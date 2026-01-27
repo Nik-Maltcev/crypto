@@ -1,0 +1,5 @@
+{
+  "name": "CryptoPulse AI",
+  "description": "Real-time cryptocurrency sentiment analysis using Reddit threads and Gemini AI to predict market trends for the next 7 days.",
+  "requestFramePermissions": []
+}
