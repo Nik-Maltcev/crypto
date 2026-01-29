@@ -11,7 +11,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
@@ -21,8 +20,6 @@ from worker.telethon_client import get_telethon_client, close_telethon_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-scheduler = AsyncIOScheduler()
 
 
 async def parse_chats_job():
@@ -80,20 +77,11 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database ready")
     
-    # Schedule parsing every 6 hours (but don't run immediately)
-    settings = get_settings()
-    interval = getattr(settings, 'PARSE_INTERVAL_HOURS', 6)
-    scheduler.add_job(parse_chats_job, 'interval', hours=interval, id='parse_job')
-    scheduler.start()
-    logger.info(f"Scheduler started (every {interval}h)")
-    
-    # DON'T run initial parse - wait for manual trigger via /api/telegram/parse
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
     yield
     
     # Shutdown
-    scheduler.shutdown(wait=False)
     await close_telethon_client()
     logger.info("Service stopped")
 
