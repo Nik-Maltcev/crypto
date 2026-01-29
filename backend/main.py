@@ -80,15 +80,15 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database ready")
     
-    # Schedule parsing every 6 hours
+    # Schedule parsing every 6 hours (but don't run immediately)
     settings = get_settings()
     interval = getattr(settings, 'PARSE_INTERVAL_HOURS', 6)
     scheduler.add_job(parse_chats_job, 'interval', hours=interval, id='parse_job')
     scheduler.start()
     logger.info(f"Scheduler started (every {interval}h)")
     
-    # Run initial parse
-    asyncio.create_task(parse_chats_job())
+    # DON'T run initial parse - wait for manual trigger via /api/telegram/parse
+    logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
     yield
     
