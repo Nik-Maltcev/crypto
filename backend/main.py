@@ -17,6 +17,7 @@ from core.database import get_async_session, init_db
 from core.models import ParseLog
 from worker.jobs.parser import ChatParser
 from worker.telethon_client import get_telethon_client, close_telethon_client
+from reddit_parser import fetch_multiple_subreddits
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -155,6 +156,26 @@ async def trigger_parse():
     """Manually trigger parsing."""
     asyncio.create_task(parse_chats_job())
     return {"status": "started"}
+
+
+@app.post("/api/reddit/parse")
+async def parse_reddit(subreddits: list[str] = None):
+    """Parse Reddit posts from given subreddits."""
+    if not subreddits:
+        # Default subreddits
+        subreddits = [
+            "CryptoCurrency", "Bitcoin", "ethereum", "solana", 
+            "dogecoin", "CryptoMarkets", "altcoin", "defi"
+        ]
+    
+    posts = await fetch_multiple_subreddits(subreddits)
+    
+    return {
+        "success": True,
+        "subreddits_count": len(subreddits),
+        "posts_count": len(posts),
+        "posts": posts
+    }
 
 
 if __name__ == "__main__":

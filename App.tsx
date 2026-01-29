@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { TARGET_SUBREDDITS } from './constants';
-import { fetchSubredditPosts } from './services/redditService';
+import { fetchSubredditPosts, fetchAllRedditPosts } from './services/redditService';
 import { analyzeSentiment, performDeepAnalysis } from './services/geminiService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { fetchTelegramData, formatTelegramForAnalysis } from './services/telegramService';
@@ -107,28 +107,18 @@ const App: React.FC = () => {
     setTelegramMessages([]);
     setTelegramIncluded(false);
     abortRef.current = false;
-    setProgress({ current: 0, total: selectedSubreddits.length + 2 }); // +2 for Telegram steps
+    setProgress({ current: 0, total: 3 }); // 3 steps: market+reddit, telegram, analysis
     
     try {
       // Step 1: Market data
       setStatus('Получение рыночных данных с CoinMarketCap...');
       const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
       
-      // Step 2: Reddit
-      const allPosts: RedditPost[] = [];
-      let processedCount = 0;
+      // Step 2: Reddit via backend
+      setStatus(`Сканирование ${selectedSubreddits.length} сабреддитов...`);
+      setProgress({ current: 1, total: 3 });
       
-      for (const sub of selectedSubreddits) {
-        if (abortRef.current) break;
-        setStatus(`Сканирование r/${sub}...`);
-        
-        const posts = await fetchSubredditPosts(sub);
-        const significantPosts = posts.filter(p => p.score > 5); 
-        allPosts.push(...significantPosts);
-        
-        processedCount++;
-        setProgress({ current: processedCount, total: selectedSubreddits.length + 2 });
-      }
+      const allPosts = await fetchAllRedditPosts(selectedSubreddits);
 
       if (abortRef.current) {
         setStatus("Сканирование прервано пользователем.");
@@ -137,9 +127,10 @@ const App: React.FC = () => {
         return;
       }
 
+      setProgress({ current: 2, total: 3 });
+
       // Step 3: Telegram
       setStatus('Загрузка данных из Telegram чатов...');
-      setProgress({ current: processedCount + 1, total: selectedSubreddits.length + 2 });
       
       let telegramContext = '';
       try {
@@ -153,7 +144,7 @@ const App: React.FC = () => {
         setStatus('Telegram недоступен, продолжаем с Reddit...');
       }
       
-      setProgress({ current: processedCount + 2, total: selectedSubreddits.length + 2 });
+      setProgress({ current: 3, total: 3 });
 
       if (allPosts.length === 0 && !telegramContext) {
         throw new Error("Не найдено данных для анализа.");
@@ -209,44 +200,34 @@ const App: React.FC = () => {
     setDeepResults(null);
     setSourcePosts([]);
     abortRef.current = false;
-    setProgress({ current: 0, total: selectedSubreddits.length });
+    setProgress({ current: 0, total: 3 }); // 3 steps: market, reddit, analysis
     
     try {
       setStatus('Получение рыночных данных с CoinMarketCap...');
+      setProgress({ current: 1, total: 3 });
       const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
       
-      const allPosts: RedditPost[] = [];
-      let processedCount = 0;
-      
-      for (const sub of selectedSubreddits) {
-        if (abortRef.current) break;
-        setStatus(`Сканирование r/${sub}...`);
-        
-        const posts = await fetchSubredditPosts(sub);
-        const significantPosts = posts.filter(p => p.score > 5); 
-        allPosts.push(...significantPosts);
-        
-        processedCount++;
-        setProgress({ current: processedCount, total: selectedSubreddits.length });
-      }
-
-      if (allPosts.length === 0) {
-        throw new Error("Не найдено подходящих постов.");
-      }
-
       if (abortRef.current) {
         setStatus("Сканирование прервано пользователем.");
         setLoading(false);
         return;
       }
 
-      setStatus(`Сортировка ${allPosts.length} постов...`);
-      const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 150);
-      setSourcePosts(topPosts);
-
-      setStatus(`AI (Flash) анализирует ${topPosts.length} тредов...`);
+      setStatus(`Сканирование ${selectedSubreddits.length} сабреддитов через бэкенд...`);
+      setProgress({ current: 2, total: 3 });
       
-      const analysis = await analyzeSentiment(topPosts, marketContext);
+      const allPosts = await fetchAllRedditPosts(selectedSubreddits);
+
+      if (allPosts.length === 0) {
+        throw new Error("Не найдено подходящих постов.");
+      }
+
+      setSourcePosts(allPosts);
+
+      setStatus(`AI (Flash) анализирует ${allPosts.length} тредов...`);
+      setProgress({ current: 3, total: 3 });
+      
+      const analysis = await analyzeSentiment(allPosts, marketContext);
 
       // Merge Real-time Prices
       const enrichedCoins = analysis.coins.map(coin => {
