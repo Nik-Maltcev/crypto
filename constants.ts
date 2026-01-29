@@ -1,7 +1,5 @@
 import { SubredditOption } from './types';
 
-export const CMC_API_KEY = 'da97c4c4535f4a5784b66f0bd12bea9c';
-
 export const SYSTEM_INSTRUCTION = `
 You are a world-class Cryptocurrency Market Analyst specializing in sentiment analysis from social media data (Reddit) AND real-time market data.
 Your goal is to identify high-potential cryptocurrencies for the next 24 hours based on "hype", community sentiment, and technical market structure.

@@ -18,6 +18,7 @@ from core.models import ParseLog
 from worker.jobs.parser import ChatParser
 from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
+from cmc_parser import fetch_cmc_data
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -177,6 +178,16 @@ async def parse_reddit(subreddits: list[str] = None):
         "posts_count": len(posts),
         "posts": posts
     }
+
+
+@app.get("/api/cmc/data")
+async def get_cmc_data():
+    """Get CoinMarketCap market data."""
+    settings = get_settings()
+    api_key = getattr(settings, 'CMC_API_KEY', None) or ""
+    
+    result = await fetch_cmc_data(api_key)
+    return result
 
 
 if __name__ == "__main__":

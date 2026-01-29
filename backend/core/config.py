@@ -31,6 +31,9 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./data.db"  # Default to SQLite
+    
+    # CoinMarketCap
+    CMC_API_KEY: str = ""
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
