@@ -100,6 +100,19 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Log all unhandled exceptions."""
+    import traceback
+    logger.error(f"Unhandled exception: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
 @app.get("/")
 async def health():
     return {"status": "ok", "service": "telegram-parser"}
