@@ -89,11 +89,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Telegram Crypto Parser", lifespan=lifespan)
 
+# CORS - allow all origins for frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,  # Must be False when allow_origins is "*"
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
