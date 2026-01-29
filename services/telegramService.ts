@@ -3,6 +3,50 @@ import { TelegramMessage, TelegramExportResponse } from '../types';
 // URL твоего Python API (замени на реальный после деплоя)
 const TELEGRAM_API_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
+export const triggerTelegramParse = async (): Promise<void> => {
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/api/telegram/parse`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to start Telegram parse: ${response.status}`);
+    }
+    
+    console.log('Telegram parsing started');
+  } catch (error) {
+    console.error("Failed to trigger Telegram parse:", error);
+    throw error;
+  }
+};
+
+export const waitForTelegramData = async (maxWaitMs: number = 120000): Promise<TelegramExportResponse> => {
+  const startTime = Date.now();
+  const pollInterval = 3000; // Check every 3 seconds
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const status = await getTelegramStatus();
+      
+      if (status.status === 'success') {
+        return await fetchTelegramData();
+      }
+      
+      if (status.status === 'failed') {
+        throw new Error('Telegram parsing failed');
+      }
+      
+      // Still running, wait and retry
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    } catch (error) {
+      // If 404, parsing not done yet
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+  }
+  
+  throw new Error('Telegram parsing timeout');
+};
+
 export const fetchTelegramData = async (): Promise<TelegramExportResponse> => {
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/api/telegram/export`);

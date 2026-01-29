@@ -3,7 +3,7 @@ import { TARGET_SUBREDDITS } from './constants';
 import { fetchSubredditPosts, fetchAllRedditPosts } from './services/redditService';
 import { analyzeSentiment, performDeepAnalysis } from './services/geminiService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
-import { fetchTelegramData, formatTelegramForAnalysis } from './services/telegramService';
+import { fetchTelegramData, formatTelegramForAnalysis, triggerTelegramParse, waitForTelegramData } from './services/telegramService';
 import { AnalysisResponse, RedditPost, DeepAnalysisResult, TelegramMessage } from './types';
 import CryptoCard from './components/CryptoCard';
 import SentimentChart from './components/SentimentChart';
@@ -130,11 +130,16 @@ const App: React.FC = () => {
       setProgress({ current: 2, total: 3 });
 
       // Step 3: Telegram
-      setStatus('Загрузка данных из Telegram чатов...');
+      setStatus('Запуск парсинга Telegram чатов...');
       
       let telegramContext = '';
       try {
-        const telegramData = await fetchTelegramData();
+        // Trigger parsing first
+        await triggerTelegramParse();
+        setStatus('Парсинг Telegram... (может занять до 2 минут)');
+        
+        // Wait for parsing to complete
+        const telegramData = await waitForTelegramData(180000); // 3 min timeout
         setTelegramMessages(telegramData.data.messages);
         setTelegramIncluded(true);
         telegramContext = formatTelegramForAnalysis(telegramData.data.messages);
