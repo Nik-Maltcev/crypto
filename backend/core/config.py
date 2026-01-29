@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     # Telegram Userbot (Telethon)
     TELEGRAM_API_ID: int
     TELEGRAM_API_HASH: str
-    TELEGRAM_PHONE: str
+    TELEGRAM_PHONE: str = ""  # Optional when using StringSession
 
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data.db"  # Default to SQLite
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
