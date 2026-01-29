@@ -183,8 +183,11 @@ async def parse_reddit(subreddits: list[str] = None):
 @app.get("/api/cmc/data")
 async def get_cmc_data():
     """Get CoinMarketCap market data."""
-    settings = get_settings()
-    api_key = getattr(settings, 'CMC_API_KEY', None) or ""
+    import os
+    api_key = os.environ.get('CMC_API_KEY', '')
+    
+    if not api_key:
+        return {"success": False, "error": "CMC_API_KEY not configured", "data": [], "summary": "MARKET CONTEXT: Data Unavailable."}
     
     result = await fetch_cmc_data(api_key)
     return result
