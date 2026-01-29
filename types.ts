@@ -62,3 +62,28 @@ export interface CMCCoinData {
     }
   }
 }
+
+// Telegram types
+export interface TelegramMessage {
+  chat: string;
+  chat_title: string;
+  message_id: number;
+  date: string;
+  text: string;
+  sender_name: string | null;
+  sender_username: string | null;
+}
+
+export interface TelegramExportResponse {
+  success: boolean;
+  parsed_at: string;
+  chats_count: number;
+  messages_count: number;
+  data: {
+    parsed_at: string;
+    parse_days: number;
+    chats_count: number;
+    messages_count: number;
+    messages: TelegramMessage[];
+  };
+}

@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# Exclude original TG folder
+AI FREELANCE TG/
