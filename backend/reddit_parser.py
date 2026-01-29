@@ -27,7 +27,7 @@ async def fetch_subreddit_posts(subreddit: str, limit: int = 25) -> list[dict[st
     url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit={limit}"
     
     headers = {
-        "User-Agent": "CryptoPulseAI/1.0 (Server-Side Parser)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
