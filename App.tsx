@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { TARGET_SUBREDDITS } from './constants';
-import { fetchSubredditPosts, fetchAllRedditPosts } from './services/redditService';
+import { fetchAllRedditPosts } from './services/redditService';
 import { analyzeSentiment, performDeepAnalysis } from './services/geminiService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
-import { fetchTelegramData, formatTelegramForAnalysis, triggerTelegramParse, waitForTelegramData } from './services/telegramService';
-import { AnalysisResponse, RedditPost, DeepAnalysisResult, TelegramMessage } from './types';
+import { AnalysisResponse, RedditPost, DeepAnalysisResult } from './types';
 import CryptoCard from './components/CryptoCard';
 import SentimentChart from './components/SentimentChart';
 
@@ -25,21 +24,14 @@ const BrainIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>
 );
 
-const TelegramIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-);
-
 const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [fullLoading, setFullLoading] = useState(false);
   const [deepLoading, setDeepLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<AnalysisResponse | null>(null);
   const [deepResults, setDeepResults] = useState<DeepAnalysisResult | null>(null);
   const [sourcePosts, setSourcePosts] = useState<RedditPost[]>([]);
-  const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
-  const [telegramIncluded, setTelegramIncluded] = useState(false);
   
   // Select top 10 by default
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>(
@@ -91,108 +83,6 @@ const App: React.FC = () => {
       setDeepLoading(false);
     }
   };
-
-  // Полный анализ: Reddit + Telegram
-  const handleFullAnalysis = useCallback(async () => {
-    if (selectedSubreddits.length === 0) {
-      alert("Выберите хотя бы один сабреддит.");
-      return;
-    }
-
-    setFullLoading(true);
-    setLoading(true);
-    setResults(null);
-    setDeepResults(null);
-    setSourcePosts([]);
-    setTelegramMessages([]);
-    setTelegramIncluded(false);
-    abortRef.current = false;
-    setProgress({ current: 0, total: 3 }); // 3 steps: market+reddit, telegram, analysis
-    
-    try {
-      // Step 1: Market data
-      setStatus('Получение рыночных данных с CoinMarketCap...');
-      const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
-      
-      // Step 2: Reddit via backend
-      setStatus(`Сканирование ${selectedSubreddits.length} сабреддитов...`);
-      setProgress({ current: 1, total: 3 });
-      
-      const allPosts = await fetchAllRedditPosts(selectedSubreddits);
-
-      if (abortRef.current) {
-        setStatus("Сканирование прервано пользователем.");
-        setLoading(false);
-        setFullLoading(false);
-        return;
-      }
-
-      setProgress({ current: 2, total: 3 });
-
-      // Step 3: Telegram
-      setStatus('Запуск парсинга Telegram чатов...');
-      
-      let telegramContext = '';
-      try {
-        // Trigger parsing first
-        await triggerTelegramParse();
-        setStatus('Парсинг Telegram... (может занять до 2 минут)');
-        
-        // Wait for parsing to complete
-        const telegramData = await waitForTelegramData(180000); // 3 min timeout
-        setTelegramMessages(telegramData.data.messages);
-        setTelegramIncluded(true);
-        telegramContext = formatTelegramForAnalysis(telegramData.data.messages);
-        setStatus(`Telegram: ${telegramData.data.messages_count} сообщений из ${telegramData.data.chats_count} чатов`);
-      } catch (tgError) {
-        console.warn('Telegram data unavailable:', tgError);
-        setStatus('Telegram недоступен, продолжаем с Reddit...');
-      }
-      
-      setProgress({ current: 3, total: 3 });
-
-      if (allPosts.length === 0 && !telegramContext) {
-        throw new Error("Не найдено данных для анализа.");
-      }
-
-      setStatus(`Сортировка ${allPosts.length} постов...`);
-      const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 150);
-      setSourcePosts(topPosts);
-
-      // Combine contexts
-      const combinedContext = marketContext + '\n\n' + telegramContext;
-
-      setStatus(`AI (Flash) анализирует данные из Reddit${telegramContext ? ' + Telegram' : ''}...`);
-      
-      const analysis = await analyzeSentiment(topPosts, combinedContext);
-
-      // Merge Real-time Prices
-      const enrichedCoins = analysis.coins.map(coin => {
-        let cmcData = coinMap.get(coin.symbol.toUpperCase());
-        if (cmcData) {
-          return {
-            ...coin,
-            currentPrice: cmcData.quote.USD.price,
-            change24h: cmcData.quote.USD.percent_change_24h,
-            change7d: cmcData.quote.USD.percent_change_7d,
-            volume24h: cmcData.quote.USD.volume_24h,
-            marketCap: cmcData.quote.USD.market_cap
-          };
-        }
-        return coin;
-      });
-      
-      setResults({ ...analysis, coins: enrichedCoins });
-
-    } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Ошибка анализа");
-    } finally {
-      setLoading(false);
-      setFullLoading(false);
-      setStatus('');
-    }
-  }, [selectedSubreddits]);
   
   const handleAnalyze = useCallback(async () => {
     if (selectedSubreddits.length === 0) {
@@ -312,23 +202,13 @@ const App: React.FC = () => {
                   <span>Стоп</span>
                 </button>
              ) : (
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={handleAnalyze} 
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
-                  >
-                    <RefreshIcon />
-                    <span>Reddit</span>
-                  </button>
-                  <button 
-                    onClick={handleFullAnalysis} 
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/20 transition-all"
-                    title="Reddit + Telegram анализ"
-                  >
-                    <TelegramIcon />
-                    <span className="hidden sm:inline">Полный</span>
-                  </button>
-                </div>
+                <button 
+                  onClick={handleAnalyze} 
+                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
+                >
+                  <RefreshIcon />
+                  <span>Анализ</span>
+                </button>
              )}
           </div>
         </div>
@@ -461,14 +341,7 @@ const App: React.FC = () => {
 
             {/* Standard Results */}
             <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-bold text-white">Обзор рынка (Flash)</h2>
-                {telegramIncluded && (
-                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                    <TelegramIcon /> +Telegram
-                  </span>
-                )}
-              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Обзор рынка (Flash)</h2>
               <p className="text-gray-300">{results.marketSummary}</p>
             </div>
 
