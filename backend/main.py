@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
@@ -174,8 +174,13 @@ async def trigger_parse():
 
 
 @app.post("/api/reddit/parse")
-async def parse_reddit(subreddits: list[str] = None):
-    """Parse Reddit posts from given subreddits."""
+async def parse_reddit(subreddits: list[str] | None = Body(default=None)):
+    """Parse Reddit posts from given subreddits.
+    
+    Accepts JSON body: ["CryptoCurrency", "Bitcoin", ...]
+    """
+    logger.info(f"Reddit parse request received. Subreddits: {subreddits}")
+    
     if not subreddits:
         # Default subreddits
         subreddits = [
@@ -184,6 +189,8 @@ async def parse_reddit(subreddits: list[str] = None):
         ]
     
     posts = await fetch_multiple_subreddits(subreddits)
+    
+    logger.info(f"Reddit parse complete. Returning {len(posts)} posts")
     
     return {
         "success": True,
