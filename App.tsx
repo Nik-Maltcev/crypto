@@ -178,52 +178,73 @@ const App: React.FC = () => {
         setSourcePosts([]);
         setTweets([]);
 
-        // --- PHASE 2: REDDIT ---
-        const allPosts: RedditPost[] = [];
-        let processedCount = 0;
+        // --- PHASE 2 & 3: FETCH REDDIT & TWITTER IN PARALLEL ---
+        setStatus('2/4 Сканирование Reddit и Twitter (Параллельно)...');
 
+        // Create initial states for progress
         setRedditProgress({ current: 0, total: selectedSubreddits.length });
-        for (const sub of selectedSubreddits) {
-          if (abortRef.current) break;
-          setStatus(`2/4 Сканирование Reddit (Свежее): r/${sub}...`);
-
-          const posts = await fetchSubredditPosts(sub);
-
-          // Since we are fetching 'new', scores might be low (e.g., 1). 
-          // We lower the threshold to 1 to allow fresh posts to be included.
-          const significantPosts = posts.filter(p => p.score >= 1);
-          allPosts.push(...significantPosts);
-
-          processedCount++;
-          setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
+        if (selectedTwitterIds.length > 0) {
+          setTwitterProgress({ current: 0, total: selectedTwitterIds.length });
+        } else {
+          setTwitterProgress({ current: 0, total: 0 });
         }
 
-        if (abortRef.current) throw new Error("Stopped by user");
-        if (allPosts.length === 0) throw new Error("Не найдено подходящих постов.");
+        // Reddit Task
+        const redditTask = async () => {
+          const allPosts: RedditPost[] = [];
+          let processedCount = 0;
 
-        // Increased limit from 150 to 500 to allow more comprehensive analysis
-        // Note: For 'new' sorting, high score sorting might push older posts to top if we mix subreddits,
-        // but since we want fresh data, we might want to ensure we keep the 500. 
-        // We'll stick to score sort to prioritize "rising" new posts, but limit is high enough to catch pure new ones.
-        setStatus(`Фильтрация ${allPosts.length} постов...`);
-        const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 500);
-        setSourcePosts(topPosts);
-        finalPosts = topPosts;
+          for (const sub of selectedSubreddits) {
+            if (abortRef.current) break;
 
-        // --- PHASE 3: TWITTER ---
-        if (selectedTwitterIds.length > 0) {
-          setStatus('3/4 Сбор данных Twitter (Свежее)...');
-          setTwitterProgress({ current: 0, total: selectedTwitterIds.length });
+            const posts = await fetchSubredditPosts(sub);
+            const significantPosts = posts.filter(p => p.score >= 1);
+            allPosts.push(...significantPosts);
 
-          finalTweets = await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
+            processedCount++;
+            setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
+          }
+
+          if (allPosts.length === 0) throw new Error("Не найдено подходящих постов Reddit.");
+
+          const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 500);
+          return topPosts;
+        };
+
+        // Twitter Task
+        const twitterTask = async () => {
+          if (selectedTwitterIds.length === 0) return [];
+
+          return await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
             setTwitterProgress({ current: curr, total: total });
-            setStatus(`Сканирование Twitter (${curr}/${total})...`);
           });
+        };
 
-          if (abortRef.current) throw new Error("Stopped by user");
+        // Run both simultaneously
+        const [redditResult, twitterResult] = await Promise.allSettled([
+          redditTask(),
+          twitterTask()
+        ]);
+
+        if (abortRef.current) throw new Error("Stopped by user");
+
+        // Process Reddit Result
+        if (redditResult.status === 'fulfilled') {
+          finalPosts = redditResult.value;
+          setSourcePosts(finalPosts);
+        } else {
+          console.error("Reddit fetch failed:", redditResult.reason);
+          throw new Error(`Ошибка Reddit: ${redditResult.reason}`);
+        }
+
+        // Process Twitter Result
+        if (twitterResult.status === 'fulfilled') {
+          finalTweets = twitterResult.value;
           setTweets(finalTweets);
         } else {
-          setStatus('Пропуск Twitter (не выбрано)...');
+          console.error("Twitter fetch failed:", twitterResult.reason);
+          setStatus('Ошибка Twitter, продолжаем с Reddit...');
+          // Non-fatal, we can continue without Twitter
         }
       } else {
         setStatus('Используем уже собранные данные...');
@@ -406,8 +427,8 @@ const App: React.FC = () => {
                         key={sub.name}
                         onClick={() => toggleSubreddit(sub.name)}
                         className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${selectedSubreddits.includes(sub.name)
-                            ? 'bg-orange-600/20 border-orange-500 text-orange-400'
-                            : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                          ? 'bg-orange-600/20 border-orange-500 text-orange-400'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
                           }`}
                       >
                         r/{sub.name}
@@ -437,8 +458,8 @@ const App: React.FC = () => {
                         key={acc.id}
                         onClick={() => toggleTwitter(acc.id)}
                         className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${selectedTwitterIds.includes(acc.id)
-                            ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                            : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
                           }`}
                         title={acc.username}
                       >
@@ -477,8 +498,8 @@ const App: React.FC = () => {
                       <div className="text-right border-l border-gray-700 pl-4">
                         <p className="text-xs text-gray-500 uppercase">Risk Level</p>
                         <span className={`text-sm font-bold px-2 py-0.5 rounded ${result.riskLevel === 'Low' ? 'bg-emerald-500/20 text-emerald-400' :
-                            result.riskLevel === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-red-500/20 text-red-400'
+                          result.riskLevel === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-red-500/20 text-red-400'
                           }`}>
                           {result.riskLevel}
                         </span>
