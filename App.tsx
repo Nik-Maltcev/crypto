@@ -8,7 +8,7 @@ import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData } from './type
 import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
-import TwitterTools from './components/TwitterTools';
+
 
 // Icons
 const RefreshIcon = () => (
@@ -318,14 +318,6 @@ const App: React.FC = () => {
                         <span>20:00 МСК</span>
                     </button>
 
-                    {/* Altcoin Hunter Button */}
-                    <button
-                        onClick={() => executeAnalysisPipeline('altcoins', true)}
-                        className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
-                    >
-                        <SearchIcon />
-                        <span>Поиск Альткоинов</span>
-                    </button>
 
                     {/* Standard Trigger */}
                     <button 
@@ -568,8 +560,7 @@ const App: React.FC = () => {
         )}
       </main>
       
-      {/* Twitter Tools Floating Button */}
-      <TwitterTools />
+
     </div>
   );
 };
