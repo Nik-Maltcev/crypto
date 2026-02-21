@@ -93,7 +93,7 @@ const TelegramFilter: React.FC = () => {
                     Фильтрация Telegram-чатов AI (Beta)
                 </h2>
                 <p className="text-sm text-gray-400 mb-6 max-w-2xl">
-                    Вставьте список ссылок или ников Telegram-чатов (по одному в строке). Нейросеть Gemini 1.5 Flash проанализирует последние сообщения каждого чата и отсеет спам, скам и флуд от полезных сообществ.
+                    Вставьте список ссылок или ников Telegram-чатов (по одному в строке). Нейросеть Gemini 2.5 Flash проанализирует последние сообщения каждого чата и отсеет спам, скам и флуд от полезных сообществ.
                 </p>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -191,8 +191,8 @@ const TelegramFilter: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded text-xs font-semibold ${res.isSpam
-                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/20'
-                                                    : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
+                                                ? 'bg-red-500/20 text-red-400 border border-red-500/20'
+                                                : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
                                                 }`}>
                                                 {res.category}
                                             </span>
