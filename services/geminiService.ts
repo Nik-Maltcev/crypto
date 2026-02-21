@@ -1,142 +1,249 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { RedditPost, AnalysisResponse, DeepAnalysisResult } from '../types';
+import { RedditPost, CombinedAnalysisResponse, Tweet } from '../types';
 import { SYSTEM_INSTRUCTION } from '../constants';
 
-const ANALYSIS_SCHEMA: Schema = {
+// --- SCHEMA 1: SIMPLE (Single Target 24h) ---
+const SIMPLE_COIN_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    marketSummary: {
-      type: Type.STRING,
-      description: "Краткое саммари общего настроения рынка на основе постов, 2-3 предложения на русском языке."
-    },
-    coins: {
+    symbol: { type: Type.STRING },
+    name: { type: Type.STRING },
+    sentimentScore: { type: Type.NUMBER },
+    prediction: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
+    confidence: { type: Type.NUMBER },
+    reasoning: { type: Type.STRING, description: "Анализ (1-2 предложения). На русском." },
+    targetPrice24h: { type: Type.NUMBER, description: "Predicted price in exactly 24 hours." },
+    targetChange24h: { type: Type.NUMBER, description: "Predicted % change in exactly 24 hours." }
+  },
+  required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "targetPrice24h", "targetChange24h"]
+};
+
+// --- SCHEMA 2: TARGET (Specific Time, e.g. 20:00 MSK) ---
+const TARGET_COIN_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    symbol: { type: Type.STRING },
+    name: { type: Type.STRING },
+    sentimentScore: { type: Type.NUMBER },
+    prediction: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
+    confidence: { type: Type.NUMBER },
+    reasoning: { type: Type.STRING, description: "Анализ (1-2 предложения). На русском." },
+    targetPrice: { type: Type.NUMBER, description: "Predicted price at the specific target time (e.g. 20:00 MSK)." },
+    targetChange: { type: Type.NUMBER, description: "Predicted % change relative to NOW." }
+  },
+  required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "targetPrice", "targetChange"]
+};
+
+// --- SCHEMA 3: DETAILED (Hourly Array) ---
+const HOURLY_COIN_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    symbol: { type: Type.STRING },
+    name: { type: Type.STRING },
+    sentimentScore: { type: Type.NUMBER },
+    prediction: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
+    confidence: { type: Type.NUMBER },
+    reasoning: { type: Type.STRING, description: "Анализ (1-2 предложения). На русском." },
+    hourlyForecast: {
       type: Type.ARRAY,
+      description: "24 data points (hourly) for the next 24h.",
       items: {
         type: Type.OBJECT,
         properties: {
-          symbol: { type: Type.STRING, description: "Ticker symbol e.g., BTC" },
-          name: { type: Type.STRING, description: "Full name e.g., Bitcoin" },
-          sentimentScore: { type: Type.NUMBER, description: "0-100 score" },
-          prediction: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
-          confidence: { type: Type.NUMBER, description: "0-100 confidence level in the prediction" },
-          reasoning: { type: Type.STRING, description: "Объяснение прогноза на основе постов с Reddit на русском языке." },
-          sources: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of relevant Reddit URLs from the input." },
-          pricePrediction24h: { type: Type.STRING, description: "Качественный текстовый прогноз цены на 24 часа на русском языке." },
-          targetPriceRange: { type: Type.STRING, description: "Standard estimated price range for next 24h (e.g. 95k-98k)." },
-          precisePriceRange: { type: Type.STRING, description: "Highly specific, minimal spread 'SNIPER' price target for 24h (e.g. 96.5k-96.8k)." }
-        },
-        required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "pricePrediction24h", "targetPriceRange", "precisePriceRange"]
+          hourOffset: { type: Type.NUMBER },
+          price: { type: Type.NUMBER },
+          change: { type: Type.NUMBER }
+        }
       }
     }
   },
-  required: ["marketSummary", "coins"]
+  required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "hourlyForecast"]
 };
 
-const DEEP_ANALYSIS_SCHEMA: Schema = {
+// --- SCHEMA 4: ALTCOIN HUNTER ---
+const ALTCOIN_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    strategy: { type: Type.STRING, description: "Detailed trading strategy and analysis (Markdown supported) in Russian." },
-    topPick: { type: Type.STRING, description: "The single best asset symbol to watch." },
-    riskLevel: { type: Type.STRING, enum: ["Low", "Medium", "High", "Extreme"] },
-    technicalVerdict: { type: Type.STRING, description: "Technical analysis summary based on price/volume data in Russian." }
+    symbol: { type: Type.STRING },
+    name: { type: Type.STRING },
+    potential7d: { type: Type.STRING, description: "Predicted growth in 7 days (e.g. '+20%', '2x')." },
+    risk: { type: Type.STRING, enum: ["Medium", "High", "Degen"] },
+    score: { type: Type.NUMBER, description: "Hype score 0-100" },
+    why: { type: Type.STRING, description: "Why this coin? Based on reddit discussions." }
   },
-  required: ["strategy", "topPick", "riskLevel", "technicalVerdict"]
+  required: ["symbol", "name", "potential7d", "risk", "score", "why"]
 };
 
-// Initial Flash Analysis
-export const analyzeSentiment = async (posts: RedditPost[], marketContext: string): Promise<AnalysisResponse> => {
+const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'): Schema => {
+  const isAltcoin = mode === 'altcoins';
+  
+  // Select coin schema based on mode
+  let coinItemSchema = SIMPLE_COIN_SCHEMA;
+  if (mode === 'hourly') coinItemSchema = HOURLY_COIN_SCHEMA;
+  if (mode === 'today_20msk') coinItemSchema = TARGET_COIN_SCHEMA;
+
+  return {
+    type: Type.OBJECT,
+    properties: {
+      marketSummary: {
+        type: Type.STRING,
+        description: "Краткое саммари рынка (2 предложения на русском)."
+      },
+      forecastLabel: {
+        type: Type.STRING,
+        description: "Label for the forecast time (e.g. 'Прогноз (24ч)' or 'Прогноз (20:00 МСК)')."
+      },
+      strategy: { 
+        type: Type.STRING, 
+        description: "Стратегия (markdown, кратко). На русском." 
+      },
+      topPick: { 
+        type: Type.STRING, 
+        description: "Тикер лучшего актива." 
+      },
+      riskLevel: { 
+        type: Type.STRING, 
+        enum: ["Low", "Medium", "High", "Extreme"] 
+      },
+      technicalVerdict: { 
+        type: Type.STRING, 
+        description: "Вердикт (кратко). На русском." 
+      },
+      // Conditionally require coins OR altcoins
+      ...(isAltcoin ? {
+        altcoins: {
+          type: Type.ARRAY,
+          items: ALTCOIN_SCHEMA,
+          description: "List of 4-6 promising altcoins found in text."
+        }
+      } : {
+        coins: {
+          type: Type.ARRAY,
+          items: coinItemSchema
+        }
+      })
+    },
+    required: ["marketSummary", "forecastLabel", "strategy", "topPick", "riskLevel", "technicalVerdict", isAltcoin ? "altcoins" : "coins"]
+  };
+};
+
+export const performCombinedAnalysis = async (
+  posts: RedditPost[], 
+  tweets: Tweet[],
+  marketContext: string,
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' = 'simple'
+): Promise<CombinedAnalysisResponse> => {
   if (!posts || posts.length === 0) {
-    throw new Error("Нет постов для анализа");
+    throw new Error("Нет данных для анализа (Reddit пуст).");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const jsonPayload = JSON.stringify(posts, [
-    'subreddit', 'title', 'selftext', 'score', 'url', 'created_utc'
-  ]);
+  // Input Data - INCREASED LIMIT from 40 to 300 posts to use Gemini 3 Pro large context
+  const redditPayload = JSON.stringify(posts.slice(0, 300).map(p => ({
+    title: p.title,
+    text: p.selftext ? p.selftext.substring(0, 200) : "", // Slightly more text for altcoin hunting
+    subreddit: p.subreddit,
+    score: p.score
+  })));
+
+  const twitterPayload = tweets.length > 0 
+    ? JSON.stringify(tweets.slice(0, 50).map(t => ({
+        text: t.text.substring(0, 150),
+        user: t.user
+      })))
+    : "No Twitter Data.";
+
+  // Mode-specific prompts
+  let modeInstructions = "";
+  let task = "";
+
+  // Dynamic Thinking Budget
+  // Complex tasks (Hourly, Altcoins) need more reasoning tokens to avoid hallucinations and filter noise
+  let thinkingBudget = 2048; // Default for simple tasks
+
+  if (mode === 'simple') {
+    task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
+    modeInstructions = `
+      FORECAST TASK: Provide ONLY ONE target price for exactly 24 hours from now.
+      FIELDS: "targetPrice24h" (number), "targetChange24h" (number).
+      "forecastLabel": "Прогноз (24ч)"
+    `;
+    thinkingBudget = 2048; 
+  } else if (mode === 'hourly') {
+    task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
+    modeInstructions = `
+      FORECAST TASK: Generate a detailed hourly forecast.
+      FIELDS: "hourlyForecast" (array of 24 objects).
+      "forecastLabel": "Почасовой (24ч)"
+    `;
+    thinkingBudget = 8192; // Higher budget for complex array generation
+  } else if (mode === 'today_20msk') {
+    const now = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${now.toISOString()}.`;
+    modeInstructions = `
+      FORECAST TASK: Predict price for the UPCOMING 20:00 Moscow Time (UTC+3).
+      If current time is before 17:00 UTC, target is TODAY 20:00 MSK (17:00 UTC).
+      If current time is past 17:00 UTC, target is TOMORROW 20:00 MSK.
+      FIELDS: "targetPrice" (number), "targetChange" (number).
+      "forecastLabel": "Прогноз (20:00 МСК)"
+    `;
+    thinkingBudget = 4096; // Moderate budget for time calculation logic
+  } else if (mode === 'altcoins') {
+    task = "FIND HIDDEN GEMS / ALTCOINS (Exclude BTC, ETH). Focus on tokens mentioned in r/SatoshiStreetBets, r/CryptoMoonShots, etc.";
+    modeInstructions = `
+      TASK: Identify 4-6 altcoins/tokens with high potential for the NEXT 7 DAYS.
+      IGNORE: BTC, ETH, USDT, USDC.
+      LOOK FOR: Coins with high social engagement, upcoming catalysts, or meme hype.
+      OUTPUT FIELD: "altcoins" (array).
+      "potential7d": Predict growth (e.g. "+30%", "2-3x").
+      "risk": Assess risk (Medium/High/Degen).
+      "forecastLabel": "Поиск Гемов (7д)"
+    `;
+    thinkingBudget = 8192; // Higher budget to filter noise from signal in altcoins
+  }
+
+  // maxOutputTokens must be sufficient to cover thinking + JSON response
+  const maxOutputTokens = thinkingBudget + 4096;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview', 
       contents: `
-      1. ANALYZE REDDIT POSTS:
-      ${jsonPayload}
+      CONTEXT: ${marketContext}
+      REDDIT DATA: ${redditPayload}
+      TWITTER DATA: ${twitterPayload}
 
-      2. USE THIS REAL-TIME MARKET DATA FOR CONTEXT/VALIDATION:
-      ${marketContext}
-
-      Сделай прогноз по криптовалютам на следующие 24 часа. ОТВЕЧАЙ НА РУССКОМ ЯЗЫКЕ.
+      TASK: ${task}
+      OUTPUT: JSON matching schema.
+      
+      ${modeInstructions}
+      
+      RULES: Russian language for text. Extremely concise.
       `,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
-        responseSchema: ANALYSIS_SCHEMA,
-        thinkingConfig: { thinkingBudget: 1024 }, // Enable thinking for better calculations
-        temperature: 0.1, 
+        responseSchema: createMainSchema(mode),
+        // Enable Reasoning (Thinking)
+        thinkingConfig: { thinkingBudget }, 
+        maxOutputTokens: maxOutputTokens,
+        temperature: mode === 'altcoins' ? 0.4 : 0.2, 
       }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Пустой ответ от Gemini");
+    let text = response.text || "";
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    return JSON.parse(text) as AnalysisResponse;
+    if (!text) throw new Error("Empty response from AI");
+
+    return JSON.parse(text) as CombinedAnalysisResponse;
 
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
-    throw error;
-  }
-};
-
-// Deep Pro Analysis
-export const performDeepAnalysis = async (currentAnalysis: AnalysisResponse): Promise<DeepAnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  // Filter relevant data to send to Pro model
-  const marketDataForAi = currentAnalysis.coins.map(c => ({
-    symbol: c.symbol,
-    price: c.currentPrice,
-    change24h: c.change24h,
-    change7d: c.change7d,
-    volume: c.volume24h,
-    sentiment: c.sentimentScore,
-    ai_prediction: c.prediction,
-    reddit_reasoning: c.reasoning
-  }));
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Using the more powerful model
-      contents: `
-      PERFORM A DEEP DIVE "HEDGE FUND MANAGER" STYLE ANALYSIS.
-      
-      INPUT DATA (Sentiment + Market Data):
-      ${JSON.stringify(marketDataForAi, null, 2)}
-
-      MARKET SUMMARY:
-      ${currentAnalysis.marketSummary}
-
-      TASK:
-      1. Synthesize the Reddit sentiment with the hard numbers (Price, Volume, % Change).
-      2. Identify discrepancies. (e.g. Is Reddit bullish but price is crashing? Warning sign.)
-      3. Look for "High Conviction" plays where Sentiment AND Technicals align.
-      4. Provide a professional strategy for the next 24 hours.
-      
-      Respond in Russian.
-      `,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: DEEP_ANALYSIS_SCHEMA,
-        temperature: 0.2, // Low temperature for analytical precision
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("Empty response from Gemini Pro");
-
-    return JSON.parse(text) as DeepAnalysisResult;
-
-  } catch (error) {
-    console.error("Gemini Deep Analysis Error:", error);
+    if (error instanceof SyntaxError) {
+      throw new Error("Ошибка обработки данных AI. Попробуйте снова.");
+    }
     throw error;
   }
 };

@@ -1,11 +1,14 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { TARGET_SUBREDDITS } from './constants';
-import { fetchAllRedditPosts } from './services/redditService';
-import { analyzeSentiment, performDeepAnalysis } from './services/geminiService';
+import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS } from './constants';
+import { fetchSubredditPosts } from './services/redditService';
+import { fetchBatchTweets } from './services/twitterService';
+import { performCombinedAnalysis } from './services/geminiService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
-import { AnalysisResponse, RedditPost, DeepAnalysisResult } from './types';
+import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData } from './types';
 import CryptoCard from './components/CryptoCard';
+import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
+import TwitterTools from './components/TwitterTools';
 
 // Icons
 const RefreshIcon = () => (
@@ -24,18 +27,37 @@ const BrainIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>
 );
 
+const AnalysisIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+);
+
+const SearchIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+);
+
+const ClockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+);
+
 const App: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [deepLoading, setDeepLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [results, setResults] = useState<AnalysisResponse | null>(null);
-  const [deepResults, setDeepResults] = useState<DeepAnalysisResult | null>(null);
-  const [sourcePosts, setSourcePosts] = useState<RedditPost[]>([]);
   
-  // Select top 10 by default
+  // Progress states for different phases
+  const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
+  const [twitterProgress, setTwitterProgress] = useState({ current: 0, total: 0 });
+  
+  // Data
+  const [result, setResult] = useState<CombinedAnalysisResponse | null>(null);
+  const [sourcePosts, setSourcePosts] = useState<RedditPost[]>([]);
+  const [tweets, setTweets] = useState<Tweet[]>([]);
+  
+  // Selection
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>(
     TARGET_SUBREDDITS.slice(0, 10).map(s => s.name)
+  );
+  const [selectedTwitterIds, setSelectedTwitterIds] = useState<string[]>(
+    TWITTER_ACCOUNTS.slice(0, 5).map(t => t.id)
   );
   
   const abortRef = useRef<boolean>(false);
@@ -46,125 +68,199 @@ const App: React.FC = () => {
   };
 
   const handleDownloadJSON = () => {
-    if (!results) return;
+    if (!result) return;
 
     const exportData = {
       timestamp: new Date().toISOString(),
-      analysis: results,
-      deepAnalysis: deepResults,
-      source_data_count: sourcePosts.length,
+      analysis: result,
+      sources: {
+        reddit_count: sourcePosts.length,
+        twitter_count: tweets.length
+      },
       source_posts: sourcePosts.map(post => ({
         ...post,
         created_date_human: new Date(post.created_utc * 1000).toLocaleString('ru-RU', {
           timeZoneName: 'short'
         })
+      })),
+      tweets: tweets.map(t => ({
+        ...t,
+        created_date_human: new Date(t.created_at).toLocaleString('ru-RU')
       }))
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `crypto_pulse_full_report_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchorNode.setAttribute("download", `crypto_pulse_report_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
   };
 
-  const handleDeepAnalysis = async () => {
-    if (!results) return;
-    setDeepLoading(true);
-    setDeepResults(null);
-    try {
-      const deepData = await performDeepAnalysis(results);
-      setDeepResults(deepData);
-    } catch (error) {
-      alert("Ошибка глубинного анализа: " + (error instanceof Error ? error.message : "Unknown error"));
-    } finally {
-      setDeepLoading(false);
-    }
+  // Selection Logic
+  const toggleSubreddit = (name: string) => {
+    setSelectedSubreddits(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]);
   };
-  
-  const handleAnalyze = useCallback(async () => {
+  const toggleTwitter = (id: string) => {
+    setSelectedTwitterIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  // Helper to run the AI part and merge market data
+  const runAIAnalysis = async (
+    posts: RedditPost[], 
+    tweets: Tweet[], 
+    marketContext: string, 
+    coinMap: Map<string, CMCCoinData>,
+    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
+  ) => {
+      let modeText = 'Общий прогноз (24ч)';
+      if (mode === 'hourly') modeText = 'Почасовая детализация';
+      if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
+      if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
+
+      setStatus(`AI: Генерация (${modeText})...`);
+      
+      const analysis = await performCombinedAnalysis(posts, tweets, marketContext, mode);
+
+      // Merge Real-time Prices only if coins exist (standard mode)
+      if (analysis.coins) {
+        const enrichedCoins = analysis.coins.map(coin => {
+          let cmcData = coinMap.get(coin.symbol.toUpperCase());
+          if (cmcData) {
+            return {
+              ...coin,
+              currentPrice: cmcData.quote.USD.price,
+              change24h: cmcData.quote.USD.percent_change_24h,
+              change7d: cmcData.quote.USD.percent_change_7d,
+              volume24h: cmcData.quote.USD.volume_24h,
+              marketCap: cmcData.quote.USD.market_cap
+            };
+          }
+          return coin;
+        });
+        analysis.coins = enrichedCoins;
+      }
+      
+      setResult(analysis);
+      setStatus('Готово!');
+  };
+
+  // Generic function to Fetch Data AND Run Analysis
+  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk', forceRefresh = true) => {
     if (selectedSubreddits.length === 0) {
       alert("Выберите хотя бы один сабреддит.");
       return;
     }
 
-    setLoading(true);
-    setResults(null);
-    setDeepResults(null);
-    setSourcePosts([]);
+    setIsProcessing(true);
+    setResult(null); 
     abortRef.current = false;
-    setProgress({ current: 0, total: 3 }); // 3 steps: market, reddit, analysis
+    
+    // Check if we need to fetch new data
+    const shouldFetch = forceRefresh || sourcePosts.length === 0;
     
     try {
-      setStatus('Получение рыночных данных с CoinMarketCap...');
-      setProgress({ current: 1, total: 3 });
+      // --- PHASE 1: MARKET DATA ---
+      // Always refresh market data as it's fast
+      setStatus('1/4 Получение рыночных данных...');
       const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
       
-      if (abortRef.current) {
-        setStatus("Сканирование прервано пользователем.");
-        setLoading(false);
-        return;
-      }
+      let finalPosts = sourcePosts;
+      let finalTweets = tweets;
 
-      setStatus(`Сканирование ${selectedSubreddits.length} сабреддитов через бэкенд...`);
-      setProgress({ current: 2, total: 3 });
-      
-      const allPosts = await fetchAllRedditPosts(selectedSubreddits);
+      // If fetching required (Force Refresh OR No Data)
+      if (shouldFetch) {
+        // Clear old data references locally
+        finalPosts = [];
+        finalTweets = [];
+        setSourcePosts([]);
+        setTweets([]);
 
-      if (allPosts.length === 0) {
-        throw new Error("Не найдено подходящих постов.");
-      }
-
-      setSourcePosts(allPosts);
-
-      setStatus(`AI (Flash) анализирует ${allPosts.length} тредов...`);
-      setProgress({ current: 3, total: 3 });
-      
-      const analysis = await analyzeSentiment(allPosts, marketContext);
-
-      // Merge Real-time Prices
-      const enrichedCoins = analysis.coins.map(coin => {
-        let cmcData = coinMap.get(coin.symbol.toUpperCase());
-        if (cmcData) {
-          return {
-            ...coin,
-            currentPrice: cmcData.quote.USD.price,
-            change24h: cmcData.quote.USD.percent_change_24h,
-            change7d: cmcData.quote.USD.percent_change_7d,
-            volume24h: cmcData.quote.USD.volume_24h,
-            marketCap: cmcData.quote.USD.market_cap
-          };
+        // --- PHASE 2: REDDIT ---
+        const allPosts: RedditPost[] = [];
+        let processedCount = 0;
+        
+        setRedditProgress({ current: 0, total: selectedSubreddits.length });
+        for (const sub of selectedSubreddits) {
+          if (abortRef.current) break;
+          setStatus(`2/4 Сканирование Reddit (Свежее): r/${sub}...`);
+          
+          const posts = await fetchSubredditPosts(sub);
+          
+          // Since we are fetching 'new', scores might be low (e.g., 1). 
+          // We lower the threshold to 1 to allow fresh posts to be included.
+          const significantPosts = posts.filter(p => p.score >= 1); 
+          allPosts.push(...significantPosts);
+          
+          processedCount++;
+          setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
         }
-        return coin;
-      });
-      
-      setResults({ ...analysis, coins: enrichedCoins });
+
+        if (abortRef.current) throw new Error("Stopped by user");
+        if (allPosts.length === 0) throw new Error("Не найдено подходящих постов.");
+
+        // Increased limit from 150 to 500 to allow more comprehensive analysis
+        // Note: For 'new' sorting, high score sorting might push older posts to top if we mix subreddits,
+        // but since we want fresh data, we might want to ensure we keep the 500. 
+        // We'll stick to score sort to prioritize "rising" new posts, but limit is high enough to catch pure new ones.
+        setStatus(`Фильтрация ${allPosts.length} постов...`);
+        const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 500);
+        setSourcePosts(topPosts);
+        finalPosts = topPosts;
+
+        // --- PHASE 3: TWITTER ---
+        if (selectedTwitterIds.length > 0) {
+          setStatus('3/4 Сбор данных Twitter (Свежее)...');
+          setTwitterProgress({ current: 0, total: selectedTwitterIds.length });
+          
+          finalTweets = await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
+            setTwitterProgress({ current: curr, total: total });
+            setStatus(`Сканирование Twitter (${curr}/${total})...`);
+          });
+
+          if (abortRef.current) throw new Error("Stopped by user");
+          setTweets(finalTweets);
+        } else {
+          setStatus('Пропуск Twitter (не выбрано)...');
+        }
+      } else {
+         setStatus('Используем уже собранные данные...');
+      }
+
+      // --- PHASE 4: COMBINED AI ANALYSIS ---
+      await runAIAnalysis(finalPosts, finalTweets, marketContext, coinMap, mode);
 
     } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Ошибка анализа");
-    } finally {
-      if (!abortRef.current) {
-        setLoading(false);
-        setStatus('');
+      if (abortRef.current) {
+        setStatus("Отменено пользователем.");
       } else {
-        setLoading(false);
+        console.error(error);
+        alert(error instanceof Error ? error.message : "Ошибка анализа");
+        setStatus("Ошибка.");
       }
+    } finally {
+      setIsProcessing(false);
     }
-  }, [selectedSubreddits]);
+  }, [selectedSubreddits, selectedTwitterIds, sourcePosts, tweets]);
 
-  const toggleSubreddit = (name: string) => {
-    setSelectedSubreddits(prev => 
-      prev.includes(name) 
-        ? prev.filter(s => s !== name)
-        : [...prev, name]
-    );
+  // Hourly Analysis (Uses existing data)
+  const handleHourlyAnalysis = async () => {
+    if (sourcePosts.length === 0) return;
+    setIsProcessing(true);
+    abortRef.current = false;
+    try {
+        setStatus('Обновление рыночных цен...');
+        const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
+        await runAIAnalysis(sourcePosts, tweets, marketContext, coinMap, 'hourly');
+    } catch (error) {
+        console.error(error);
+        alert("Ошибка при почасовом анализе");
+        setStatus("Ошибка.");
+    } finally {
+        setIsProcessing(false);
+    }
   };
-
-  const selectAll = () => setSelectedSubreddits(TARGET_SUBREDDITS.map(s => s.name));
-  const deselectAll = () => setSelectedSubreddits([]);
 
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
@@ -180,20 +276,18 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            {results && !loading && (
-              <>
-                 <button
-                  onClick={handleDownloadJSON}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-semibold text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-all"
-                  title="Скачать результат в JSON"
-                >
-                  <DownloadIcon />
-                  <span className="hidden sm:inline">JSON</span>
-                </button>
-              </>
+            {result && !isProcessing && (
+              <button
+                onClick={handleDownloadJSON}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-semibold text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-all"
+                title="Скачать JSON"
+              >
+                <DownloadIcon />
+                <span className="hidden sm:inline">JSON</span>
+              </button>
             )}
             
-             {loading ? (
+             {isProcessing ? (
                 <button 
                   onClick={handleStop}
                   className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20 transition-all"
@@ -202,13 +296,46 @@ const App: React.FC = () => {
                   <span>Стоп</span>
                 </button>
              ) : (
-                <button 
-                  onClick={handleAnalyze} 
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
-                >
-                  <RefreshIcon />
-                  <span>Анализ</span>
-                </button>
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
+                    
+                    {/* Hourly Trigger */}
+                    {sourcePosts.length > 0 && result?.coins && !result.coins[0]?.hourlyForecast && (
+                        <button
+                            onClick={handleHourlyAnalysis}
+                            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-500/30 transition-all"
+                        >
+                            <AnalysisIcon />
+                            <span className="hidden lg:inline">Почасово</span>
+                        </button>
+                    )}
+
+                    {/* Today 20:00 MSK */}
+                    <button
+                        onClick={() => executeAnalysisPipeline('today_20msk', true)}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all"
+                    >
+                        <ClockIcon />
+                        <span>20:00 МСК</span>
+                    </button>
+
+                    {/* Altcoin Hunter Button */}
+                    <button
+                        onClick={() => executeAnalysisPipeline('altcoins', true)}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
+                    >
+                        <SearchIcon />
+                        <span>Поиск Альткоинов</span>
+                    </button>
+
+                    {/* Standard Trigger */}
+                    <button 
+                    onClick={() => executeAnalysisPipeline('simple', true)}
+                    className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
+                    >
+                    <RefreshIcon />
+                    <span>Сбор + Анализ (24ч)</span>
+                    </button>
+                </div>
              )}
           </div>
         </div>
@@ -216,83 +343,106 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        {/* Progress */}
-        {loading && (
+        {/* Progress Display */}
+        {isProcessing && (
           <div className="bg-brand-card border border-gray-800 rounded-xl p-6 animate-pulse">
             <div className="flex justify-between text-sm mb-2 text-gray-400">
-              <span>{status}</span>
-              <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+              <span className="font-mono text-brand-accent">{status}</span>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div 
-                className="bg-brand-accent h-2.5 rounded-full transition-all duration-300" 
-                style={{ width: `${(progress.current / progress.total) * 100}%` }}
-              ></div>
+            {/* Multi-stage Progress Bars */}
+            <div className="space-y-2">
+               {/* Reddit Bar */}
+               <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                 <div 
+                   className="bg-orange-500 h-1.5 transition-all duration-300" 
+                   style={{ width: `${redditProgress.total ? (redditProgress.current / redditProgress.total) * 100 : 0}%` }}
+                 ></div>
+               </div>
+               {/* Twitter Bar */}
+               {selectedTwitterIds.length > 0 && (
+                 <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                   <div 
+                     className="bg-blue-500 h-1.5 transition-all duration-300" 
+                     style={{ width: `${twitterProgress.total ? (twitterProgress.current / twitterProgress.total) * 100 : 0}%` }}
+                   ></div>
+                 </div>
+               )}
             </div>
           </div>
         )}
 
-        {/* Sources */}
-        <section className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[300px] overflow-y-auto custom-scrollbar">
-          <div className="flex items-center justify-between mb-4 sticky top-0 bg-brand-card py-2 z-10 border-b border-gray-800">
-            <h2 className="text-lg font-semibold text-white">Источники ({selectedSubreddits.length})</h2>
-            <div className="flex space-x-2">
-              <button onClick={selectAll} className="text-xs text-blue-400">Все</button>
-              <button onClick={deselectAll} className="text-xs text-gray-400">Сброс</button>
+        {/* Configuration Area */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Reddit Selection */}
+          <div className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[400px] flex flex-col">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <span className="text-orange-500">●</span> Источники Reddit
+              </h2>
+              <div className="flex space-x-2">
+                <button onClick={() => setSelectedSubreddits(TARGET_SUBREDDITS.map(s => s.name))} className="text-xs text-blue-400 hover:text-blue-300">Все</button>
+                <button onClick={() => setSelectedSubreddits([])} className="text-xs text-gray-400 hover:text-gray-300">Сброс</button>
+              </div>
             </div>
+            <div className="flex-grow overflow-y-auto custom-scrollbar">
+              <div className="flex flex-wrap gap-2 content-start">
+                {TARGET_SUBREDDITS.map((sub) => (
+                  <button
+                    key={sub.name}
+                    onClick={() => toggleSubreddit(sub.name)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                      selectedSubreddits.includes(sub.name)
+                        ? 'bg-orange-600/20 border-orange-500 text-orange-400'
+                        : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                    }`}
+                  >
+                    r/{sub.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedSubreddits.length}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {TARGET_SUBREDDITS.map((sub) => (
-              <button
-                key={sub.name}
-                onClick={() => toggleSubreddit(sub.name)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
-                  selectedSubreddits.includes(sub.name)
-                    ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                    : 'bg-gray-800/50 border-gray-700 text-gray-500'
-                }`}
-              >
-                r/{sub.name}
-              </button>
-            ))}
+
+          {/* Twitter Selection */}
+          <div className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[400px] flex flex-col">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <span className="text-blue-500">●</span> Источники Twitter (X)
+              </h2>
+              <div className="flex space-x-2">
+                 <button onClick={() => setSelectedTwitterIds(TWITTER_ACCOUNTS.map(t => t.id))} className="text-xs text-blue-400 hover:text-blue-300">Все</button>
+                 <button onClick={() => setSelectedTwitterIds(TWITTER_ACCOUNTS.slice(0, 5).map(t => t.id))} className="text-xs text-blue-400 hover:text-blue-300">Топ 5</button>
+                 <button onClick={() => setSelectedTwitterIds([])} className="text-xs text-gray-400 hover:text-gray-300">Сброс</button>
+              </div>
+            </div>
+            <div className="flex-grow overflow-y-auto custom-scrollbar">
+              <div className="flex flex-wrap gap-2 content-start">
+                {TWITTER_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => toggleTwitter(acc.id)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                      selectedTwitterIds.includes(acc.id)
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                        : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                    }`}
+                    title={acc.username}
+                  >
+                    @{acc.username}
+                  </button>
+                ))}
+              </div>
+            </div>
+             <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedTwitterIds.length}</p>
           </div>
         </section>
 
-        {/* Results */}
-        {results ? (
+        {/* Combined Result Display */}
+        {result ? (
           <>
-            {/* Deep Analysis Action Section */}
-            <div className="bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <BrainIcon />
-                  Gemini 3 Pro Deep Dive
-                </h3>
-                <p className="text-gray-300 text-sm mt-1">
-                  Запустить углубленный анализ графиков и сентимента с помощью самой мощной модели Google.
-                </p>
-              </div>
-              <button 
-                onClick={handleDeepAnalysis}
-                disabled={deepLoading}
-                className="whitespace-nowrap px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {deepLoading ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Анализ...
-                  </>
-                ) : (
-                  <>
-                    <span className="text-lg">✨</span> Анализ от ИИ (Pro)
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Deep Analysis Result Display */}
-            {deepResults && (
-              <div className="bg-brand-card border border-indigo-500/50 rounded-xl p-8 shadow-2xl relative overflow-hidden animate-fade-in">
+            {/* Strategy Card (Always visible) */}
+            <div className="bg-brand-card border border-indigo-500/50 rounded-xl p-8 shadow-2xl relative overflow-hidden animate-fade-in">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                    <BrainIcon />
                 </div>
@@ -302,21 +452,23 @@ const App: React.FC = () => {
                     <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
                       Стратегический отчет
                     </h2>
-                    <p className="text-xs text-gray-400 uppercase tracking-widest mt-1">Модель: Gemini 3 Pro</p>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest mt-1">
+                      {result.forecastLabel ? `Mode: ${result.forecastLabel}` : 'Mode: Daily/Hourly Analysis'}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4 mt-4 md:mt-0">
                      <div className="text-right">
                        <p className="text-xs text-gray-500 uppercase">Top Pick</p>
-                       <p className="text-xl font-bold text-emerald-400">{deepResults.topPick}</p>
+                       <p className="text-xl font-bold text-emerald-400">{result.topPick}</p>
                      </div>
                      <div className="text-right border-l border-gray-700 pl-4">
                        <p className="text-xs text-gray-500 uppercase">Risk Level</p>
                        <span className={`text-sm font-bold px-2 py-0.5 rounded ${
-                         deepResults.riskLevel === 'Low' ? 'bg-emerald-500/20 text-emerald-400' :
-                         deepResults.riskLevel === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                         result.riskLevel === 'Low' ? 'bg-emerald-500/20 text-emerald-400' :
+                         result.riskLevel === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
                          'bg-red-500/20 text-red-400'
                        }`}>
-                         {deepResults.riskLevel}
+                         {result.riskLevel}
                        </span>
                      </div>
                   </div>
@@ -326,53 +478,98 @@ const App: React.FC = () => {
                   <div>
                     <h4 className="text-sm font-semibold text-gray-300 uppercase mb-3 border-l-2 border-indigo-500 pl-3">Технический Вердикт</h4>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm">
-                      {deepResults.technicalVerdict}
+                      {result.technicalVerdict}
                     </p>
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-gray-300 uppercase mb-3 border-l-2 border-brand-accent pl-3">Торговая Стратегия</h4>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm">
-                      {deepResults.strategy}
+                      {result.strategy}
                     </p>
                   </div>
                 </div>
-              </div>
-            )}
+            </div>
 
-            {/* Standard Results */}
+            {/* Market Summary */}
             <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl relative overflow-hidden">
-              <h2 className="text-xl font-bold text-white mb-2">Обзор рынка (Flash)</h2>
-              <p className="text-gray-300">{results.marketSummary}</p>
+              <h2 className="text-xl font-bold text-white mb-2">Обзор рынка</h2>
+              <p className="text-gray-300">{result.marketSummary}</p>
             </div>
 
-            <div className="bg-brand-card border border-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-6">Тепловая карта настроений</h3>
-              <SentimentChart data={results.coins} />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-white mb-6">Детальный анализ (Топ активы)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {results.coins.map((coin, idx) => (
-                  <CryptoCard key={`${coin.symbol}-${idx}`} coin={coin} />
-                ))}
+            {/* CONDITIONAL CONTENT: Altcoins VS Standard Coins */}
+            {result.altcoins ? (
+              /* ALTCOIN VIEW */
+              <div>
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                  <span className="text-purple-400">💎</span> Найденные Гемы (7-дневный потенциал)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {result.altcoins.map((gem, idx) => (
+                    <AltcoinGemCard key={`${gem.symbol}-${idx}`} gem={gem} />
+                  ))}
+                </div>
+                {result.altcoins.length === 0 && (
+                   <div className="text-center p-10 text-gray-500 bg-gray-900/50 rounded-xl border border-dashed border-gray-700">
+                      ИИ не нашел явных альткоинов с высоким потенциалом в текущем контексте.
+                   </div>
+                )}
               </div>
+            ) : (
+              /* STANDARD VIEW (BTC, ETH...) */
+              <>
+                {/* Charts */}
+                {result.coins && (
+                  <div className="bg-brand-card border border-gray-800 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-6">Тепловая карта настроений</h3>
+                    <SentimentChart data={result.coins} />
+                  </div>
+                )}
+
+                {/* Detailed Cards */}
+                {result.coins && (
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-6">Детальный анализ (Топ активы)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {result.coins.map((coin, idx) => (
+                        <CryptoCard key={`${coin.symbol}-${idx}`} coin={coin} forecastLabel={result.forecastLabel} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* Source Stats */}
+            <div className="grid grid-cols-2 gap-4 opacity-70">
+                <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                   <h4 className="text-xs font-bold text-orange-400 mb-1">Reddit</h4>
+                   <p className="text-sm text-gray-400">Обработано постов: {sourcePosts.length}</p>
+                </div>
+                {tweets.length > 0 && (
+                  <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                     <h4 className="text-xs font-bold text-blue-400 mb-1">Twitter</h4>
+                     <p className="text-sm text-gray-400">Обработано твитов: {tweets.length}</p>
+                  </div>
+                )}
             </div>
           </>
         ) : (
-          !loading && (
+          !isProcessing && (
             <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-gray-800 rounded-xl">
               <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
                 <span className="text-3xl">🚀</span>
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">Готов к анализу</h3>
               <p className="text-gray-400 max-w-md">
-                Выберите сабреддиты и нажмите «Старт».
+                Настройте источники выше и выберите режим анализа.
               </p>
             </div>
           )
         )}
       </main>
+      
+      {/* Twitter Tools Floating Button */}
+      <TwitterTools />
     </div>
   );
 };

@@ -1,38 +1,62 @@
 import { CMCCoinData } from '../types';
+import { CMC_API_KEY } from '../constants';
 
-const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'https://skillful-recreation-production.up.railway.app';
+const PROXY_URL = 'https://corsproxy.io/?';
+const CMC_BASE_URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
+
+const TARGET_SYMBOLS = ['BTC', 'ETH', 'XRP', 'SOL', 'BNB', 'DOGE', 'ADA', 'AVAX'];
 
 export const fetchCryptoMarketData = async (): Promise<{ summary: string; coinMap: Map<string, CMCCoinData> }> => {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/cmc/data`, {
+    // IMPORTANT: We pass the API Key as a query parameter (CMC_PRO_API_KEY) instead of a header.
+    // Public CORS proxies often strip custom headers like X-CMC_PRO_API_KEY, causing 401/403 errors or fetch failures.
+    const targetUrl = `${CMC_BASE_URL}?start=1&limit=100&convert=USD&CMC_PRO_API_KEY=${CMC_API_KEY}`;
+    
+    // We encode the target URL to ensure it's passed correctly through the proxy
+    const url = `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
+        // Header removed: Key is now in URL
       }
     });
 
     if (!response.ok) {
-      throw new Error(`CMC API Error: ${response.status}`);
+      const errorText = await response.text().catch(() => 'No error details');
+      throw new Error(`CMC API Error: ${response.status} - ${errorText}`);
     }
 
     const json = await response.json();
     
-    if (!json.success) {
-      console.warn("CMC data unavailable:", json.error);
-      return { summary: "MARKET CONTEXT: Data Unavailable.", coinMap: new Map() };
+    if (!json || !json.data) {
+      throw new Error("Invalid Data Structure from CMC");
     }
 
     const data: CMCCoinData[] = json.data;
+
     const coinMap = new Map<string, CMCCoinData>();
+    let summaryText = "MARKET CONTEXT (Key Assets):\n";
 
     data.forEach((coin) => {
+      // Store ALL in map for lookup
       coinMap.set(coin.symbol.toUpperCase(), coin);
+      
+      // But only add relevant ones to the context string sent to AI
+      if (TARGET_SYMBOLS.includes(coin.symbol.toUpperCase()) || coin.quote.USD.market_cap > 50000000000) {
+        const price = coin.quote.USD.price < 1 ? coin.quote.USD.price.toFixed(4) : coin.quote.USD.price.toFixed(2);
+        const change24h = coin.quote.USD.percent_change_24h.toFixed(1);
+        const change7d = coin.quote.USD.percent_change_7d.toFixed(1);
+        summaryText += `${coin.symbol}: $${price} (24h: ${change24h}%, 7d: ${change7d}%)\n`;
+      }
     });
 
-    return { summary: json.summary, coinMap };
+    return { summary: summaryText, coinMap };
 
   } catch (error) {
     console.error("Failed to fetch CoinMarketCap data:", error);
-    return { summary: "MARKET CONTEXT: Data Unavailable.", coinMap: new Map() };
+    // Return empty data instead of throwing, so the app can continue with just Reddit data
+    return { summary: "MARKET CONTEXT: Real-time data unavailable (API Error).", coinMap: new Map() };
   }
 };
