@@ -9,6 +9,7 @@ import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
+import SingleCoinAnalysis from './components/SingleCoinAnalysis';
 
 // Icons
 const RefreshIcon = () => (
@@ -40,7 +41,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin'>('singleCoin');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -312,6 +313,13 @@ const App: React.FC = () => {
               >
                 Анализ чатов (Beta)
               </button>
+              <button
+                onClick={() => setActiveTab('singleCoin')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'singleCoin' ? 'bg-gray-800 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+              >
+                Мнение о монете
+              </button>
             </div>
           </div>
 
@@ -375,7 +383,9 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {activeTab === 'chatFilter' ? (
+        {activeTab === 'singleCoin' ? (
+          <SingleCoinAnalysis />
+        ) : activeTab === 'chatFilter' ? (
           <TelegramFilter />
         ) : (
           <>

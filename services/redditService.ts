@@ -35,7 +35,7 @@ async function fetchWithRateLimit(url: string): Promise<any> {
   // Use corsproxy.io to bypass browser CORS restrictions for Reddit API
   // Note: Proxies often strip headers, so we rely on the safetyDelay if headers are missing.
   const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-  
+
   try {
     const response = await fetch(proxyUrl, {
       headers: {
@@ -79,13 +79,18 @@ async function fetchWithRateLimit(url: string): Promise<any> {
   }
 }
 
-export const fetchSubredditPosts = async (subredditName: string): Promise<RedditPost[]> => {
+export const fetchSubredditPosts = async (subredditName: string, searchQuery?: string): Promise<RedditPost[]> => {
   try {
     // FETCH NEW: Changed from 'hot' to 'new' to get fresh content as requested
-    const targetUrl = `https://www.reddit.com/r/${subredditName}/new.json?limit=50`;
-    
+    let targetUrl = `https://www.reddit.com/r/${subredditName}/new.json?limit=50`;
+
+    // If a search query is provided (e.g., specific coin analysis)
+    if (searchQuery) {
+      targetUrl = `https://www.reddit.com/r/${subredditName}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&t=week&limit=50`;
+    }
+
     const data = await fetchWithRateLimit(targetUrl);
-    
+
     if (!data || !data.data || !data.data.children) {
       return [];
     }

@@ -74,8 +74,21 @@ const ALTCOIN_SCHEMA: Schema = {
   required: ["symbol", "name", "potential7d", "risk", "score", "why"]
 };
 
-const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'): Schema => {
+// --- SCHEMA 5: SINGLE COIN ANALYSIS ---
+const SINGLE_COIN_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    currentSituation: { type: Type.STRING, description: "Текущая ситуация по монете (на основе API и соцсетей)." },
+    forecast: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
+    detail: { type: Type.STRING, description: "Развернутое мнение. Если данных в соцсетях за 3 дня нет или мало, явно начать с 'Обсуждают мало/недостаточно данных'." },
+    hasEnoughData: { type: Type.BOOLEAN, description: "True если есть хотя бы несколько постов/твитов по монете, False если упоминаний почти нет." }
+  },
+  required: ["currentSituation", "forecast", "detail", "hasEnoughData"]
+};
+
+const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin'): Schema => {
   const isAltcoin = mode === 'altcoins';
+  const isSingleCoin = mode === 'single_coin';
 
   // Select coin schema based on mode
   let coinItemSchema = SIMPLE_COIN_SCHEMA;
@@ -109,8 +122,10 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
         type: Type.STRING,
         description: "Вердикт (кратко). На русском."
       },
-      // Conditionally require coins OR altcoins
-      ...(isAltcoin ? {
+      // Conditionally require coins OR altcoins OR singleCoin
+      ...(isSingleCoin ? {
+        singleCoin: SINGLE_COIN_SCHEMA
+      } : isAltcoin ? {
         altcoins: {
           type: Type.ARRAY,
           items: ALTCOIN_SCHEMA,
@@ -123,7 +138,7 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
         }
       })
     },
-    required: ["marketSummary", "forecastLabel", "strategy", "topPick", "riskLevel", "technicalVerdict", isAltcoin ? "altcoins" : "coins"]
+    required: ["marketSummary", "forecastLabel", "strategy", "topPick", "riskLevel", "technicalVerdict", isSingleCoin ? "singleCoin" : (isAltcoin ? "altcoins" : "coins")]
   };
 };
 
@@ -131,7 +146,8 @@ export const performCombinedAnalysis = async (
   posts: RedditPost[],
   tweets: Tweet[],
   marketContext: string,
-  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' = 'simple'
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' = 'simple',
+  targetCoinSymbol?: string
 ): Promise<CombinedAnalysisResponse> => {
   if (!posts || posts.length === 0) {
     throw new Error("Нет данных для анализа (Reddit пуст).");
@@ -201,6 +217,16 @@ export const performCombinedAnalysis = async (
       "forecastLabel": "Поиск Гемов (7д)"
     `;
     thinkingBudget = 8192; // Higher budget to filter noise from signal in altcoins
+  } else if (mode === 'single_coin') {
+    task = `ANALYZE SPECIFIC COIN: ${targetCoinSymbol || 'UNKNOWN'}. Read the Reddit and Twitter data strictly looking for this coin. Check the Market Context for its current price.`;
+    modeInstructions = `
+      TASK: Provide a comprehensive opinion on ONE specific coin: ${targetCoinSymbol}.
+      - Combine the objective real-time market data from CMC with subjective sentiment from Reddit/Twitter.
+      - If there are fewer than 3 mentions in the social data, you MUST set hasEnoughData to false, and the 'detail' field must explicitly begin by stating that the coin is rarely discussed.
+      - OUTPUT FIELD: "singleCoin" (object).
+      "forecastLabel": "Анализ: ${targetCoinSymbol}"
+    `;
+    thinkingBudget = 4096;
   }
 
   // maxOutputTokens must be sufficient to cover thinking + JSON response

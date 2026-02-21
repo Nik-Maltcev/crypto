@@ -81,6 +81,9 @@ export interface CombinedAnalysisResponse {
   // Altcoin Mode
   altcoins?: AltcoinGem[];
 
+  // Single Coin Mode
+  singleCoin?: SingleCoinAnalysisResult;
+
   // Deep Analysis Fields
   strategy: string; // Detailed text strategy
   topPick: string; // Best asset symbol
@@ -141,5 +144,13 @@ export interface ChatFilterResult {
   isSpam: boolean;
   category: 'Spam' | 'Scam' | 'Flood' | 'Useful' | 'News' | 'Signals';
   reason: string;
+}
+
+// New Interface for Single Coin Specific Analysis
+export interface SingleCoinAnalysisResult {
+  currentSituation: string;
+  forecast: 'Bullish' | 'Bearish' | 'Neutral';
+  detail: string;
+  hasEnoughData: boolean;
 }
 
