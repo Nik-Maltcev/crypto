@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { RedditPost, CombinedAnalysisResponse, Tweet } from '../types';
+import { RedditPost, CombinedAnalysisResponse, Tweet, TelegramMessage, ChatFilterResult } from '../types';
 import { SYSTEM_INSTRUCTION } from '../constants';
 
 // --- SCHEMA 1: SIMPLE (Single Target 24h) ---
@@ -76,7 +76,7 @@ const ALTCOIN_SCHEMA: Schema = {
 
 const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'): Schema => {
   const isAltcoin = mode === 'altcoins';
-  
+
   // Select coin schema based on mode
   let coinItemSchema = SIMPLE_COIN_SCHEMA;
   if (mode === 'hourly') coinItemSchema = HOURLY_COIN_SCHEMA;
@@ -93,21 +93,21 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
         type: Type.STRING,
         description: "Label for the forecast time (e.g. 'Прогноз (24ч)' or 'Прогноз (20:00 МСК)')."
       },
-      strategy: { 
-        type: Type.STRING, 
-        description: "Стратегия (markdown, кратко). На русском." 
+      strategy: {
+        type: Type.STRING,
+        description: "Стратегия (markdown, кратко). На русском."
       },
-      topPick: { 
-        type: Type.STRING, 
-        description: "Тикер лучшего актива." 
+      topPick: {
+        type: Type.STRING,
+        description: "Тикер лучшего актива."
       },
-      riskLevel: { 
-        type: Type.STRING, 
-        enum: ["Low", "Medium", "High", "Extreme"] 
+      riskLevel: {
+        type: Type.STRING,
+        enum: ["Low", "Medium", "High", "Extreme"]
       },
-      technicalVerdict: { 
-        type: Type.STRING, 
-        description: "Вердикт (кратко). На русском." 
+      technicalVerdict: {
+        type: Type.STRING,
+        description: "Вердикт (кратко). На русском."
       },
       // Conditionally require coins OR altcoins
       ...(isAltcoin ? {
@@ -128,7 +128,7 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
 };
 
 export const performCombinedAnalysis = async (
-  posts: RedditPost[], 
+  posts: RedditPost[],
   tweets: Tweet[],
   marketContext: string,
   mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' = 'simple'
@@ -147,11 +147,11 @@ export const performCombinedAnalysis = async (
     score: p.score
   })));
 
-  const twitterPayload = tweets.length > 0 
+  const twitterPayload = tweets.length > 0
     ? JSON.stringify(tweets.slice(0, 50).map(t => ({
-        text: t.text.substring(0, 150),
-        user: t.user
-      })))
+      text: t.text.substring(0, 150),
+      user: t.user
+    })))
     : "No Twitter Data.";
 
   // Mode-specific prompts
@@ -169,7 +169,7 @@ export const performCombinedAnalysis = async (
       FIELDS: "targetPrice24h" (number), "targetChange24h" (number).
       "forecastLabel": "Прогноз (24ч)"
     `;
-    thinkingBudget = 2048; 
+    thinkingBudget = 2048;
   } else if (mode === 'hourly') {
     task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
     modeInstructions = `
@@ -208,7 +208,7 @@ export const performCombinedAnalysis = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
+      model: 'gemini-3-pro-preview',
       contents: `
       CONTEXT: ${marketContext}
       REDDIT DATA: ${redditPayload}
@@ -226,9 +226,9 @@ export const performCombinedAnalysis = async (
         responseMimeType: "application/json",
         responseSchema: createMainSchema(mode),
         // Enable Reasoning (Thinking)
-        thinkingConfig: { thinkingBudget }, 
+        thinkingConfig: { thinkingBudget },
         maxOutputTokens: maxOutputTokens,
-        temperature: mode === 'altcoins' ? 0.4 : 0.2, 
+        temperature: mode === 'altcoins' ? 0.4 : 0.2,
       }
     });
 
@@ -245,5 +245,84 @@ export const performCombinedAnalysis = async (
       throw new Error("Ошибка обработки данных AI. Попробуйте снова.");
     }
     throw error;
+  }
+};
+
+// --- CHAT FILTER SCHEMA ---
+const CHAT_FILTER_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    results: {
+      type: Type.ARRAY,
+      description: "List of analyzed chats",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          chatTitle: { type: Type.STRING },
+          isSpam: { type: Type.BOOLEAN, description: "True if chat is flood, spam, scam, or unhelpful." },
+          category: { type: Type.STRING, enum: ["Spam", "Scam", "Flood", "Useful", "News", "Signals"] },
+          reason: { type: Type.STRING, description: "One sentence reason in Russian." }
+        },
+        required: ["chatTitle", "isSpam", "category", "reason"]
+      }
+    }
+  },
+  required: ["results"]
+};
+
+// Функция для анализа списка Telegram чатов на спам и полезность
+export const filterTelegramChats = async (
+  chatData: Record<string, TelegramMessage[]>
+): Promise<ChatFilterResult[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  // Format the chat data into a dense context
+  let contextText = "TELEGRAM CHATS HISTORY FOR ANALYSIS:\n\n";
+  Object.entries(chatData).forEach(([title, messages]) => {
+    contextText += `--- CHAT: ${title} ---\n`;
+    if (messages.length === 0) {
+      contextText += "(No messages found)\n";
+      return;
+    }
+    // Take up to 50 recent messages per chat to give AI enough context without overflowing
+    messages.slice(0, 50).forEach(msg => {
+      const sender = msg.sender_name || msg.sender_username || "User";
+      contextText += `[${msg.date}] ${sender}: ${msg.text.substring(0, 150)}\n`;
+    });
+    contextText += "\n";
+  });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `
+      CONTEXT: ${contextText}
+
+      TASK: You are an expert crypto community moderator. Analyze the provided message histories of several Telegram chats.
+      For each chat, determine if it is "Spam", "Scam", "Flood" (unhelpful noise), or "Useful" / "News" / "Signals" (valuable crypto content).
+      
+      RULES:
+      - isSpam must be true if the chat consists mainly of airdrop links, bot commands, meaningless noise, or scams.
+      - Reason must be concise and in Russian language.
+
+      OUTPUT: JSON matching the schema containing all given chats.
+      `,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: CHAT_FILTER_SCHEMA,
+        temperature: 0.1,
+      }
+    });
+
+    let text = response.text || "";
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    if (!text) throw new Error("Empty response from AI");
+
+    const parsed = JSON.parse(text) as { results: ChatFilterResult[] };
+    return parsed.results || [];
+  } catch (error) {
+    console.error("Gemini Chat Filter Error:", error);
+    throw new Error("Ошибка при оценке чатов AI.");
   }
 };

@@ -200,6 +200,50 @@ async def parse_reddit(subreddits: list[str] | None = Body(default=None)):
     }
 
 
+@app.post("/api/telegram/preview_chats")
+async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7)):
+    """Fetch messages from a custom list of chats for preview/filtering."""
+    logger.info(f"Preview chats request received. Chats: {chats}, days: {days}")
+    
+    if not chats:
+        raise HTTPException(400, "Chats list cannot be empty")
+        
+    try:
+        client = await get_telethon_client()
+        parser = ChatParser(client)
+        
+        # Parse all requested chats
+        messages = await parser.parse_all_chats(chats, days=days)
+        
+        # Group by chat to return organized data
+        grouped_data = {}
+        for chat in chats:
+            # We use chat as key, initially empty
+            grouped_data[chat] = []
+            
+        for msg in messages:
+            chat_id = msg.get("chat")
+            # Telethon might return internal IDs, but we match by what we requested or what we got
+            # It's better to just group by chat_title for UI display
+            title = msg.get("chat_title", chat_id)
+            if title not in grouped_data:
+                grouped_data[title] = []
+            grouped_data[title].append(msg)
+            
+        logger.info(f"Successfully fetched {len(messages)} messages from {len(chats)} chats.")
+        
+        return {
+            "success": True,
+            "chats_requested": len(chats),
+            "messages_found": len(messages),
+            "data": grouped_data
+        }
+    except Exception as e:
+        logger.error(f"Error in preview_chats: {e}")
+        raise HTTPException(500, str(e))
+
+
+
 @app.get("/api/cmc/data")
 async def get_cmc_data():
     """Get CoinMarketCap market data."""

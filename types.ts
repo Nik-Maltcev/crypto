@@ -40,7 +40,7 @@ export interface CryptoAnalysis {
   confidence: number; // 0 to 100
   reasoning: string;
   sources: string[]; // URLs of reddit threads used
-  
+
   // Single Target Forecast (Simple Mode 24h)
   targetPrice24h?: number;
   targetChange24h?: number;
@@ -51,7 +51,7 @@ export interface CryptoAnalysis {
 
   // Detailed Forecast (Hourly Mode)
   hourlyForecast?: HourlyForecastPoint[];
-  
+
   // Real-time Market Data (Optional, merged from CMC)
   currentPrice?: number;
   change24h?: number;
@@ -77,10 +77,10 @@ export interface CombinedAnalysisResponse {
 
   // Standard Modes
   coins?: CryptoAnalysis[];
-  
+
   // Altcoin Mode
   altcoins?: AltcoinGem[];
-  
+
   // Deep Analysis Fields
   strategy: string; // Detailed text strategy
   topPick: string; // Best asset symbol
@@ -115,3 +115,31 @@ export interface CMCCoinData {
     }
   };
 }
+
+export interface TelegramMessage {
+  chat: string;
+  chat_title: string;
+  message_id: number;
+  date: string;
+  text: string;
+  sender_name?: string;
+  sender_username?: string;
+}
+
+export interface TelegramExportResponse {
+  success: boolean;
+  parsed_at: string;
+  chats_count: number;
+  messages_count: number;
+  data: {
+    messages: TelegramMessage[];
+  };
+}
+
+export interface ChatFilterResult {
+  chatTitle: string;
+  isSpam: boolean;
+  category: 'Spam' | 'Scam' | 'Flood' | 'Useful' | 'News' | 'Signals';
+  reason: string;
+}
+

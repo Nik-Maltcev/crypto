@@ -8,11 +8,11 @@ export const triggerTelegramParse = async (): Promise<void> => {
     const response = await fetch(`${TELEGRAM_API_URL}/api/telegram/parse`, {
       method: 'POST'
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to start Telegram parse: ${response.status}`);
     }
-    
+
     console.log('Telegram parsing started');
   } catch (error) {
     console.error("Failed to trigger Telegram parse:", error);
@@ -23,19 +23,19 @@ export const triggerTelegramParse = async (): Promise<void> => {
 export const waitForTelegramData = async (maxWaitMs: number = 120000): Promise<TelegramExportResponse> => {
   const startTime = Date.now();
   const pollInterval = 3000; // Check every 3 seconds
-  
+
   while (Date.now() - startTime < maxWaitMs) {
     try {
       const status = await getTelegramStatus();
-      
+
       if (status.status === 'success') {
         return await fetchTelegramData();
       }
-      
+
       if (status.status === 'failed') {
         throw new Error('Telegram parsing failed');
       }
-      
+
       // Still running, wait and retry
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     } catch (error) {
@@ -43,24 +43,24 @@ export const waitForTelegramData = async (maxWaitMs: number = 120000): Promise<T
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
   }
-  
+
   throw new Error('Telegram parsing timeout');
 };
 
 export const fetchTelegramData = async (): Promise<TelegramExportResponse> => {
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/api/telegram/export`);
-    
+
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error('Нет данных Telegram. Запусти /parse в боте.');
       }
       throw new Error(`Telegram API Error: ${response.status}`);
     }
-    
+
     const json = await response.json();
     return json;
-    
+
   } catch (error) {
     console.error("Failed to fetch Telegram data:", error);
     throw error;
@@ -84,7 +84,7 @@ export const getTelegramStatus = async (): Promise<{
 // Преобразуем Telegram сообщения в формат похожий на Reddit для Gemini
 export const formatTelegramForAnalysis = (messages: TelegramMessage[]): string => {
   let summary = "TELEGRAM CRYPTO CHATS CONTEXT:\n";
-  
+
   // Группируем по чатам
   const byChat = new Map<string, TelegramMessage[]>();
   messages.forEach(msg => {
@@ -92,7 +92,7 @@ export const formatTelegramForAnalysis = (messages: TelegramMessage[]): string =
     existing.push(msg);
     byChat.set(msg.chat_title, existing);
   });
-  
+
   // Берём топ сообщения из каждого чата
   byChat.forEach((msgs, chatTitle) => {
     summary += `\n[${chatTitle}]:\n`;
@@ -101,6 +101,34 @@ export const formatTelegramForAnalysis = (messages: TelegramMessage[]): string =
       summary += `- ${text}\n`;
     });
   });
-  
+
   return summary;
+};
+
+// Функция для получения preview сообщений из кастомного списка чатов
+export const fetchChatsPreview = async (chats: string[], days: number = 7): Promise<{
+  success: boolean;
+  chats_requested: number;
+  messages_found: number;
+  data: Record<string, TelegramMessage[]>;
+}> => {
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/api/telegram/preview_chats`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ chats, days })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Telegram Preview API Error: ${response.status} ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to fetch chats preview:", error);
+    throw error;
+  }
 };
