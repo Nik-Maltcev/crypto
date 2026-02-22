@@ -238,6 +238,9 @@ async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7
             "messages_found": len(messages),
             "data": grouped_data
         }
+    except asyncio.exceptions.CancelledError:
+        logger.warning(f"Client disconnected or request timeout during preview_chats.")
+        raise HTTPException(408, "Request Timeout: Parsing takes too long for a synchronous request.")
     except Exception as e:
         logger.error(f"Error in preview_chats: {e}")
         raise HTTPException(500, str(e))
