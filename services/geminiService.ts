@@ -80,7 +80,7 @@ const SINGLE_COIN_SCHEMA: Schema = {
   properties: {
     currentSituation: { type: Type.STRING, description: "Текущая ситуация по монете (на основе API и соцсетей)." },
     forecast: { type: Type.STRING, enum: ["Bullish", "Bearish", "Neutral"] },
-    detail: { type: Type.STRING, description: "Развернутое мнение. Если данных в соцсетях за 3 дня нет или мало, явно начать с 'Обсуждают мало/недостаточно данных'." },
+    detail: { type: Type.STRING, description: "Развернутое аналитическое мнение (жестко и по существу). Пиши уверенно и объективно, без воды и слов вроде 'возможно' или 'кажется', опираясь только на переданные цифры и настроения. Если данных в соцсетях за 3 дня нет или мало, явно начать с 'Обсуждают мало/недостаточно данных'." },
     hasEnoughData: { type: Type.BOOLEAN, description: "True если есть хотя бы несколько постов/твитов по монете, False если упоминаний почти нет." }
   },
   required: ["currentSituation", "forecast", "detail", "hasEnoughData"]
@@ -220,8 +220,9 @@ export const performCombinedAnalysis = async (
   } else if (mode === 'single_coin') {
     task = `ANALYZE SPECIFIC COIN: ${targetCoinSymbol || 'UNKNOWN'}. Read the Reddit and Twitter data strictly looking for this coin. Check the Market Context for its current price.`;
     modeInstructions = `
-      TASK: Provide a comprehensive opinion on ONE specific coin: ${targetCoinSymbol}.
-      - Combine the objective real-time market data from CMC with subjective sentiment from Reddit/Twitter.
+      TASK: Provide a HIGHLY CONFIDENT, OBJECTIVE, and ANALYTICAL opinion on ONE specific coin: ${targetCoinSymbol}.
+      - Base your verdict STRICTLY AND EXCLUSIVELY on the provided data (CMC market data + Reddit/Twitter sentiment).
+      - BE DECISIVE. Avoid weak words like "possibly", "maybe", "mixed", or "unclear". Give a sharp, professional market assessment in Russian.
       - If there are fewer than 3 mentions in the social data, you MUST set hasEnoughData to false, and the 'detail' field must explicitly begin by stating that the coin is rarely discussed.
       - OUTPUT FIELD: "singleCoin" (object).
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
