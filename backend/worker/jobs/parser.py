@@ -7,6 +7,7 @@ from typing import Any
 
 from telethon import TelegramClient
 from telethon.tl.types import User
+from telethon.errors import FloodWaitError
 
 from core.config import get_settings
 
@@ -87,6 +88,9 @@ class ChatParser:
             
             logger.info(f"Parsed {len(messages)} messages from {chat_id}")
             
+        except FloodWaitError as e:
+            logger.error(f"FloodWait on chat {chat_id}: must wait {e.seconds}s. Aborting further parsing.")
+            raise  # Re-raise so parse_all_chats can handle it
         except Exception as e:
             logger.error(f"Error parsing chat {chat_id}: {e}")
             # Try to reconnect for next chat
@@ -126,8 +130,12 @@ class ChatParser:
                     logger.error(f"Reconnect failed: {e}")
             
             logger.info(f"Parsing chat {i + 1}/{len(chat_ids)}: {chat_id}")
-            messages = await self.parse_chat(chat_id, days, max_messages=max_messages_per_chat, min_length_override=min_length_override)
-            all_messages.extend(messages)
+            try:
+                messages = await self.parse_chat(chat_id, days, max_messages=max_messages_per_chat, min_length_override=min_length_override)
+                all_messages.extend(messages)
+            except FloodWaitError as e:
+                logger.error(f"FLOOD WAIT: Telegram requires a {e.seconds}s wait. Stopping. Returning {len(all_messages)} messages collected so far.")
+                break  # Stop trying more chats — they'll all fail too
         
         all_messages.sort(key=lambda x: x["date"], reverse=True)
         
