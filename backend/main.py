@@ -213,7 +213,8 @@ async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7
         parser = ChatParser(client)
         
         # Parse all requested chats (limit to 50 messages per chat for speed)
-        messages = await parser.parse_all_chats(chats, days=days, max_messages_per_chat=50)
+        # Use min_length=3 to catch short Chinese messages that would be filtered at default 10
+        messages = await parser.parse_all_chats(chats, days=days, max_messages_per_chat=50, min_length_override=3)
         
         # Create a dictionary mapping requested chat -> its resolved title
         # Defaults to the requested chat string if no messages were found
