@@ -7,7 +7,7 @@ from typing import Any
 
 from telethon import TelegramClient
 from telethon.tl.types import User
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, AuthKeyUnregisteredError
 
 from core.config import get_settings
 
@@ -91,6 +91,9 @@ class ChatParser:
         except FloodWaitError as e:
             logger.error(f"FloodWait on chat {chat_id}: must wait {e.seconds}s. Aborting further parsing.")
             raise  # Re-raise so parse_all_chats can handle it
+        except AuthKeyUnregisteredError:
+            logger.error(f"SESSION REVOKED for chat {chat_id}. The session string is no longer valid.")
+            raise  # Re-raise so parse_all_chats can stop the whole loop
         except Exception as e:
             logger.error(f"Error parsing chat {chat_id}: {e}")
             # Try to reconnect for next chat
@@ -136,6 +139,9 @@ class ChatParser:
             except FloodWaitError as e:
                 logger.error(f"FLOOD WAIT: Telegram requires a {e.seconds}s wait. Stopping. Returning {len(all_messages)} messages collected so far.")
                 break  # Stop trying more chats — they'll all fail too
+            except AuthKeyUnregisteredError:
+                logger.error(f"CRITICAL: Telegram Session is REVOKED. Stopping. Please update TELETHON_SESSION.")
+                break  # Session is dead, no point in continuing
         
         all_messages.sort(key=lambda x: x["date"], reverse=True)
         
