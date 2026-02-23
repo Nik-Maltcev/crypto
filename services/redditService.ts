@@ -1,95 +1,29 @@
 import { RedditPost } from '../types';
 
+const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+
 // Helper to clean up Reddit data
 const cleanText = (text: string) => {
   return text ? text.replace(/\s+/g, ' ').substring(0, 500) : '';
 };
 
-// Rate Limiting State
-let rateLimitRemaining = 600; // Default optimistic starting point
-let rateLimitResetTime = 0; // Epoch time when limit resets
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-/**
- * Smart Rate Limiting Fetch
- * 1. Checks headers for X-Ratelimit-Remaining
- * 2. Pauses if limit is hit
- * 3. Enforces a minimum safety delay between requests to avoid burst-bans
- */
-async function fetchWithRateLimit(url: string): Promise<any> {
-  const now = Date.now();
-
-  // 1. Strict Header Adherence
-  if (rateLimitRemaining < 2 && now < rateLimitResetTime) {
-    const waitTime = rateLimitResetTime - now + 1000; // Add 1s buffer
-    console.warn(`[RateLimit] Hitting limits. Waiting ${Math.ceil(waitTime / 1000)}s...`);
-    await sleep(waitTime);
-  } else {
-    // 2. Pessimistic Safety Delay (Default to ~60 QPM = 1000ms delay per request to be safe without headers)
-    // If we have plenty of remaining requests (confirmed by headers), we can go faster.
-    const safetyDelay = rateLimitRemaining > 50 ? 600 : 1500;
-    await sleep(safetyDelay);
-  }
-
-  // Use our own backend as CORS proxy
-  const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
-  const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(url)}`;
-
-  try {
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'User-Agent': 'CryptoPulseAI/1.0 (Client-Side App)'
-      }
-    });
-
-    // Update Rate Limits from Headers (if available through proxy)
-    const remainingHeader = response.headers.get('x-ratelimit-remaining');
-    const resetHeader = response.headers.get('x-ratelimit-reset');
-
-    if (remainingHeader) {
-      rateLimitRemaining = parseFloat(remainingHeader);
-    }
-    if (resetHeader) {
-      rateLimitResetTime = Date.now() + (parseFloat(resetHeader) * 1000);
-    }
-
-    if (!response.ok) {
-      // 429 = Too Many Requests
-      if (response.status === 429) {
-        rateLimitRemaining = 0;
-        rateLimitResetTime = Date.now() + 60000; // Assume 1 min penalty if header missing
-        throw new Error('Rate Limited (429)');
-      }
-      throw new Error(`Status ${response.status}`);
-    }
-
-    const text = await response.text();
-    const trimmed = text.trim();
-
-    // 3. Strict JSON Validation (Prevent "Unexpected token <" error)
-    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-      throw new Error('Received HTML/Invalid content (likely error page)');
-    }
-
-    return JSON.parse(text);
-  } catch (error) {
-    console.warn(`Fetch failed for ${url}:`, error);
-    throw error;
-  }
-}
-
 export const fetchSubredditPosts = async (subredditName: string, searchQuery?: string): Promise<RedditPost[]> => {
   try {
-    // FETCH NEW: Changed from 'hot' to 'new' to get fresh content as requested
-    let targetUrl = `https://www.reddit.com/r/${subredditName}/new.json?limit=50`;
+    // We now use our dedicated backed endpoint which handles Reddit OAuth
+    let url = `${BACKEND_URL}/api/reddit/posts?subreddit=${encodeURIComponent(subredditName)}&limit=50`;
 
-    // If a search query is provided (e.g., specific coin analysis)
     if (searchQuery) {
-      targetUrl = `https://www.reddit.com/r/${subredditName}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&t=week&limit=50`;
+      url += `&q=${encodeURIComponent(searchQuery)}`;
     }
 
-    const data = await fetchWithRateLimit(targetUrl);
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.warn(`Reddit fetch failed for r/${subredditName}: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
 
     if (!data || !data.data || !data.data.children) {
       return [];
@@ -119,12 +53,10 @@ export const fetchSubredditPosts = async (subredditName: string, searchQuery?: s
         return !isDiscussion && isRecent;
       });
 
-    // Return strict data, no mocks.
     return posts;
 
   } catch (error) {
-    // If a specific subreddit fails, we return empty so the batch continues.
-    // We do NOT return mock data.
+    console.warn(`Error fetching r/${subredditName}:`, error);
     return [];
   }
 };

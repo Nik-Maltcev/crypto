@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # CoinMarketCap
     CMC_API_KEY: str = ""
 
+    # Reddit OAuth
+    REDDIT_CLIENT_ID: str = ""
+    REDDIT_CLIENT_SECRET: str = ""
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def convert_database_url(cls, v: str) -> str:

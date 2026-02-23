@@ -262,6 +262,91 @@ async def get_cmc_data():
     return result
 
 
+# --- Reddit OAuth ---
+_reddit_token: str | None = None
+_reddit_token_expires: float = 0
+
+
+async def get_reddit_token() -> str:
+    """Get or refresh Reddit OAuth token (application-only auth)."""
+    import time
+    global _reddit_token, _reddit_token_expires
+    
+    if _reddit_token and time.time() < _reddit_token_expires - 60:
+        return _reddit_token
+    
+    settings = get_settings()
+    client_id = settings.REDDIT_CLIENT_ID
+    client_secret = settings.REDDIT_CLIENT_SECRET
+    
+    # Fallback to direct env check just in case
+    if not client_id:
+        import os
+        client_id = os.environ.get("REDDIT_CLIENT_ID", "")
+    if not client_secret:
+        import os
+        client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
+    
+    if not client_id or not client_secret:
+        logger.warning("REDDIT_CLIENT_ID or REDDIT_CLIENT_SECRET not configured. Reddit API will fail.")
+        raise HTTPException(500, "Reddit credentials missing on server")
+    
+    import httpx
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                "https://www.reddit.com/api/v1/access_token",
+                auth=(client_id, client_secret),
+                data={"grant_type": "client_credentials"},
+                headers={"User-Agent": "CryptoPulseAI/1.0"}
+            )
+            data = resp.json()
+        except Exception as e:
+            logger.error(f"Failed to connect to Reddit for OAuth: {e}")
+            raise HTTPException(502, f"Reddit unreachable: {str(e)}")
+    
+    if "access_token" not in data:
+        logger.error(f"Reddit OAuth failed: {data}")
+        raise HTTPException(500, f"Reddit OAuth failed: {data}")
+    
+    _reddit_token = data["access_token"]
+    _reddit_token_expires = time.time() + data.get("expires_in", 3600)
+    logger.info("Reddit OAuth token acquired")
+    return _reddit_token
+
+
+@app.get("/api/reddit/posts")
+async def fetch_reddit_posts(subreddit: str, limit: int = 50, q: str | None = None):
+    """Fetch posts from a subreddit using OAuth (60 req/min limit)."""
+    import httpx
+    
+    try:
+        token = await get_reddit_token()
+    except HTTPException as he:
+        # Re-raise known exceptions
+        raise he
+    except Exception as e:
+        logger.error(f"Unexpected Reddit OAuth error: {e}")
+        raise HTTPException(500, f"Reddit OAuth error: {str(e)}")
+    
+    if q:
+        url = f"https://oauth.reddit.com/r/{subreddit}/search.json?q={q}&sort=new&t=week&limit={limit}"
+    else:
+        url = f"https://oauth.reddit.com/r/{subreddit}/new.json?limit={limit}"
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers={
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "CryptoPulseAI/1.0"
+        })
+    
+    if resp.status_code != 200:
+        logger.warning(f"Reddit API error for r/{subreddit}: {resp.status_code} - {resp.text}")
+        return {"data": {"children": []}}
+    
+    return resp.json()
+
+
 @app.get("/api/proxy")
 async def proxy_request(url: str, headers: str | None = None):
     """Generic CORS proxy: forwards GET requests to external APIs server-side."""
