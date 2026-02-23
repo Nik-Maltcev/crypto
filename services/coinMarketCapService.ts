@@ -1,7 +1,7 @@
 import { CMCCoinData } from '../types';
 import { CMC_API_KEY } from '../constants';
 
-const PROXY_URL = 'https://corsproxy.io/?';
+const PROXY_URL = 'https://api.allorigins.win/raw?url=';
 const CMC_BASE_URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
 
 const TARGET_SYMBOLS = ['BTC', 'ETH', 'XRP', 'SOL', 'BNB', 'DOGE', 'ADA', 'AVAX'];
