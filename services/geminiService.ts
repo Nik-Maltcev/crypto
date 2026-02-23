@@ -52,7 +52,8 @@ const HOURLY_COIN_SCHEMA: Schema = {
         properties: {
           hourOffset: { type: Type.NUMBER },
           price: { type: Type.NUMBER },
-          change: { type: Type.NUMBER }
+          change: { type: Type.NUMBER },
+          confidence: { type: Type.NUMBER }
         }
       }
     }
@@ -187,11 +188,16 @@ export const performCombinedAnalysis = async (
     `;
     thinkingBudget = 2048;
   } else if (mode === 'hourly') {
-    task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
+    const nowInput = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
     modeInstructions = `
-      FORECAST TASK: Generate a detailed hourly forecast.
-      FIELDS: "hourlyForecast" (array of 24 objects).
-      "forecastLabel": "Почасовой (24ч)"
+      FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
+      MSK CONTEXT: Current time is UTC+3 (Moscow). 
+      The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now in Moscow time.
+      Example: If now is 20:15 MSK, hourOffset 1 is 21:00 MSK.
+      FIELDS: "hourlyForecast" (array of 24 objects). 
+      Each point MUST include "confidence" (0-100) based on signal strength.
+      "forecastLabel": "Почасовой (МСК)"
     `;
     thinkingBudget = 8192; // Higher budget for complex array generation
   } else if (mode === 'today_20msk') {

@@ -30,6 +30,7 @@ export interface HourlyForecastPoint {
   hourOffset: number; // 1 to 24
   price: number;
   change: number; // percentage change relative to current price
+  confidence: number; // 0 to 100
 }
 
 export interface CryptoAnalysis {
