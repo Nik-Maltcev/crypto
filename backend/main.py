@@ -215,19 +215,20 @@ async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7
         # Parse all requested chats
         messages = await parser.parse_all_chats(chats, days=days)
         
-        # Group by chat to return organized data
-        grouped_data = {}
-        for chat in chats:
-            # We use chat as key, initially empty
-            grouped_data[chat] = []
-            
+        # Create a dictionary mapping requested chat -> its resolved title
+        # Defaults to the requested chat string if no messages were found
+        req_to_title = {c: c for c in chats}
         for msg in messages:
-            chat_id = msg.get("chat")
-            # Telethon might return internal IDs, but we match by what we requested or what we got
-            # It's better to just group by chat_title for UI display
-            title = msg.get("chat_title", chat_id)
-            if title not in grouped_data:
-                grouped_data[title] = []
+            req_to_title[msg["chat"]] = msg.get("chat_title", msg["chat"])
+
+        grouped_data = {}
+        # Initialize an empty array for every resolved chat title
+        for c in chats:
+            grouped_data[req_to_title[c]] = []
+            
+        # Group messages by their resolved title
+        for msg in messages:
+            title = req_to_title[msg["chat"]]
             grouped_data[title].append(msg)
             
         logger.info(f"Successfully fetched {len(messages)} messages from {len(chats)} chats.")

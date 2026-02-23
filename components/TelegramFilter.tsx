@@ -42,11 +42,36 @@ const TelegramFilter: React.FC = () => {
                 throw new Error("Не удалось получить сообщения из предоставленных чатов.");
             }
 
-            // Step 2: Send to Gemini Flash
-            setStatus(`2/2: AI Анализ ${Object.keys(fetchedData.data).length} чатов через Gemini...`);
-            const analysisResults = await filterTelegramChats(fetchedData.data);
+            // Step 2: Filter out abandoned chats
+            const activeChats: Record<string, any> = {};
+            const deadChats: ChatFilterResult[] = [];
 
-            setResults(analysisResults);
+            for (const [title, messages] of Object.entries(fetchedData.data)) {
+                if ((messages as any[]).length === 0) {
+                    deadChats.push({
+                        chatTitle: title,
+                        isSpam: true,
+                        category: "Flood", // We classify abandoned chats as useless/flood
+                        reason: `Чат заброшен. Нет новых сообщений за последние ${days} дн.`
+                    });
+                } else {
+                    activeChats[title] = messages;
+                }
+            }
+
+            // Step 3: Send to Gemini Flash
+            let analysisResults: ChatFilterResult[] = [];
+            const activeChatsCount = Object.keys(activeChats).length;
+
+            if (activeChatsCount > 0) {
+                setStatus(`2/2: AI Анализ ${activeChatsCount} активных чатов через Gemini...`);
+                analysisResults = await filterTelegramChats(activeChats as any);
+            } else {
+                setStatus(`2/2: Нет активных чатов для AI анализа.`);
+            }
+
+            // Combine AI results and locally identified dead chats
+            setResults([...analysisResults, ...deadChats]);
             setStatus('Готово!');
 
         } catch (error) {
