@@ -262,6 +262,31 @@ async def get_cmc_data():
     return result
 
 
+@app.get("/api/proxy")
+async def proxy_request(url: str, headers: str | None = None):
+    """Generic CORS proxy: forwards GET requests to external APIs server-side."""
+    import httpx
+    import json as json_module
+    
+    try:
+        extra_headers = {}
+        if headers:
+            extra_headers = json_module.loads(headers)
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(url, headers=extra_headers)
+        
+        # Try to return JSON if possible
+        try:
+            data = resp.json()
+            return JSONResponse(content=data, status_code=resp.status_code)
+        except Exception:
+            return JSONResponse(content={"raw": resp.text}, status_code=resp.status_code)
+    except Exception as e:
+        logger.error(f"Proxy error for {url}: {e}")
+        raise HTTPException(500, f"Proxy error: {str(e)}")
+
+
 if __name__ == "__main__":
     import os
     import uvicorn

@@ -32,9 +32,9 @@ async function fetchWithRateLimit(url: string): Promise<any> {
     await sleep(safetyDelay);
   }
 
-  // Use allorigins to bypass browser CORS restrictions for Reddit API
-  // Note: Proxies often strip headers, so we rely on the safetyDelay if headers are missing.
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  // Use our own backend as CORS proxy
+  const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+  const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(url)}`;
 
   try {
     const response = await fetch(proxyUrl, {

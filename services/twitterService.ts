@@ -17,18 +17,17 @@ export const extractUsername = (url: string): string => {
 
 // Simplified ID fetcher for tools (not used in main flow anymore)
 export const fetchTwitterUserId = async (username: string): Promise<string | null> => {
-  // Use allorigins to bypass CORS restrictions in browser
+  // Use our own backend as CORS proxy
+  const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
   const targetUrl = `https://${TWITTER_HOST}/user?username=${username}`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+  const headersParam = encodeURIComponent(JSON.stringify({
+    'X-RapidAPI-Key': RAPID_API_KEY,
+    'X-RapidAPI-Host': TWITTER_HOST
+  }));
+  const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
 
   try {
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-      headers: {
-        'X-RapidAPI-Key': RAPID_API_KEY,
-        'X-RapidAPI-Host': TWITTER_HOST
-      }
-    });
+    const response = await fetch(proxyUrl);
 
     if (!response.ok) return null;
     const data = await response.json();
@@ -88,16 +87,15 @@ export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet
   // Endpoint: UserTweets or similar
   // RapidAPI Twitter241 often uses `user-tweets` or `user/tweets`
   const targetUrl = `https://${TWITTER_HOST}/user-tweets?user=${userId}&count=${count}`;
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+  const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+  const headersParam = encodeURIComponent(JSON.stringify({
+    'X-RapidAPI-Key': RAPID_API_KEY,
+    'X-RapidAPI-Host': TWITTER_HOST
+  }));
+  const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
 
   try {
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-      headers: {
-        'X-RapidAPI-Key': RAPID_API_KEY,
-        'X-RapidAPI-Host': TWITTER_HOST
-      }
-    });
+    const response = await fetch(proxyUrl);
 
     if (!response.ok) {
       console.warn(`Failed to fetch tweets for ${userId}: ${response.status}`);

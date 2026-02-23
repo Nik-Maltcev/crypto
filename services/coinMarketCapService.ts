@@ -1,7 +1,8 @@
 import { CMCCoinData } from '../types';
 import { CMC_API_KEY } from '../constants';
 
-const PROXY_URL = 'https://api.allorigins.win/raw?url=';
+const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+const PROXY_URL = `${BACKEND_URL}/api/proxy?url=`;
 const CMC_BASE_URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
 
 const TARGET_SYMBOLS = ['BTC', 'ETH', 'XRP', 'SOL', 'BNB', 'DOGE', 'ADA', 'AVAX'];
