@@ -212,8 +212,8 @@ async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7
         client = await get_telethon_client()
         parser = ChatParser(client)
         
-        # Parse all requested chats
-        messages = await parser.parse_all_chats(chats, days=days)
+        # Parse all requested chats (limit to 50 messages per chat for speed)
+        messages = await parser.parse_all_chats(chats, days=days, max_messages_per_chat=50)
         
         # Create a dictionary mapping requested chat -> its resolved title
         # Defaults to the requested chat string if no messages were found

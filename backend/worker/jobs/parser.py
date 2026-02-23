@@ -32,6 +32,7 @@ class ChatParser:
         self,
         chat_id: str,
         days: int = 2,
+        max_messages: int | None = None,
     ) -> list[dict[str, Any]]:
         """Parse messages from a single chat."""
         messages = []
@@ -78,6 +79,10 @@ class ChatParser:
                     "sender_name": sender_name,
                     "sender_username": sender_username,
                 })
+                
+                # Stop early if we have enough messages for this chat
+                if max_messages and len(messages) >= max_messages:
+                    break
             
             logger.info(f"Parsed {len(messages)} messages from {chat_id}")
             
@@ -98,6 +103,7 @@ class ChatParser:
         self,
         chat_ids: list[str],
         days: int = 2,
+        max_messages_per_chat: int | None = None,
     ) -> list[dict[str, Any]]:
         """Parse messages from all chats."""
         all_messages = []
@@ -118,7 +124,7 @@ class ChatParser:
                     logger.error(f"Reconnect failed: {e}")
             
             logger.info(f"Parsing chat {i + 1}/{len(chat_ids)}: {chat_id}")
-            messages = await self.parse_chat(chat_id, days)
+            messages = await self.parse_chat(chat_id, days, max_messages=max_messages_per_chat)
             all_messages.extend(messages)
         
         all_messages.sort(key=lambda x: x["date"], reverse=True)
