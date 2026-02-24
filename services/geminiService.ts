@@ -155,7 +155,13 @@ export const performCombinedAnalysis = async (
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
   }
 
-  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8080';
+  let backendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
+  if (!backendUrl) {
+    backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:8080'
+      : window.location.origin;
+  }
+
   const ai = new GoogleGenAI({
     apiKey: process.env.API_KEY,
     httpOptions: { baseUrl: `${backendUrl}/api/proxy/gemini` }
