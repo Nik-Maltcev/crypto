@@ -166,7 +166,7 @@ RULES: Russian language for text. Extremely concise.
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
   // Ensure JSON structure by pre-filling the assistant response
-  const assistantPrefill = "{\n";
+  const assistantPrefill = "{";
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/proxy/post?url=https://api.anthropic.com/v1/messages`, {
