@@ -146,6 +146,7 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
 export const performCombinedAnalysis = async (
   posts: RedditPost[],
   tweets: Tweet[],
+  telegramMsgs: TelegramMessage[],
   marketContext: string,
   mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' = 'simple',
   targetCoinSymbol?: string
@@ -170,6 +171,13 @@ export const performCombinedAnalysis = async (
       user: t.user
     })))
     : "No Twitter Data.";
+
+  const telegramPayload = telegramMsgs.length > 0
+    ? JSON.stringify(telegramMsgs.slice(0, 200).map(msg => ({
+      chat: msg.chat_title,
+      text: msg.text.substring(0, 150)
+    })))
+    : "No Telegram Data.";
 
   // Mode-specific prompts
   let modeInstructions = "";
@@ -246,6 +254,7 @@ export const performCombinedAnalysis = async (
       CONTEXT: ${marketContext}
       REDDIT DATA: ${redditPayload}
       TWITTER DATA: ${twitterPayload}
+      TELEGRAM DATA: ${telegramPayload}
 
       TASK: ${task}
       OUTPUT: JSON matching schema.

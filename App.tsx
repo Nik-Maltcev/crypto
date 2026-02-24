@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS } from './constants';
+import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS } from './constants';
 import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
+import { fetchChatsPreview } from './services/telegramService';
 import { performCombinedAnalysis } from './services/geminiService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
-import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData } from './types';
+import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
 import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
@@ -48,11 +49,13 @@ const App: React.FC = () => {
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
   const [twitterProgress, setTwitterProgress] = useState({ current: 0, total: 0 });
+  const [telegramProgress, setTelegramProgress] = useState({ current: 0, total: 0 });
 
   // Data
   const [result, setResult] = useState<CombinedAnalysisResponse | null>(null);
   const [sourcePosts, setSourcePosts] = useState<RedditPost[]>([]);
   const [tweets, setTweets] = useState<Tweet[]>([]);
+  const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
 
   // Selection
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>(
@@ -60,6 +63,9 @@ const App: React.FC = () => {
   );
   const [selectedTwitterIds, setSelectedTwitterIds] = useState<string[]>(
     TWITTER_ACCOUNTS.slice(0, 5).map(t => t.id)
+  );
+  const [selectedTelegramChats, setSelectedTelegramChats] = useState<string[]>(
+    DEFAULT_TELEGRAM_CHATS.slice(0, 5)
   );
 
   const abortRef = useRef<boolean>(false);
@@ -77,7 +83,9 @@ const App: React.FC = () => {
       analysis: result,
       sources: {
         reddit_count: sourcePosts.length,
-        twitter_count: tweets.length
+        twitter_count: tweets.length,
+        telegram_chats_count: telegramMessages.length > 0 ? selectedTelegramChats.length : 0,
+        telegram_messages_count: telegramMessages.length
       },
       source_posts: sourcePosts.map(post => ({
         ...post,
@@ -88,7 +96,8 @@ const App: React.FC = () => {
       tweets: tweets.map(t => ({
         ...t,
         created_date_human: new Date(t.created_at).toLocaleString('ru-RU')
-      }))
+      })),
+      telegram_messages: telegramMessages
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
@@ -107,11 +116,15 @@ const App: React.FC = () => {
   const toggleTwitter = (id: string) => {
     setSelectedTwitterIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
+  const toggleTelegramChat = (chat: string) => {
+    setSelectedTelegramChats(prev => prev.includes(chat) ? prev.filter(c => c !== chat) : [...prev, chat]);
+  };
 
   // Helper to run the AI part and merge market data
   const runAIAnalysis = async (
     posts: RedditPost[],
     tweets: Tweet[],
+    telegramMsgs: TelegramMessage[],
     marketContext: string,
     coinMap: Map<string, CMCCoinData>,
     mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
@@ -123,7 +136,7 @@ const App: React.FC = () => {
 
     setStatus(`AI: Генерация (${modeText})...`);
 
-    const analysis = await performCombinedAnalysis(posts, tweets, marketContext, mode);
+    const analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode);
 
     // Merge Real-time Prices only if coins exist (standard mode)
     if (analysis.coins) {
@@ -170,25 +183,25 @@ const App: React.FC = () => {
 
       let finalPosts = sourcePosts;
       let finalTweets = tweets;
+      let finalTelegram = telegramMessages;
 
       // If fetching required (Force Refresh OR No Data)
       if (shouldFetch) {
         // Clear old data references locally
         finalPosts = [];
         finalTweets = [];
+        finalTelegram = [];
         setSourcePosts([]);
         setTweets([]);
+        setTelegramMessages([]);
 
-        // --- PHASE 2 & 3: FETCH REDDIT & TWITTER IN PARALLEL ---
-        setStatus('2/4 Сканирование Reddit и Twitter (Параллельно)...');
+        // --- PHASE 2 & 3: FETCH SOURCES IN PARALLEL ---
+        setStatus('2/4 Сканирование источников (Параллельно)...');
 
         // Create initial states for progress
         setRedditProgress({ current: 0, total: selectedSubreddits.length });
-        if (selectedTwitterIds.length > 0) {
-          setTwitterProgress({ current: 0, total: selectedTwitterIds.length });
-        } else {
-          setTwitterProgress({ current: 0, total: 0 });
-        }
+        setTwitterProgress({ current: 0, total: selectedTwitterIds.length });
+        setTelegramProgress({ current: 0, total: selectedTelegramChats.length > 0 ? 1 : 0 });
 
         // Reddit Task
         const redditTask = async () => {
@@ -221,10 +234,28 @@ const App: React.FC = () => {
           });
         };
 
-        // Run both simultaneously
-        const [redditResult, twitterResult] = await Promise.allSettled([
+        // Telegram Task
+        const telegramTask = async () => {
+          if (selectedTelegramChats.length === 0) return [];
+          const response = await fetchChatsPreview(selectedTelegramChats, 1); // Only last 24h
+          setTelegramProgress({ current: 1, total: 1 });
+
+          const allMsgs: TelegramMessage[] = [];
+          if (response && response.data) {
+            Object.values(response.data).forEach(msgs => {
+              if (msgs && Array.isArray(msgs)) {
+                allMsgs.push(...msgs);
+              }
+            });
+          }
+          return allMsgs;
+        };
+
+        // Run all simultaneously
+        const [redditResult, twitterResult, telegramResult] = await Promise.allSettled([
           redditTask(),
-          twitterTask()
+          twitterTask(),
+          telegramTask()
         ]);
 
         if (abortRef.current) throw new Error("Stopped by user");
@@ -244,15 +275,25 @@ const App: React.FC = () => {
           setTweets(finalTweets);
         } else {
           console.error("Twitter fetch failed:", twitterResult.reason);
-          setStatus('Ошибка Twitter, продолжаем с Reddit...');
-          // Non-fatal, we can continue without Twitter
+          setStatus('Ошибка Twitter, продолжаем...');
+          // Non-fatal
+        }
+
+        // Process Telegram Result
+        if (telegramResult.status === 'fulfilled') {
+          finalTelegram = telegramResult.value;
+          setTelegramMessages(finalTelegram);
+        } else {
+          console.error("Telegram fetch failed:", telegramResult.reason);
+          setStatus('Ошибка Telegram, продолжаем...');
+          // Non-fatal
         }
       } else {
         setStatus('Используем уже собранные данные...');
       }
 
       // --- PHASE 4: COMBINED AI ANALYSIS ---
-      await runAIAnalysis(finalPosts, finalTweets, marketContext, coinMap, mode);
+      await runAIAnalysis(finalPosts, finalTweets, finalTelegram, marketContext, coinMap, mode);
 
     } catch (error) {
       if (abortRef.current) {
@@ -275,7 +316,7 @@ const App: React.FC = () => {
     try {
       setStatus('Обновление рыночных цен...');
       const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
-      await runAIAnalysis(sourcePosts, tweets, marketContext, coinMap, 'hourly');
+      await runAIAnalysis(sourcePosts, tweets, telegramMessages, marketContext, coinMap, 'hourly');
     } catch (error) {
       console.error(error);
       alert("Ошибка при почасовом анализе");
@@ -413,12 +454,21 @@ const App: React.FC = () => {
                       ></div>
                     </div>
                   )}
+                  {/* Telegram Bar */}
+                  {selectedTelegramChats.length > 0 && (
+                    <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-brand-accent h-1.5 transition-all duration-800"
+                        style={{ width: `${telegramProgress.total ? (telegramProgress.current / telegramProgress.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Configuration Area */}
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Reddit Selection */}
               <div className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[400px] flex flex-col">
                 <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
@@ -479,6 +529,37 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedTwitterIds.length}</p>
+              </div>
+
+              {/* Telegram Selection */}
+              <div className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[400px] flex flex-col">
+                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <span className="text-brand-accent">●</span> Источники Telegram
+                  </h2>
+                  <div className="flex space-x-2">
+                    <button onClick={() => setSelectedTelegramChats(DEFAULT_TELEGRAM_CHATS)} className="text-xs text-brand-accent hover:text-emerald-300">Все</button>
+                    <button onClick={() => setSelectedTelegramChats([])} className="text-xs text-gray-400 hover:text-gray-300">Сброс</button>
+                  </div>
+                </div>
+                <div className="flex-grow overflow-y-auto custom-scrollbar">
+                  <div className="flex flex-wrap gap-2 content-start">
+                    {DEFAULT_TELEGRAM_CHATS.map((chat) => (
+                      <button
+                        key={chat}
+                        onClick={() => toggleTelegramChat(chat)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${selectedTelegramChats.includes(chat)
+                          ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-500 hover:border-gray-600'
+                          }`}
+                        title={chat}
+                      >
+                        @{chat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedTelegramChats.length}</p>
               </div>
             </section>
 
@@ -583,15 +664,21 @@ const App: React.FC = () => {
                 )}
 
                 {/* Source Stats */}
-                <div className="grid grid-cols-2 gap-4 opacity-70">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 opacity-70">
                   <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
                     <h4 className="text-xs font-bold text-orange-400 mb-1">Reddit</h4>
-                    <p className="text-sm text-gray-400">Обработано постов: {sourcePosts.length}</p>
+                    <p className="text-sm text-gray-400">Постов: {sourcePosts.length}</p>
                   </div>
                   {tweets.length > 0 && (
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
                       <h4 className="text-xs font-bold text-blue-400 mb-1">Twitter</h4>
-                      <p className="text-sm text-gray-400">Обработано твитов: {tweets.length}</p>
+                      <p className="text-sm text-gray-400">Твитов: {tweets.length}</p>
+                    </div>
+                  )}
+                  {telegramMessages.length > 0 && (
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                      <h4 className="text-xs font-bold text-brand-accent mb-1">Telegram</h4>
+                      <p className="text-sm text-gray-400">Сообщений: {telegramMessages.length}</p>
                     </div>
                   )}
                 </div>
