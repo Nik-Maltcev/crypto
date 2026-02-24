@@ -155,16 +155,8 @@ export const performCombinedAnalysis = async (
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
   }
 
-  let backendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
-  if (!backendUrl) {
-    backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8080'
-      : window.location.origin;
-  }
-
   const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY,
-    httpOptions: { baseUrl: `${backendUrl}/api/proxy/gemini` }
+    apiKey: process.env.API_KEY
   });
 
   // Input Data - INCREASED LIMIT from 40 to 300 posts to use Gemini 3 Pro large context
@@ -339,16 +331,8 @@ const CHAT_FILTER_SCHEMA: Schema = {
 export const filterTelegramChats = async (
   chatData: Record<string, TelegramMessage[]>
 ): Promise<ChatFilterResult[]> => {
-  let backendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
-  if (!backendUrl) {
-    backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8080'
-      : window.location.origin;
-  }
-
   const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY,
-    httpOptions: { baseUrl: `${backendUrl}/api/proxy/gemini` }
+    apiKey: process.env.API_KEY
   });
 
   // Format the chat data into a dense context
