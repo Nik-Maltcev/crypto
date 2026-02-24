@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 import json
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
@@ -370,6 +370,75 @@ async def proxy_request(url: str, headers: str | None = None):
     except Exception as e:
         logger.error(f"Proxy error for {url}: {e}")
         raise HTTPException(500, f"Proxy error: {str(e)}")
+
+@app.post("/api/proxy/post")
+async def proxy_post_request(url: str, request: Request):
+    """Generic proxy for POST requests to external APIs."""
+    import httpx
+    
+    try:
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        # Strip out headers that shouldn't be forwarded
+        clean_headers = {}
+        for k, v in headers.items():
+            k_lower = k.lower()
+            if k_lower not in ['host', 'origin', 'referer', 'content-length', 'connection', 'accept-encoding']:
+                clean_headers[k] = v
+                
+        # Ensure correct content-type if JSON
+        if b"{" in body[:10]:
+            clean_headers['Content-Type'] = 'application/json'
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(url, content=body, headers=clean_headers)
+        
+        try:
+            data = resp.json()
+            return JSONResponse(content=data, status_code=resp.status_code)
+        except Exception:
+            return JSONResponse(content={"raw": resp.text}, status_code=resp.status_code)
+    except Exception as e:
+        logger.error(f"Proxy POST error for {url}: {e}")
+        raise HTTPException(500, f"Proxy POST error: {str(e)}")
+
+@app.post("/api/proxy/gemini/{path:path}")
+async def proxy_gemini_request(path: str, request: Request):
+    """Specific proxy for Gemini API to bypass location restrictions."""
+    import httpx
+    import os
+    
+    # Construct the true Gemini API URL
+    url = f"https://generativelanguage.googleapis.com/{path}"
+    
+    # Append the API key from query params or headers if the frontend passed it
+    query_string = request.url.query
+    if query_string:
+        url = f"{url}?{query_string}"
+    
+    try:
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        clean_headers = {}
+        for k, v in headers.items():
+            k_lower = k.lower()
+            if k_lower not in ['host', 'origin', 'referer', 'content-length', 'connection', 'accept-encoding']:
+                clean_headers[k] = v
+        
+        if b"{" in body[:10]:
+            clean_headers['Content-Type'] = 'application/json'
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(url, content=body, headers=clean_headers)
+        
+        # Return exact Gemini response including raw text for parsing
+        return JSONResponse(content=resp.json() if resp.text else {}, status_code=resp.status_code)
+        
+    except Exception as e:
+        logger.error(f"Gemini Proxy error: {e}")
+        raise HTTPException(500, f"Gemini Proxy error: {str(e)}")
 
 
 if __name__ == "__main__":

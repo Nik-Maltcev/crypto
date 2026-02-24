@@ -155,7 +155,11 @@ export const performCombinedAnalysis = async (
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8080';
+  const ai = new GoogleGenAI({
+    apiKey: process.env.API_KEY,
+    httpOptions: { baseUrl: `${backendUrl}/api/proxy/gemini` }
+  });
 
   // Input Data - INCREASED LIMIT from 40 to 300 posts to use Gemini 3 Pro large context
   const redditPayload = JSON.stringify(posts.slice(0, 300).map(p => ({
@@ -241,11 +245,11 @@ export const performCombinedAnalysis = async (
       - OUTPUT FIELD: "singleCoin" (object).
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
     `;
-    thinkingBudget = 4096;
+    thinkingBudget = 1024;
   }
 
   // maxOutputTokens must be sufficient to cover thinking + JSON response
-  const maxOutputTokens = thinkingBudget + 4096;
+  const maxOutputTokens = 8192; // Maximize up to safe limit, Gemini 3 Pro supports large outputs
 
   try {
     const response = await ai.models.generateContent({
@@ -276,6 +280,19 @@ export const performCombinedAnalysis = async (
 
     let text = response.text || "";
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    // Basic protection against truncated JSON
+    if (!text.endsWith('}')) {
+      console.warn("JSON response may have been truncated. Attempting to recover...");
+      const lastBrace = text.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        text = text.substring(0, lastBrace + 1);
+      } else {
+        // If it's an array for altcoins?
+        const lastBracket = text.lastIndexOf(']');
+        if (lastBracket !== -1) text = text.substring(0, lastBracket + 1) + '}';
+      }
+    }
 
     if (!text) throw new Error("Empty response from AI");
 
@@ -316,7 +333,11 @@ const CHAT_FILTER_SCHEMA: Schema = {
 export const filterTelegramChats = async (
   chatData: Record<string, TelegramMessage[]>
 ): Promise<ChatFilterResult[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8080';
+  const ai = new GoogleGenAI({
+    apiKey: process.env.API_KEY,
+    httpOptions: { baseUrl: `${backendUrl}/api/proxy/gemini` }
+  });
 
   // Format the chat data into a dense context
   let contextText = "TELEGRAM CHATS HISTORY FOR ANALYSIS:\n\n";
@@ -358,6 +379,11 @@ export const filterTelegramChats = async (
 
     let text = response.text || "";
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    if (!text.endsWith('}')) {
+      const lastBrace = text.lastIndexOf('}');
+      if (lastBrace !== -1) text = text.substring(0, lastBrace + 1);
+    }
 
     if (!text) throw new Error("Empty response from AI");
 
