@@ -259,7 +259,7 @@ export const performCombinedAnalysis = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-pro',
       contents: `
       CONTEXT: ${marketContext}
       REDDIT DATA: ${redditPayload}
