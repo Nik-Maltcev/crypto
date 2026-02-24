@@ -53,7 +53,9 @@ class Settings(BaseSettings):
 
     # Worker settings
     PARSE_DAYS: int = 2  # Today + yesterday
-    REQUEST_DELAY_SEC: float = 1.5
+    REQUEST_DELAY_SEC: float = 3.5  # Increased from 1.5 to 3.5 for safety
+    BATCH_SIZE_TRIGGER: int = 20    # Take a long break every N chats
+    BATCH_PAUSE_SEC: float = 30.0   # 30 seconds break between batches
     MIN_MESSAGE_LENGTH: int = 10
 
     @field_validator("ADMIN_IDS", mode="before")

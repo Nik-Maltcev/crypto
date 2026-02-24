@@ -20,6 +20,7 @@ class ChatParser:
     def __init__(self, client: TelegramClient):
         self.client = client
         self.settings = get_settings()
+        self._entity_cache = {}  # Cache to avoid redundant get_entity calls
     
     async def ensure_connected(self):
         """Ensure client is connected, reconnect if needed."""
@@ -45,7 +46,13 @@ class ChatParser:
             # Ensure connected before each chat
             await self.ensure_connected()
             
-            entity = await self.client.get_entity(chat_id)
+            # Check cache first to avoid ResolveUsernameRequest
+            if chat_id in self._entity_cache:
+                entity = self._entity_cache[chat_id]
+            else:
+                entity = await self.client.get_entity(chat_id)
+                self._entity_cache[chat_id] = entity
+                
             chat_title = getattr(entity, 'title', chat_id)
             
             async for message in self.client.iter_messages(
@@ -119,8 +126,17 @@ class ChatParser:
         delay = self.settings.REQUEST_DELAY_SEC
         
         for i, chat_id in enumerate(chat_ids):
+            # Normal inter-request delay
             if i > 0:
                 await asyncio.sleep(delay)
+            
+            # Batch Pause logic: take a longer break every N chats
+            batch_trigger = getattr(self.settings, 'BATCH_SIZE_TRIGGER', 20)
+            batch_pause = getattr(self.settings, 'BATCH_PAUSE_SEC', 30.0)
+            
+            if i > 0 and i % batch_trigger == 0:
+                logger.info(f"SAFE BATCH PAUSE: Waiting {batch_pause}s to avoid Telegram FloodWait...")
+                await asyncio.sleep(batch_pause)
             
             # Reconnect every 100 chats to avoid disconnection
             if i > 0 and i % 100 == 0:
