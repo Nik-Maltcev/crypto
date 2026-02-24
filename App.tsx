@@ -205,21 +205,24 @@ const App: React.FC = () => {
 
         // Reddit Task
         const redditTask = async () => {
+          if (selectedSubreddits.length === 0) return [];
           const allPosts: RedditPost[] = [];
           let processedCount = 0;
 
           for (const sub of selectedSubreddits) {
             if (abortRef.current) break;
 
-            const posts = await fetchSubredditPosts(sub);
-            const significantPosts = posts.filter(p => p.score >= 1);
-            allPosts.push(...significantPosts);
+            try {
+              const posts = await fetchSubredditPosts(sub);
+              const significantPosts = posts.filter(p => p.score >= 1);
+              allPosts.push(...significantPosts);
+            } catch (err) {
+              console.warn(`Failed to fetch reddit /r/${sub}`, err);
+            }
 
             processedCount++;
             setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
           }
-
-          if (allPosts.length === 0) throw new Error("Не найдено подходящих постов Reddit.");
 
           const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 500);
           return topPosts;
@@ -229,26 +232,37 @@ const App: React.FC = () => {
         const twitterTask = async () => {
           if (selectedTwitterIds.length === 0) return [];
 
-          return await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
-            setTwitterProgress({ current: curr, total: total });
-          });
+          try {
+            return await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
+              setTwitterProgress({ current: curr, total: total });
+            });
+          } catch (err) {
+            console.warn("Failed to fetch Twitter", err);
+            return [];
+          }
         };
 
         // Telegram Task
         const telegramTask = async () => {
           if (selectedTelegramChats.length === 0) return [];
-          const response = await fetchChatsPreview(selectedTelegramChats, 1); // Only last 24h
-          setTelegramProgress({ current: 1, total: 1 });
 
-          const allMsgs: TelegramMessage[] = [];
-          if (response && response.data) {
-            Object.values(response.data).forEach(msgs => {
-              if (msgs && Array.isArray(msgs)) {
-                allMsgs.push(...msgs);
-              }
-            });
+          try {
+            const response = await fetchChatsPreview(selectedTelegramChats, 1); // Only last 24h
+            setTelegramProgress({ current: 1, total: 1 });
+
+            const allMsgs: TelegramMessage[] = [];
+            if (response && response.data) {
+              Object.values(response.data).forEach(msgs => {
+                if (msgs && Array.isArray(msgs)) {
+                  allMsgs.push(...msgs);
+                }
+              });
+            }
+            return allMsgs;
+          } catch (err) {
+            console.warn("Failed to fetch Telegram", err);
+            return [];
           }
-          return allMsgs;
         };
 
         // Run all simultaneously
@@ -290,6 +304,11 @@ const App: React.FC = () => {
         }
       } else {
         setStatus('Используем уже собранные данные...');
+      }
+
+      // Final Check: Do we have ANY data to analyze?
+      if (finalPosts.length === 0 && finalTweets.length === 0 && finalTelegram.length === 0) {
+        throw new Error("Не удалось получить данные ни из одного источника. Проверьте настройки или подождите.");
       }
 
       // --- PHASE 4: COMBINED AI ANALYSIS ---

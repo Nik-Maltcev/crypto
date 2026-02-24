@@ -151,8 +151,8 @@ export const performCombinedAnalysis = async (
   mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' = 'simple',
   targetCoinSymbol?: string
 ): Promise<CombinedAnalysisResponse> => {
-  if (!posts || posts.length === 0) {
-    throw new Error("Нет данных для анализа (Reddit пуст).");
+  if ((!posts || posts.length === 0) && (!tweets || tweets.length === 0) && (!telegramMsgs || telegramMsgs.length === 0)) {
+    throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
