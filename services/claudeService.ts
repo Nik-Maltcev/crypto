@@ -165,9 +165,6 @@ RULES: Russian language for text. Extremely concise.
 
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
-  // Ensure JSON structure by pre-filling the assistant response
-  const assistantPrefill = "{";
-
   try {
     const response = await fetch(`${BACKEND_URL}/api/proxy/post?url=https://api.anthropic.com/v1/messages`, {
       method: "POST",
@@ -181,8 +178,7 @@ RULES: Russian language for text. Extremely concise.
         max_tokens: 4096,
         system: systemPrompt,
         messages: [
-          { role: "user", content: userPrompt },
-          { role: "assistant", content: assistantPrefill }
+          { role: "user", content: userPrompt }
         ]
       })
     });
@@ -201,9 +197,6 @@ RULES: Russian language for text. Extremely concise.
 
     const data = await response.json();
     let text = data.content?.[0]?.text || "";
-
-    // Prepend the prefill since Claude continues from it
-    text = assistantPrefill + text;
 
     // Clean markdown if present
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
