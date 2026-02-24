@@ -4,6 +4,7 @@ import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
 import { fetchChatsPreview } from './services/telegramService';
 import { performCombinedAnalysis } from './services/geminiService';
+import { performClaudeAnalysis } from './services/claudeService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
 import CryptoCard from './components/CryptoCard';
@@ -45,6 +46,10 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin'>('singleCoin');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
+
+  // Setup Model Preference
+  const [aiModel, setAiModel] = useState<'gemini' | 'claude'>('gemini');
+  const [claudeApiKey, setClaudeApiKey] = useState('');
 
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
@@ -134,9 +139,17 @@ const App: React.FC = () => {
     if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
     if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
 
-    setStatus(`AI: Генерация (${modeText})...`);
+    setStatus(`AI: Генерация (${modeText}) через ${aiModel === 'gemini' ? 'Gemini 2.5 Pro' : 'Claude Opus 4.6'}...`);
 
-    const analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode);
+    let analysis: CombinedAnalysisResponse;
+    if (aiModel === 'claude') {
+      if (!claudeApiKey) {
+        throw new Error("Необходим ключ API для Claude");
+      }
+      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey);
+    } else {
+      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode);
+    }
 
     // Merge Real-time Prices only if coins exist (standard mode)
     if (analysis.coins) {
@@ -388,6 +401,29 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <div className="hidden lg:flex items-center space-x-2 bg-gray-900 border border-gray-800 rounded-lg overflow-hidden h-9">
+              <button
+                onClick={() => setAiModel('gemini')}
+                className={`px-3 h-full text-xs font-bold transition-all ${Math.abs(1) === 1 && aiModel === 'gemini' ? 'bg-blue-600/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                Gemini 2.5
+              </button>
+              <button
+                onClick={() => setAiModel('claude')}
+                className={`px-3 h-full text-xs font-bold transition-all ${Math.abs(1) === 1 && aiModel === 'claude' ? 'bg-orange-600/20 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                Claude Opus 4.6
+              </button>
+            </div>
+            {aiModel === 'claude' && (
+              <input
+                type="password"
+                placeholder="Claude API Key (sk-ant-...)"
+                value={claudeApiKey}
+                onChange={(e) => setClaudeApiKey(e.target.value)}
+                className="hidden md:block w-48 text-xs bg-gray-900 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-brand-accent h-9"
+              />
+            )}
             {result && !isProcessing && (
               <button
                 onClick={handleDownloadJSON}

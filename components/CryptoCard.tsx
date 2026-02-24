@@ -1,5 +1,5 @@
-import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import React, { useState } from 'react';
+import HourlyChartModal from './HourlyChartModal';
 import { CryptoAnalysis } from '../types';
 
 interface CryptoCardProps {
@@ -8,6 +8,8 @@ interface CryptoCardProps {
 }
 
 const CryptoCard: React.FC<CryptoCardProps> = ({ coin, forecastLabel }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const isBullish = coin.prediction === 'Bullish';
   const isBearish = coin.prediction === 'Bearish';
 
@@ -41,26 +43,6 @@ const CryptoCard: React.FC<CryptoCardProps> = ({ coin, forecastLabel }) => {
 
   // Determine if we have detailed hourly data
   const hasHourlyData = coin.hourlyForecast && coin.hourlyForecast.length >= 6;
-
-  // Chart Data Preparation (if available)
-  const chartData = hasHourlyData ? coin.hourlyForecast!.map((point) => {
-    // Current time in MSK (UTC+3)
-    const now = new Date();
-    const mskOffset = 3 * 60; // 3 hours in minutes
-    const nowMsk = new Date(now.getTime() + (mskOffset + now.getTimezoneOffset()) * 60000);
-
-    // Calculate the target hour for this point
-    // We start from the NEXT full hour (ceil)
-    const startHourMsk = (nowMsk.getHours() + 1) % 24;
-    const targetHour = (startHourMsk + point.hourOffset - 1) % 24;
-
-    return {
-      time: `${targetHour.toString().padStart(2, '0')}:00`,
-      price: point.price,
-      change: point.change,
-      confidence: point.confidence
-    };
-  }) : [];
 
   return (
     <div className={`bg-brand-card border ${borderColor} rounded-xl overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col h-full relative group`}>
@@ -100,48 +82,21 @@ const CryptoCard: React.FC<CryptoCardProps> = ({ coin, forecastLabel }) => {
         <div className="mb-4">
 
           {hasHourlyData ? (
-            /* CHART VIEW (Hourly Mode) */
+            /* CHART VIEW (Hourly Mode) Mini Button */
             <>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold uppercase tracking-widest text-blue-400">{displayLabel}</span>
               </div>
-              <div className="h-40 w-full bg-gray-900/20 rounded-lg border border-gray-800 overflow-hidden relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id={`gradient-${coin.symbol}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }}
-                      itemStyle={{ color: '#e5e7eb' }}
-                      labelStyle={{ color: '#9ca3af', marginBottom: '4px' }}
-                      formatter={(value: number, name: string, props: any) => {
-                        if (name === 'Цена') {
-                          return [`$${value.toLocaleString()}`, name];
-                        }
-                        return [value, name];
-                      }}
-                      labelFormatter={(label, payload) => {
-                        const data = payload[0]?.payload;
-                        if (data && data.confidence !== undefined) {
-                          return `${label} (Уверенность: ${data.confidence}%)`;
-                        }
-                        return label;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="price"
-                      stroke={chartColor}
-                      fillOpacity={1}
-                      fill={`url(#gradient-${coin.symbol})`}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div
+                onClick={() => setIsModalOpen(true)}
+                className="h-32 w-full bg-gray-900/40 hover:bg-gray-800/60 rounded-lg border border-gray-800 hover:border-blue-500/50 cursor-pointer overflow-hidden relative flex flex-col items-center justify-center transition-all group"
+              >
+                <div className="absolute inset-0 opacity-10 bg-blue-500 group-hover:opacity-20 transition-opacity"></div>
+                <svg className="w-8 h-8 text-blue-400 mb-2 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+                <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">Почасовая детализация 📊</span>
+                <span className="text-[10px] text-gray-500 mt-1">Нажмите для просмотра графика</span>
               </div>
             </>
           ) : (
@@ -172,6 +127,14 @@ const CryptoCard: React.FC<CryptoCardProps> = ({ coin, forecastLabel }) => {
           </p>
         </div>
       </div>
+
+      {hasHourlyData && (
+        <HourlyChartModal
+          coin={coin}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
