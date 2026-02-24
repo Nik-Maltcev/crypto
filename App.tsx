@@ -342,7 +342,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedSubreddits, selectedTwitterIds, sourcePosts, tweets]);
+  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, aiModel, claudeApiKey]);
 
   // Hourly Analysis (Uses existing data)
   const handleHourlyAnalysis = async () => {
