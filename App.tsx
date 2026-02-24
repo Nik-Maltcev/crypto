@@ -265,11 +265,11 @@ const App: React.FC = () => {
           }
         };
 
-        // Run all simultaneously
-        const [redditResult, twitterResult, telegramResult] = await Promise.allSettled([
+        // 1. Run Reddit and Twitter simultaneously
+        setStatus('2/4 Сканирование Reddit и Twitter (Параллельно)...');
+        const [redditResult, twitterResult] = await Promise.allSettled([
           redditTask(),
-          twitterTask(),
-          telegramTask()
+          twitterTask()
         ]);
 
         if (abortRef.current) throw new Error("Stopped by user");
@@ -280,7 +280,7 @@ const App: React.FC = () => {
           setSourcePosts(finalPosts);
         } else {
           console.error("Reddit fetch failed:", redditResult.reason);
-          throw new Error(`Ошибка Reddit: ${redditResult.reason}`);
+          setStatus('Ошибка Reddit, продолжаем...');
         }
 
         // Process Twitter Result
@@ -290,18 +290,22 @@ const App: React.FC = () => {
         } else {
           console.error("Twitter fetch failed:", twitterResult.reason);
           setStatus('Ошибка Twitter, продолжаем...');
-          // Non-fatal
         }
 
-        // Process Telegram Result
-        if (telegramResult.status === 'fulfilled') {
-          finalTelegram = telegramResult.value;
-          setTelegramMessages(finalTelegram);
-        } else {
-          console.error("Telegram fetch failed:", telegramResult.reason);
-          setStatus('Ошибка Telegram, продолжаем...');
-          // Non-fatal
+        // 2. Run Telegram sequentially afterwards
+        setStatus('3/4 Сканирование Telegram (Последовательно)...');
+        if (selectedTelegramChats.length > 0) {
+          try {
+            // Directly await the task instead of Promise.allSettled
+            finalTelegram = await telegramTask();
+            setTelegramMessages(finalTelegram);
+          } catch (telegramErr) {
+            console.error("Telegram fetch failed:", telegramErr);
+            setStatus('Ошибка Telegram, продолжаем...');
+          }
         }
+
+        if (abortRef.current) throw new Error("Stopped by user");
       } else {
         setStatus('Используем уже собранные данные...');
       }
