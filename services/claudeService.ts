@@ -163,19 +163,11 @@ ${modeInstructions}
 RULES: Russian language for text. Extremely concise.
   `;
 
-  // Proxy the request through our backend to avoid CORS issues with Anthropic API
-  let backendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
-  if (!backendUrl) {
-    backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8080'
-      : window.location.origin;
-  }
-
   // Ensure JSON structure by pre-filling the assistant response
   const assistantPrefill = "{\n";
 
   try {
-    const response = await fetch(`${backendUrl}/api/proxy/post?url=https://api.anthropic.com/v1/messages`, {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
