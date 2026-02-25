@@ -5,9 +5,10 @@ export const performClaudeAnalysis = async (
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[],
   marketContext: string,
-  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' = 'simple',
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading' = 'simple',
   targetCoinSymbol?: string,
-  apiKey?: string
+  apiKey?: string,
+  userBalance?: number
 ): Promise<CombinedAnalysisResponse> => {
   if ((!posts || posts.length === 0) && (!tweets || tweets.length === 0) && (!telegramMsgs || telegramMsgs.length === 0)) {
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
@@ -93,6 +94,36 @@ export const performClaudeAnalysis = async (
       - OUTPUT FIELD: "singleCoin" (object).
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
     `;
+  } else if (mode === 'trading') {
+    task = `GENERATE FUTURES TRADING RECOMMENDATIONS. Analyze ALL coins from social data and market context. USER BALANCE: ${userBalance || 10} USDT.`;
+    modeInstructions = `
+      TASK: Find 3-8 coins where sentiment AND market data give clear directional signal for the next 24 hours.
+      OUTPUT FIELD: "trades" (array of objects).
+      Each object MUST include:
+      - "symbol", "name"
+      - "direction": "LONG" or "SHORT"
+      - "confidence": 0-100
+      - "reasoning": Russian, concise
+      - "currentPrice": from market context
+      - "leverage": 2-10
+      - "entryPrice": same as currentPrice
+      - "takeProfit": realistic TP
+      - "stopLoss": protective SL
+      - "positionSizeUSDT": leverage * ${userBalance || 10}
+      - "riskRewardRatio": e.g. "1:1.5"
+      - "potentialProfit": e.g. "+3.6%"
+      - "potentialLoss": e.g. "-4.5%"
+      - "liquidationPrice": liquidation price
+      - "warning": Russian warning about liquidation risk
+      
+      RULES:
+      - SHORT: TP < entry, SL > entry
+      - LONG: TP > entry, SL < entry
+      - liquidation LONG = entry * (1 - 1/leverage)
+      - liquidation SHORT = entry * (1 + 1/leverage)
+      - Only coins with confidence >= 60
+      "forecastLabel": "Торговые рекомендации (24ч)"
+    `;
   }
 
   const systemPrompt = `
@@ -146,6 +177,22 @@ For 'single_coin' mode, output a JSON object:
      "targetChange": +15.5, // Expected % change, if possible
      "detail": "String (Russian). Sharp, objective, professional assessment based strictly on provided data."
   }
+}
+
+For 'trading' mode, output a JSON object:
+{
+  "marketSummary": "...",
+  "forecastLabel": "Торговые рекомендации (24ч)",
+  "strategy": "...", "topPick": "BTC", "riskLevel": "Medium", "technicalVerdict": "...",
+  "trades": [
+    {
+      "symbol": "XRP", "name": "Ripple", "direction": "SHORT", "confidence": 82,
+      "reasoning": "...", "currentPrice": 1.3563, "leverage": 3, "entryPrice": 1.3563,
+      "takeProfit": 1.34, "stopLoss": 1.377, "positionSizeUSDT": 26.1,
+      "riskRewardRatio": "1:1.5", "potentialProfit": "+3.6%", "potentialLoss": "-4.5%",
+      "liquidationPrice": 1.81, "warning": "При плече 3x +33% против = ликвидация"
+    }
+  ]
 }
   `;
 

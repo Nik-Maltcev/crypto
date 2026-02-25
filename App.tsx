@@ -12,6 +12,7 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
 import SingleCoinAnalysis from './components/SingleCoinAnalysis';
+import TradingCard from './components/TradingCard';
 
 // Icons
 const RefreshIcon = () => (
@@ -50,6 +51,7 @@ const App: React.FC = () => {
   // Setup Model Preference
   const [aiModel, setAiModel] = useState<'gemini' | 'claude'>('gemini');
   const [claudeApiKey, setClaudeApiKey] = useState('');
+  const [userBalance, setUserBalance] = useState('10');
 
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
@@ -132,23 +134,26 @@ const App: React.FC = () => {
     telegramMsgs: TelegramMessage[],
     marketContext: string,
     coinMap: Map<string, CMCCoinData>,
-    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
+    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'trading'
   ) => {
     let modeText = 'Общий прогноз (24ч)';
     if (mode === 'hourly') modeText = 'Почасовая детализация';
     if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
     if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
+    if (mode === 'trading') modeText = 'Торговые рекомендации';
 
     setStatus(`AI: Генерация (${modeText}) через ${aiModel === 'gemini' ? 'Gemini 2.5 Pro' : 'Claude Opus 4.6'}...`);
+
+    const balanceNum = parseFloat(userBalance) || 10;
 
     let analysis: CombinedAnalysisResponse;
     if (aiModel === 'claude') {
       if (!claudeApiKey) {
         throw new Error("Необходим ключ API для Claude");
       }
-      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey);
+      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey, balanceNum);
     } else {
-      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode);
+      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, balanceNum);
     }
 
     // Merge Real-time Prices only if coins exist (standard mode)
@@ -175,7 +180,7 @@ const App: React.FC = () => {
   };
 
   // Generic function to Fetch Data AND Run Analysis
-  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk', forceRefresh = true) => {
+  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk' | 'trading', forceRefresh = true) => {
     if (selectedSubreddits.length === 0) {
       alert("Выберите хотя бы один сабреддит.");
       return;
@@ -342,7 +347,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, aiModel, claudeApiKey]);
+  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, aiModel, claudeApiKey, userBalance]);
 
   // Hourly Analysis (Uses existing data)
   const handleHourlyAnalysis = async () => {
@@ -401,6 +406,15 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Balance Input */}
+            <input
+              type="number"
+              placeholder="USDT"
+              value={userBalance}
+              onChange={(e) => setUserBalance(e.target.value)}
+              className="w-20 text-xs bg-gray-900 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-purple-500 h-9 text-center"
+              title="Баланс в USDT"
+            />
             <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg overflow-hidden h-9">
               <button
                 onClick={() => setAiModel('gemini')}
@@ -464,6 +478,15 @@ const App: React.FC = () => {
                 >
                   <ClockIcon />
                   <span>20:00 МСК</span>
+                </button>
+
+                {/* Trading Mode */}
+                <button
+                  onClick={() => executeAnalysisPipeline('trading', true)}
+                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
+                >
+                  <span>📊</span>
+                  <span>Торговля</span>
                 </button>
 
 
@@ -720,6 +743,21 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </>
+                )}
+
+                {/* TRADING RECOMMENDATIONS VIEW */}
+                {result.trades && result.trades.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                      <span className="text-purple-400">📊</span> Торговые рекомендации (Futures)
+                    </h3>
+                    <p className="text-xs text-gray-400 mb-6">Баланс: {userBalance} USDT • Рекомендации на ближайшие 24 часа</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {result.trades.map((trade, idx) => (
+                        <TradingCard key={`${trade.symbol}-${idx}`} trade={trade} />
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* Source Stats */}

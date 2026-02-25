@@ -71,6 +71,26 @@ export interface AltcoinGem {
   why: string; // Reasoning extracted from text
 }
 
+// Trading Recommendation (Futures TP/SL)
+export interface TradingRecommendation {
+  symbol: string;
+  name: string;
+  direction: 'LONG' | 'SHORT';
+  confidence: number; // 0-100
+  reasoning: string;
+  currentPrice: number;
+  leverage: number;
+  entryPrice: number;
+  takeProfit: number;
+  stopLoss: number;
+  positionSizeUSDT: number;
+  riskRewardRatio: string; // e.g. "1:1.5"
+  potentialProfit: string; // e.g. "+3.6%"
+  potentialLoss: string;   // e.g. "-4.5%"
+  liquidationPrice: number;
+  warning: string;
+}
+
 // Combined Interface: Contains both per-coin stats AND global strategy
 export interface CombinedAnalysisResponse {
   marketSummary: string;
@@ -81,6 +101,9 @@ export interface CombinedAnalysisResponse {
 
   // Altcoin Mode
   altcoins?: AltcoinGem[];
+
+  // Trading Mode
+  trades?: TradingRecommendation[];
 
   // Single Coin Mode
   singleCoin?: SingleCoinAnalysisResult;

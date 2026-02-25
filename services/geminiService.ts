@@ -87,9 +87,34 @@ const SINGLE_COIN_SCHEMA: Schema = {
   required: ["currentSituation", "forecast", "detail", "hasEnoughData"]
 };
 
-const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin'): Schema => {
+// --- SCHEMA 6: TRADING RECOMMENDATIONS ---
+const TRADING_ITEM_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    symbol: { type: Type.STRING },
+    name: { type: Type.STRING },
+    direction: { type: Type.STRING, enum: ["LONG", "SHORT"] },
+    confidence: { type: Type.NUMBER, description: "0-100 confidence in this trade" },
+    reasoning: { type: Type.STRING, description: "Обоснование сделки (Russian)" },
+    currentPrice: { type: Type.NUMBER },
+    leverage: { type: Type.NUMBER, description: "Recommended leverage (2-10)" },
+    entryPrice: { type: Type.NUMBER },
+    takeProfit: { type: Type.NUMBER },
+    stopLoss: { type: Type.NUMBER },
+    positionSizeUSDT: { type: Type.NUMBER },
+    riskRewardRatio: { type: Type.STRING, description: "e.g. 1:1.5" },
+    potentialProfit: { type: Type.STRING, description: "e.g. +3.6%" },
+    potentialLoss: { type: Type.STRING, description: "e.g. -4.5%" },
+    liquidationPrice: { type: Type.NUMBER },
+    warning: { type: Type.STRING, description: "Предупреждение о риске ликвидации (Russian)" }
+  },
+  required: ["symbol", "name", "direction", "confidence", "reasoning", "currentPrice", "leverage", "entryPrice", "takeProfit", "stopLoss", "positionSizeUSDT", "riskRewardRatio", "potentialProfit", "potentialLoss", "liquidationPrice", "warning"]
+};
+
+const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading'): Schema => {
   const isAltcoin = mode === 'altcoins';
   const isSingleCoin = mode === 'single_coin';
+  const isTrading = mode === 'trading';
 
   // Select coin schema based on mode
   let coinItemSchema = SIMPLE_COIN_SCHEMA;
@@ -123,8 +148,14 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
         type: Type.STRING,
         description: "Вердикт (кратко). На русском."
       },
-      // Conditionally require coins OR altcoins OR singleCoin
-      ...(isSingleCoin ? {
+      // Conditionally require coins OR altcoins OR singleCoin OR trades
+      ...(isTrading ? {
+        trades: {
+          type: Type.ARRAY,
+          items: TRADING_ITEM_SCHEMA,
+          description: "List of 3-8 trading recommendations with TP/SL."
+        }
+      } : isSingleCoin ? {
         singleCoin: SINGLE_COIN_SCHEMA
       } : isAltcoin ? {
         altcoins: {
@@ -139,7 +170,7 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
         }
       })
     },
-    required: ["marketSummary", "forecastLabel", "strategy", "topPick", "riskLevel", "technicalVerdict", isSingleCoin ? "singleCoin" : (isAltcoin ? "altcoins" : "coins")]
+    required: ["marketSummary", "forecastLabel", "strategy", "topPick", "riskLevel", "technicalVerdict", isTrading ? "trades" : (isSingleCoin ? "singleCoin" : (isAltcoin ? "altcoins" : "coins"))]
   };
 };
 
@@ -148,8 +179,9 @@ export const performCombinedAnalysis = async (
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[],
   marketContext: string,
-  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' = 'simple',
-  targetCoinSymbol?: string
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading' = 'simple',
+  targetCoinSymbol?: string,
+  userBalance?: number
 ): Promise<CombinedAnalysisResponse> => {
   if ((!posts || posts.length === 0) && (!tweets || tweets.length === 0) && (!telegramMsgs || telegramMsgs.length === 0)) {
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
@@ -244,6 +276,33 @@ export const performCombinedAnalysis = async (
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
     `;
     thinkingBudget = 1024;
+  } else if (mode === 'trading') {
+    task = `GENERATE FUTURES TRADING RECOMMENDATIONS. Analyze ALL coins from social data and market context. USER BALANCE: ${userBalance || 10} USDT.`;
+    modeInstructions = `
+      TASK: Find 3-8 coins where sentiment AND market data give clear directional signal (Bullish or Bearish) for the next 24 hours.
+      For EACH coin, provide a FULL Futures trading recommendation:
+      - "direction": "LONG" (if bullish) or "SHORT" (if bearish)
+      - "leverage": recommended leverage (2-5 for safe, up to 10 for high confidence)
+      - "entryPrice": current market price from context
+      - "takeProfit": realistic TP based on 24h forecast
+      - "stopLoss": protective SL (must be tighter than TP for good risk/reward)
+      - "positionSizeUSDT": leverage * balance (e.g. 3x * ${userBalance || 10} = ${(userBalance || 10) * 3})
+      - "riskRewardRatio": calculated R:R (e.g. "1:1.5")
+      - "potentialProfit": % gain on deposit if TP hit
+      - "potentialLoss": % loss on deposit if SL hit
+      - "liquidationPrice": price at which position gets liquidated (100% loss)
+      - "warning": Russian text warning about liquidation risk at this leverage
+      
+      CRITICAL RULES:
+      - For SHORT: TP < entryPrice, SL > entryPrice
+      - For LONG: TP > entryPrice, SL < entryPrice
+      - liquidationPrice for LONG = entryPrice * (1 - 1/leverage)
+      - liquidationPrice for SHORT = entryPrice * (1 + 1/leverage)
+      - Only recommend coins with confidence >= 60
+      - reasoning must be in Russian, concise
+      "forecastLabel": "Торговые рекомендации (24ч)"
+    `;
+    thinkingBudget = 8192;
   }
 
   // maxOutputTokens must be sufficient to cover thinking + JSON response
