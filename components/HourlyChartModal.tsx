@@ -1,5 +1,5 @@
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CryptoAnalysis } from '../types';
 
 interface HourlyChartModalProps {
@@ -20,13 +20,9 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
 
     // Chart Data Preparation
     const chartData = hasHourlyData ? coin.hourlyForecast!.map((point) => {
-        // Current time in MSK (UTC+3)
         const now = new Date();
-        const mskOffset = 3 * 60; // 3 hours in minutes
+        const mskOffset = 3 * 60;
         const nowMsk = new Date(now.getTime() + (mskOffset + now.getTimezoneOffset()) * 60000);
-
-        // Calculate the target hour for this point
-        // We start from the NEXT full hour (ceil)
         const startHourMsk = (nowMsk.getHours() + 1) % 24;
         const targetHour = (startHourMsk + point.hourOffset - 1) % 24;
 
@@ -39,7 +35,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
         };
     }) : [];
 
-    // Calculate min/max for y-axis to make chart look dynamic
+    // Calculate min/max for y-axis
     let minPrice = 'auto';
     let maxPrice = 'auto';
     if (chartData.length > 0) {
@@ -51,7 +47,18 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
         maxPrice = (maxP + diff * 0.1).toFixed(maxP < 1 ? 6 : 2);
     }
 
-    // Handle overlay click to close
+    // Confidence color helper
+    const getConfidenceColor = (conf: number) => {
+        if (conf >= 75) return '#10B981';
+        if (conf >= 50) return '#F59E0B';
+        return '#EF4444';
+    };
+
+    // Average confidence
+    const avgConfidence = chartData.length > 0
+        ? Math.round(chartData.reduce((sum, d) => sum + d.confidence, 0) / chartData.length)
+        : 0;
+
     const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) {
             onClose();
@@ -75,7 +82,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                             </span>
                         </h2>
                         <p className="text-sm text-gray-400 mt-1">
-                            Почасовой прогноз (Время МСК)
+                            Почасовой прогноз (Время МСК) • Столбики = уверенность AI
                         </p>
                     </div>
 
@@ -99,7 +106,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                     ) : (
                         <div className="h-full w-full min-h-[400px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+                                <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
                                     <defs>
                                         <linearGradient id={`colorPriceModal`} x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />
@@ -112,19 +119,26 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                         stroke="#4B5563"
                                         fontSize={12}
                                         tickMargin={12}
-                                        tickFormatter={(value, index) => {
-                                            // Show every 3rd label to avoid clutter
-                                            return index % 3 === 0 ? value : '';
-                                        }}
+                                        tickFormatter={(value, index) => index % 3 === 0 ? value : ''}
                                     />
 
                                     <YAxis
+                                        yAxisId="price"
                                         domain={[minPrice, maxPrice]}
-                                        hide={false}
                                         stroke="#4B5563"
                                         fontSize={12}
                                         width={80}
                                         tickFormatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 2, maximumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 2 })}`}
+                                    />
+
+                                    <YAxis
+                                        yAxisId="confidence"
+                                        orientation="right"
+                                        domain={[0, 100]}
+                                        stroke="#4B5563"
+                                        fontSize={10}
+                                        width={35}
+                                        tickFormatter={(v) => `${v}%`}
                                     />
 
                                     <Tooltip
@@ -135,7 +149,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
                                         }}
                                         labelStyle={{ color: '#9CA3AF', marginBottom: '8px', fontWeight: 'bold' }}
-                                        formatter={(value: any, name: any, props: any) => {
+                                        formatter={(value: any, name: any) => {
                                             if (name === 'price') return [`$${value < 1 ? Number(value).toFixed(6) : Number(value).toLocaleString()}`, 'Цена'];
                                             if (name === 'change') return [`${value > 0 ? '+' : ''}${Number(value).toFixed(2)}%`, 'Изменение'];
                                             if (name === 'confidence') return [`${value}%`, 'Уверенность AI'];
@@ -144,10 +158,16 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                         labelFormatter={(label) => `Время (МСК): ${label}`}
                                     />
 
-                                    {/* Subtle Grid */}
-                                    <div className="chart-grid"></div>
+                                    {/* Confidence Bars — colored by level */}
+                                    <Bar yAxisId="confidence" dataKey="confidence" barSize={8} radius={[2, 2, 0, 0]} opacity={0.5}>
+                                        {chartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={getConfidenceColor(entry.confidence)} />
+                                        ))}
+                                    </Bar>
 
+                                    {/* Price Area */}
                                     <Area
+                                        yAxisId="price"
                                         type="monotone"
                                         dataKey="price"
                                         stroke={chartColor}
@@ -156,10 +176,9 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                         fill={`url(#colorPriceModal)`}
                                     />
 
-                                    {/* Invisible lines just for tooltip data */}
-                                    <Area type="monotone" dataKey="change" stroke="none" fill="none" />
-                                    <Area type="monotone" dataKey="confidence" stroke="none" fill="none" />
-                                </AreaChart>
+                                    {/* Invisible line for tooltip */}
+                                    <Area yAxisId="price" type="monotone" dataKey="change" stroke="none" fill="none" />
+                                </ComposedChart>
                             </ResponsiveContainer>
                         </div>
                     )}
@@ -182,6 +201,17 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                 </span>
                             </div>
                         )}
+                        <div>
+                            <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">Ср. уверенность</span>
+                            <span className={`font-bold ${avgConfidence >= 75 ? 'text-emerald-400' : avgConfidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {avgConfidence}%
+                            </span>
+                        </div>
+                        <div className="flex items-end gap-2 text-[10px] text-gray-500">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"></span>≥75%</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500 inline-block"></span>50-74%</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block"></span>&lt;50%</span>
+                        </div>
                     </div>
                     <div className="text-right">
                         <p className="text-gray-400 max-w-lg text-xs leading-relaxed">{coin.reasoning}</p>
