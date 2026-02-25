@@ -372,134 +372,148 @@ const App: React.FC = () => {
 
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-accent to-blue-600 flex items-center justify-center text-white font-bold">
-              CP
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Row 1: Logo + Nav Tabs */}
+          <div className="h-14 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-accent to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                CP
+              </div>
+              <h1 className="text-lg font-bold text-white tracking-tight">CryptoPulse <span className="text-brand-accent">AI</span></h1>
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight mr-4">CryptoPulse <span className="text-brand-accent">AI</span></h1>
 
             {/* Navigation Tabs */}
-            <div className="hidden md:flex space-x-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
+            <div className="hidden md:flex items-center space-x-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('main')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'main' ? 'bg-gray-800 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                  }`}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'main' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
                 Анализ рынка
               </button>
               <button
                 onClick={() => setActiveTab('chatFilter')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'chatFilter' ? 'bg-gray-800 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                  }`}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'chatFilter' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                Анализ чатов (Beta)
+                Анализ чатов
               </button>
               <button
                 onClick={() => setActiveTab('singleCoin')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'singleCoin' ? 'bg-gray-800 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-                  }`}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'singleCoin' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
                 Мнение о монете
               </button>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            {/* Balance Input */}
-            <input
-              type="number"
-              placeholder="USDT"
-              value={userBalance}
-              onChange={(e) => setUserBalance(e.target.value)}
-              className="w-20 text-xs bg-gray-900 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-purple-500 h-9 text-center"
-              title="Баланс в USDT"
-            />
-            <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg overflow-hidden h-9">
-              <button
-                onClick={() => setAiModel('gemini')}
-                className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'gemini' ? 'bg-blue-600/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-              >
-                Gemini
-              </button>
-              <button
-                onClick={() => setAiModel('claude')}
-                className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'claude' ? 'bg-orange-600/20 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
-              >
-                Claude 4.6
-              </button>
-            </div>
-            {aiModel === 'claude' && (
-              <input
-                type="password"
-                placeholder="API Key (sk-ant-...)"
-                value={claudeApiKey}
-                onChange={(e) => setClaudeApiKey(e.target.value)}
-                className="w-40 text-xs bg-gray-900 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-brand-accent h-9"
-              />
-            )}
-            {result && !isProcessing && (
-              <button
-                onClick={handleDownloadJSON}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-semibold text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-all"
-                title="Скачать JSON"
-              >
-                <DownloadIcon />
-                <span className="hidden sm:inline">JSON</span>
-              </button>
-            )}
+          {/* Row 2: Controls */}
+          <div className="h-12 flex items-center justify-between border-t border-gray-800/50">
+            <div className="flex items-center gap-3">
+              {/* Balance */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-gray-500 uppercase font-bold">Баланс</span>
+                <input
+                  type="number"
+                  placeholder="10"
+                  value={userBalance}
+                  onChange={(e) => setUserBalance(e.target.value)}
+                  className="w-16 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-purple-500 h-7 text-center"
+                />
+                <span className="text-[10px] text-gray-500">USDT</span>
+              </div>
 
-            {isProcessing ? (
-              <button
-                onClick={handleStop}
-                className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20 transition-all"
-              >
-                <StopIcon />
-                <span>Стоп</span>
-              </button>
-            ) : (
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
+              <div className="w-px h-5 bg-gray-700" />
 
-                {/* Hourly Trigger */}
-                {sourcePosts.length > 0 && result?.coins && !result.coins[0]?.hourlyForecast && (
-                  <button
-                    onClick={handleHourlyAnalysis}
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-500/30 transition-all"
-                  >
-                    <AnalysisIcon />
-                    <span className="hidden lg:inline">Почасово</span>
-                  </button>
-                )}
-
-                {/* Today 20:00 MSK */}
+              {/* AI Model */}
+              <div className="flex items-center bg-gray-800 border border-gray-700/50 rounded-lg overflow-hidden h-7">
                 <button
-                  onClick={() => executeAnalysisPipeline('today_20msk', true)}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all"
+                  onClick={() => setAiModel('gemini')}
+                  className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'gemini' ? 'bg-blue-600/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                  <ClockIcon />
-                  <span>20:00 МСК</span>
+                  Gemini
                 </button>
-
-                {/* Trading Mode */}
                 <button
-                  onClick={() => executeAnalysisPipeline('trading', true)}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
+                  onClick={() => setAiModel('claude')}
+                  className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'claude' ? 'bg-orange-600/20 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                  <span>📊</span>
-                  <span>Торговля</span>
-                </button>
-
-
-                {/* Standard Trigger */}
-                <button
-                  onClick={() => executeAnalysisPipeline('simple', true)}
-                  className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
-                >
-                  <RefreshIcon />
-                  <span>Сбор + Анализ (24ч)</span>
+                  Claude 4.6
                 </button>
               </div>
-            )}
+
+              {aiModel === 'claude' && (
+                <input
+                  type="password"
+                  placeholder="API Key (sk-ant-...)"
+                  value={claudeApiKey}
+                  onChange={(e) => setClaudeApiKey(e.target.value)}
+                  className="w-36 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-orange-500 h-7"
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {result && !isProcessing && (
+                <button
+                  onClick={handleDownloadJSON}
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent hover:border-gray-700 transition-all"
+                  title="Скачать JSON"
+                >
+                  <DownloadIcon />
+                  <span className="hidden sm:inline">JSON</span>
+                </button>
+              )}
+
+              {isProcessing ? (
+                <button
+                  onClick={handleStop}
+                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20 transition-all"
+                >
+                  <StopIcon />
+                  <span>Стоп</span>
+                </button>
+              ) : (
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
+
+                  {/* Hourly Trigger */}
+                  {sourcePosts.length > 0 && result?.coins && !result.coins[0]?.hourlyForecast && (
+                    <button
+                      onClick={handleHourlyAnalysis}
+                      className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-500/30 transition-all"
+                    >
+                      <AnalysisIcon />
+                      <span className="hidden lg:inline">Почасово</span>
+                    </button>
+                  )}
+
+                  {/* Today 20:00 MSK */}
+                  <button
+                    onClick={() => executeAnalysisPipeline('today_20msk', true)}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all"
+                  >
+                    <ClockIcon />
+                    <span>20:00 МСК</span>
+                  </button>
+
+                  {/* Trading Mode */}
+                  <button
+                    onClick={() => executeAnalysisPipeline('trading', true)}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
+                  >
+                    <span>📊</span>
+                    <span>Торговля</span>
+                  </button>
+
+
+                  {/* Standard Trigger */}
+                  <button
+                    onClick={() => executeAnalysisPipeline('simple', true)}
+                    className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
+                  >
+                    <RefreshIcon />
+                    <span>Сбор + Анализ (24ч)</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
