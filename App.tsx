@@ -242,7 +242,8 @@ const App: React.FC = () => {
             setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
           }
 
-          const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 500);
+          // Remove the hardcoded 500 limit and keep all posts
+          const topPosts = allPosts.sort((a, b) => b.score - a.score);
           return topPosts;
         };
 
@@ -269,12 +270,16 @@ const App: React.FC = () => {
             setTelegramProgress({ current: 1, total: 1 });
 
             const allMsgs: TelegramMessage[] = [];
-            if (response && response.data) {
-              Object.values(response.data).forEach(msgs => {
-                if (msgs && Array.isArray(msgs)) {
-                  allMsgs.push(...msgs);
-                }
-              });
+            // API returns { data: { "chat_username": [...msgs] } }
+            Object.values(response.data).forEach(msgs => {
+              if (msgs && Array.isArray(msgs)) {
+                allMsgs.push(...msgs);
+              }
+            });
+
+            // If data directly has an array (fallback for different API response structures)
+            if (Array.isArray(response.data)) {
+              allMsgs.push(...response.data);
             }
             return allMsgs;
           } catch (err) {
@@ -316,6 +321,7 @@ const App: React.FC = () => {
           try {
             // Directly await the task instead of Promise.allSettled
             finalTelegram = await telegramTask();
+            console.log("Telegram messages fetched:", finalTelegram.length);
             setTelegramMessages(finalTelegram);
           } catch (telegramErr) {
             console.error("Telegram fetch failed:", telegramErr);
@@ -788,7 +794,7 @@ const App: React.FC = () => {
                   )}
                   {telegramMessages.length > 0 && (
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
-                      <h4 className="text-xs font-bold text-brand-accent mb-1">Telegram</h4>
+                      <h4 className="text-xs font-bold text-sky-400 mb-1">Telegram</h4>
                       <p className="text-sm text-gray-400">Сообщений: {telegramMessages.length}</p>
                     </div>
                   )}
