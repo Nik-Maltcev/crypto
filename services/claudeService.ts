@@ -5,7 +5,7 @@ export const performClaudeAnalysis = async (
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[],
   marketContext: string,
-  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading' = 'simple',
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'single_coin' | 'trading' = 'simple',
   targetCoinSymbol?: string,
   apiKey?: string,
   userBalance?: number
@@ -73,6 +73,16 @@ export const performClaudeAnalysis = async (
       FIELDS: "targetPrice" (number), "targetChange" (number).
       "forecastLabel": "Прогноз (20:00 МСК)"
     `;
+  } else if (mode === 'today_24msk') {
+    const now = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${now.toISOString()}.`;
+    modeInstructions = `
+      FORECAST TASK: Predict price for the UPCOMING 24:00 Moscow Time (UTC+3) / End of current day MSK.
+      If current time is before 21:00 UTC, target is TODAY 24:00 MSK (21:00 UTC).
+      If current time is past 21:00 UTC, target is TOMORROW 24:00 MSK.
+      FIELDS: "targetPrice" (number), "targetChange" (number).
+      "forecastLabel": "Прогноз (24:00 МСК)"
+    `;
   } else if (mode === 'altcoins') {
     task = "FIND HIDDEN GEMS / ALTCOINS (Exclude BTC, ETH). Focus on tokens mentioned in r/SatoshiStreetBets, r/CryptoMoonShots, etc.";
     modeInstructions = `
@@ -134,7 +144,7 @@ Output pure JSON only, without any markdown formatting wrappers such as \`\`\`js
 Your entire response must be parseable by JSON.parse().
     
 Response Format per Mode:
-For modes 'simple', 'hourly', 'today_20msk', output a JSON object:
+For modes 'simple', 'hourly', 'today_20msk', 'today_24msk', output a JSON object:
 {
   "marketSummary": "String (Russian) - Overarching market overview, max 3 sentences",
   "coins": [

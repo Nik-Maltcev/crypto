@@ -134,12 +134,13 @@ const App: React.FC = () => {
     telegramMsgs: TelegramMessage[],
     marketContext: string,
     coinMap: Map<string, CMCCoinData>,
-    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'trading'
+    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading'
   ) => {
     let modeText = 'Общий прогноз (24ч)';
     if (mode === 'hourly') modeText = 'Почасовая детализация';
     if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
     if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
+    if (mode === 'today_24msk') modeText = 'Прогноз на 24:00 МСК';
     if (mode === 'trading') modeText = 'Торговые рекомендации';
 
     setStatus(`AI: Генерация (${modeText}) через ${aiModel === 'gemini' ? 'Gemini 2.5 Pro' : 'Claude Opus 4.6'}...`);
@@ -180,7 +181,7 @@ const App: React.FC = () => {
   };
 
   // Generic function to Fetch Data AND Run Analysis
-  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk' | 'trading', forceRefresh = true) => {
+  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading', forceRefresh = true) => {
     if (selectedSubreddits.length === 0) {
       alert("Выберите хотя бы один сабреддит.");
       return;
@@ -497,6 +498,15 @@ const App: React.FC = () => {
                   >
                     <ClockIcon />
                     <span>20:00 МСК</span>
+                  </button>
+
+                  {/* Today 24:00 MSK */}
+                  <button
+                    onClick={() => executeAnalysisPipeline('today_24msk', true)}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition-all"
+                  >
+                    <ClockIcon />
+                    <span>24:00 МСК</span>
                   </button>
 
                   {/* Trading Mode */}

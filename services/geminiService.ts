@@ -111,7 +111,7 @@ const TRADING_ITEM_SCHEMA: Schema = {
   required: ["symbol", "name", "direction", "confidence", "reasoning", "currentPrice", "leverage", "entryPrice", "takeProfit", "stopLoss", "positionSizeUSDT", "riskRewardRatio", "potentialProfit", "potentialLoss", "liquidationPrice", "warning"]
 };
 
-const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading'): Schema => {
+const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'single_coin' | 'trading'): Schema => {
   const isAltcoin = mode === 'altcoins';
   const isSingleCoin = mode === 'single_coin';
   const isTrading = mode === 'trading';
@@ -119,7 +119,7 @@ const createMainSchema = (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk'
   // Select coin schema based on mode
   let coinItemSchema = SIMPLE_COIN_SCHEMA;
   if (mode === 'hourly') coinItemSchema = HOURLY_COIN_SCHEMA;
-  if (mode === 'today_20msk') coinItemSchema = TARGET_COIN_SCHEMA;
+  if (mode === 'today_20msk' || mode === 'today_24msk') coinItemSchema = TARGET_COIN_SCHEMA;
 
   return {
     type: Type.OBJECT,
@@ -179,7 +179,7 @@ export const performCombinedAnalysis = async (
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[],
   marketContext: string,
-  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'single_coin' | 'trading' = 'simple',
+  mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'single_coin' | 'trading' = 'simple',
   targetCoinSymbol?: string,
   userBalance?: number
 ): Promise<CombinedAnalysisResponse> => {
@@ -253,6 +253,17 @@ export const performCombinedAnalysis = async (
       "forecastLabel": "Прогноз (20:00 МСК)"
     `;
     thinkingBudget = 4096; // Moderate budget for time calculation logic
+  } else if (mode === 'today_24msk') {
+    const now = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${now.toISOString()}.`;
+    modeInstructions = `
+      FORECAST TASK: Predict price for the UPCOMING 24:00 Moscow Time (UTC+3) / End of current day MSK.
+      If current time is before 21:00 UTC, target is TODAY 24:00 MSK (21:00 UTC).
+      If current time is past 21:00 UTC, target is TOMORROW 24:00 MSK.
+      FIELDS: "targetPrice" (number), "targetChange" (number).
+      "forecastLabel": "Прогноз (24:00 МСК)"
+    `;
+    thinkingBudget = 4096;
   } else if (mode === 'altcoins') {
     task = "FIND HIDDEN GEMS / ALTCOINS (Exclude BTC, ETH). Focus on tokens mentioned in r/SatoshiStreetBets, r/CryptoMoonShots, etc.";
     modeInstructions = `
@@ -266,41 +277,41 @@ export const performCombinedAnalysis = async (
     `;
     thinkingBudget = 8192; // Higher budget to filter noise from signal in altcoins
   } else if (mode === 'single_coin') {
-    task = `ANALYZE SPECIFIC COIN: ${targetCoinSymbol || 'UNKNOWN'}. Read the Reddit and Twitter data strictly looking for this coin. Check the Market Context for its current price.`;
+    task = `ANALYZE SPECIFIC COIN: ${targetCoinSymbol || 'UNKNOWN'}. Read the Reddit and Twitter data strictly looking for this coin.Check the Market Context for its current price.`;
     modeInstructions = `
       TASK: Provide a HIGHLY CONFIDENT, OBJECTIVE, and ANALYTICAL opinion on ONE specific coin: ${targetCoinSymbol}.
-      - Base your verdict STRICTLY AND EXCLUSIVELY on the provided data (CMC market data + Reddit/Twitter sentiment).
-      - BE DECISIVE. Avoid weak words like "possibly", "maybe", "mixed", or "unclear". Give a sharp, professional market assessment in Russian.
+    - Base your verdict STRICTLY AND EXCLUSIVELY on the provided data(CMC market data + Reddit / Twitter sentiment).
+      - BE DECISIVE.Avoid weak words like "possibly", "maybe", "mixed", or "unclear".Give a sharp, professional market assessment in Russian.
       - If there are fewer than 3 mentions in the social data, you MUST set hasEnoughData to false, and the 'detail' field must explicitly begin by stating that the coin is rarely discussed.
-      - OUTPUT FIELD: "singleCoin" (object).
+      - OUTPUT FIELD: "singleCoin"(object).
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
     `;
     thinkingBudget = 1024;
   } else if (mode === 'trading') {
-    task = `GENERATE FUTURES TRADING RECOMMENDATIONS. Analyze ALL coins from social data and market context. USER BALANCE: ${userBalance || 10} USDT.`;
+    task = `GENERATE FUTURES TRADING RECOMMENDATIONS.Analyze ALL coins from social data and market context.USER BALANCE: ${userBalance || 10} USDT.`;
     modeInstructions = `
-      TASK: Find 3-8 coins where sentiment AND market data give clear directional signal (Bullish or Bearish) for the next 24 hours.
+    TASK: Find 3 - 8 coins where sentiment AND market data give clear directional signal(Bullish or Bearish) for the next 24 hours.
       For EACH coin, provide a FULL Futures trading recommendation:
-      - "direction": "LONG" (if bullish) or "SHORT" (if bearish)
-      - "leverage": recommended leverage (2-5 for safe, up to 10 for high confidence)
-      - "entryPrice": current market price from context
-      - "takeProfit": realistic TP based on 24h forecast
-      - "stopLoss": protective SL (must be tighter than TP for good risk/reward)
-      - "positionSizeUSDT": leverage * balance (e.g. 3x * ${userBalance || 10} = ${(userBalance || 10) * 3})
-      - "riskRewardRatio": calculated R:R (e.g. "1:1.5")
-      - "potentialProfit": % gain on deposit if TP hit
+    - "direction": "LONG"(if bullish) or "SHORT"(if bearish)
+      - "leverage": recommended leverage(2 - 5 for safe, up to 10 for high confidence)
+        - "entryPrice": current market price from context
+          - "takeProfit": realistic TP based on 24h forecast
+            - "stopLoss": protective SL(must be tighter than TP for good risk / reward)
+      - "positionSizeUSDT": leverage * balance(e.g. 3x * ${userBalance || 10} = ${(userBalance || 10) * 3})
+  - "riskRewardRatio": calculated R: R(e.g. "1:1.5")
+    - "potentialProfit": % gain on deposit if TP hit
       - "potentialLoss": % loss on deposit if SL hit
-      - "liquidationPrice": price at which position gets liquidated (100% loss)
-      - "warning": Russian text warning about liquidation risk at this leverage
+        - "liquidationPrice": price at which position gets liquidated(100 % loss)
+          - "warning": Russian text warning about liquidation risk at this leverage
       
       CRITICAL RULES:
-      - For SHORT: TP < entryPrice, SL > entryPrice
-      - For LONG: TP > entryPrice, SL < entryPrice
-      - liquidationPrice for LONG = entryPrice * (1 - 1/leverage)
-      - liquidationPrice for SHORT = entryPrice * (1 + 1/leverage)
-      - Only recommend coins with confidence >= 60
-      - reasoning must be in Russian, concise
-      "forecastLabel": "Торговые рекомендации (24ч)"
+  - For SHORT: TP < entryPrice, SL > entryPrice
+    - For LONG: TP > entryPrice, SL < entryPrice
+      - liquidationPrice for LONG = entryPrice * (1 - 1 / leverage)
+        - liquidationPrice for SHORT = entryPrice * (1 + 1 / leverage)
+          - Only recommend coins with confidence >= 60
+          - reasoning must be in Russian, concise
+  "forecastLabel": "Торговые рекомендации (24ч)"
     `;
     thinkingBudget = 8192;
   }
@@ -312,17 +323,17 @@ export const performCombinedAnalysis = async (
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-pro',
       contents: `
-      CONTEXT: ${marketContext}
+  CONTEXT: ${marketContext}
       REDDIT DATA: ${redditPayload}
       TWITTER DATA: ${twitterPayload}
       TELEGRAM DATA: ${telegramPayload}
 
-      TASK: ${task}
-      OUTPUT: JSON matching schema.
-      
-      ${modeInstructions}
-      
-      RULES: Russian language for text. Extremely concise.
+  TASK: ${task}
+  OUTPUT: JSON matching schema.
+
+    ${modeInstructions}
+
+  RULES: Russian language for text.Extremely concise.
       `,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,

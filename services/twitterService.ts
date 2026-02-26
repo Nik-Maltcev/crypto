@@ -160,9 +160,9 @@ export const fetchBatchTweets = async (
 
     const tweets = await fetchUserTweets(id, limitPerUser);
 
-    // Filter for recent tweets (last 48h) to ensure relevance
-    const twoDaysAgo = Date.now() - (48 * 60 * 60 * 1000);
-    const recentTweets = tweets.filter(t => new Date(t.created_at).getTime() > twoDaysAgo);
+    // Filter for recent tweets (last 24h) to ensure relevance
+    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+    const recentTweets = tweets.filter(t => new Date(t.created_at).getTime() > oneDayAgo);
 
     allTweets.push(...recentTweets);
     onProgress(i + 1, ids.length);
