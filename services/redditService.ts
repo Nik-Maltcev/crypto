@@ -4,13 +4,13 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 
 // Helper to clean up Reddit data
 const cleanText = (text: string) => {
-  return text ? text.replace(/\s+/g, ' ').substring(0, 500) : '';
+  return text ? text.replace(/\s+/g, ' ').trim() : '';
 };
 
 export const fetchSubredditPosts = async (subredditName: string, searchQuery?: string): Promise<RedditPost[]> => {
   try {
     // We now use our dedicated backed endpoint which handles Reddit OAuth
-    let url = `${BACKEND_URL}/api/reddit/posts?subreddit=${encodeURIComponent(subredditName)}&limit=50`;
+    let url = `${BACKEND_URL}/api/reddit/posts?subreddit=${encodeURIComponent(subredditName)}&limit=100`;
 
     if (searchQuery) {
       url += `&q=${encodeURIComponent(searchQuery)}`;

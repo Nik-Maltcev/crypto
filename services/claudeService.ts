@@ -18,10 +18,10 @@ export const performClaudeAnalysis = async (
     throw new Error("Отсутствует API ключ Claude.");
   }
 
-  // Input Data - limited similarly to Gemini
-  const redditPayload = JSON.stringify(posts.slice(0, 300).map(p => ({
+  // Input Data - unlimited Reddit posts
+  const redditPayload = JSON.stringify(posts.map(p => ({
     title: p.title,
-    text: p.selftext ? p.selftext.substring(0, 200) : "",
+    text: p.selftext ? p.selftext.substring(0, 500) : "",
     subreddit: p.subreddit,
     score: p.score
   })));

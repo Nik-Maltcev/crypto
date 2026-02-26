@@ -192,9 +192,9 @@ export const performCombinedAnalysis = async (
   });
 
   // Input Data - INCREASED LIMIT from 40 to 300 posts to use Gemini 3 Pro large context
-  const redditPayload = JSON.stringify(posts.slice(0, 300).map(p => ({
+  const redditPayload = JSON.stringify(posts.map(p => ({
     title: p.title,
-    text: p.selftext ? p.selftext.substring(0, 200) : "", // Slightly more text for altcoin hunting
+    text: p.selftext ? p.selftext.substring(0, 500) : "",
     subreddit: p.subreddit,
     score: p.score
   })));
