@@ -71,7 +71,7 @@ export interface AltcoinGem {
   why: string; // Reasoning extracted from text
 }
 
-// Trading Recommendation (Futures TP/SL)
+// Trading Recommendation (Futures TP/SL) - Legacy
 export interface TradingRecommendation {
   symbol: string;
   name: string;
@@ -91,6 +91,48 @@ export interface TradingRecommendation {
   warning: string;
 }
 
+// Smart Money Trading (Bybit-Optimized)
+export interface SmartMoneyTrade {
+  symbol: string;
+  name: string;
+  aiScore: number; // 0-100 (sum of 4 pillars)
+  narrativeStrength: number;    // 0-25
+  informationAsymmetry: number; // 0-25
+  socialVelocityDelta: number;  // 0-25
+  riskReward: number;           // 0-25
+
+  // Bybit Signal
+  signalType: 'scalp' | 'intraday' | 'swing';
+  direction: 'LONG' | 'SHORT';
+  confidence: 'high' | 'medium' | 'low';
+
+  // Entry/Target
+  entryZoneMin: number;
+  entryZoneMax: number;
+  targetPrice: number;
+  targetPercent: number;
+  stopLoss: number;
+
+  // Time
+  timeToTargetMinH: number;
+  timeToTargetMaxH: number;
+  maxHoldTimeH: number;
+  invalidAfter: string; // ISO datetime
+
+  // Bybit-specific
+  leverage: number;
+  fundingSensitive: boolean;
+  fundingImpact: 'low' | 'medium' | 'high';
+
+  // Context
+  catalyst: string;
+  reasoning: string;
+  currentPrice: number;
+  volume24h: number;
+  marketCap: number;
+  priceChange24h: number;
+}
+
 // Combined Interface: Contains both per-coin stats AND global strategy
 export interface CombinedAnalysisResponse {
   marketSummary: string;
@@ -102,8 +144,11 @@ export interface CombinedAnalysisResponse {
   // Altcoin Mode
   altcoins?: AltcoinGem[];
 
-  // Trading Mode
+  // Trading Mode (Legacy)
   trades?: TradingRecommendation[];
+
+  // Smart Money Trading Mode (New)
+  smartTrades?: SmartMoneyTrade[];
 
   // Single Coin Mode
   singleCoin?: SingleCoinAnalysisResult;

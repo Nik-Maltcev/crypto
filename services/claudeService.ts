@@ -124,34 +124,59 @@ Telegram: ${telegramPayload}
       "forecastLabel": "Анализ: ${targetCoinSymbol}"
     `;
   } else if (mode === 'trading') {
-    task = `GENERATE FUTURES TRADING RECOMMENDATIONS. Analyze ALL coins from social data and market context. USER BALANCE: ${userBalance || 10} USDT.`;
+    const nowUtc = new Date();
+    task = `SMART MONEY ANALYSIS for Bybit Futures. CURRENT UTC TIME: ${nowUtc.toISOString()}. Analyze the pre-filtered top coins from social velocity data.`;
     modeInstructions = `
-      TASK: Find 3-8 coins where sentiment AND market data give clear directional signal for the next 24 hours.
-      OUTPUT FIELD: "trades" (array of objects).
-      Each object MUST include:
-      - "symbol", "name"
-      - "direction": "LONG" or "SHORT"
-      - "confidence": 0-100
-      - "reasoning": Russian, concise
-      - "currentPrice": from market context
-      - "leverage": 2-10
-      - "entryPrice": same as currentPrice
-      - "takeProfit": realistic TP
-      - "stopLoss": protective SL
-      - "positionSizeUSDT": leverage * ${userBalance || 10}
-      - "riskRewardRatio": e.g. "1:1.5"
-      - "potentialProfit": e.g. "+3.6%"
-      - "potentialLoss": e.g. "-4.5%"
-      - "liquidationPrice": liquidation price
-      - "warning": Russian warning about liquidation risk
-      
-      RULES:
-      - SHORT: TP < entry, SL > entry
-      - LONG: TP > entry, SL < entry
-      - liquidation LONG = entry * (1 - 1/leverage)
-      - liquidation SHORT = entry * (1 + 1/leverage)
-      - Only coins with confidence >= 60
-      "forecastLabel": "Торговые рекомендации (24ч)"
+      SMART MONEY PIPELINE — BYBIT FUTURES ANALYSIS
+
+      The input data has been PRE-FILTERED by Gemini AI. It contains the top-15 coins by Social Velocity Delta (mention growth in last 4h vs previous 14h), split into 3 time windows with weights:
+      - last_4h (weight 50%): Most important — detect fresh catalysts
+      - 4h_to_12h (weight 30%): Trend confirmation
+      - 12h_to_18h (weight 20%): Historical context
+
+      FOR EACH COIN, score 4 PILLARS (0-25 each):
+      1. **Narrative Strength** (0-25): Is there a CONCRETE story (listing, upgrade, partnership, whale buy) or just generic hype? Score 20+ only if specific catalyst exists.
+      2. **Information Asymmetry** (0-25): Is the information NOT YET reflected in the current price? Early signal = high score. Already pumped = low score.
+      3. **Social Velocity Delta** (0-25): Growth of mentions in last_4h vs previous 14h. Explosive growth = 25, steady = 15, declining = 5.
+      4. **Risk/Reward** (0-25): Liquidity (volume24h), market cap size, distance to resistance. High liquidity + clear path = high score.
+
+      AI Score = sum of 4 pillars (0-100). ONLY return coins with aiScore >= 75.
+
+      SIGNAL TYPES (based on velocity pattern):
+      - "scalp" (explosive, 0.5-2h): Sudden spike in last 4h. Leverage: 10-20x.
+      - "intraday" (steady, 2-8h): Growing trend across windows. Leverage: 5-7x.
+      - "swing" (accumulation, 8-24h): Quiet buildup. Leverage: 2-3x.
+
+      CRITICAL RULE: Longer hold time = LOWER leverage. This is Bybit Futures, not spot.
+
+      FOR EACH COIN OUTPUT:
+      - symbol, name
+      - aiScore (0-100), narrativeStrength (0-25), informationAsymmetry (0-25), socialVelocityDelta (0-25), riskReward (0-25)
+      - signalType: "scalp" | "intraday" | "swing"
+      - direction: "LONG" | "SHORT"
+      - confidence: "high" (only if pillars 1 and 2 >= 20 each) | "medium" | "low"
+      - entryZoneMin, entryZoneMax: realistic entry price range from market context
+      - targetPrice: realistic target based on historical analogs (NOT "to the moon")
+      - targetPercent: % gain from entry to target
+      - stopLoss: protective stop
+      - timeToTargetMinH, timeToTargetMaxH: expected time range in hours
+      - maxHoldTimeH: time-based SL (close if target not reached)
+      - invalidAfter: ISO datetime after which signal expires
+      - leverage: recommended (must match signalType rules above)
+      - fundingSensitive: true if holding through 00:00/08:00/16:00 UTC funding time
+      - fundingImpact: "low" / "medium" / "high"
+      - catalyst: one-sentence catalyst description (Russian)
+      - reasoning: 1-2 sentence reasoning (Russian)
+      - currentPrice, volume24h, marketCap, priceChange24h: from market context
+
+      OUTPUT FIELD: "smartTrades" (array of objects).
+      "forecastLabel": "Smart Money (Bybit)"
+
+      ABSOLUTE RULES:
+      - Return 3-5 coins MAXIMUM. Quality over quantity.
+      - If NO coin scores >= 75, return empty array and set marketSummary to explain why.
+      - If priceChange24h > 30%, set confidence to "medium" regardless (overheated).
+      - All text fields in Russian.
     `;
   }
 
@@ -211,15 +236,17 @@ For 'single_coin' mode, output a JSON object:
 For 'trading' mode, output a JSON object:
 {
   "marketSummary": "...",
-  "forecastLabel": "Торговые рекомендации (24ч)",
-  "strategy": "...", "topPick": "BTC", "riskLevel": "Medium", "technicalVerdict": "...",
-  "trades": [
+  "forecastLabel": "Smart Money (Bybit)",
+  "smartTrades": [
     {
-      "symbol": "XRP", "name": "Ripple", "direction": "SHORT", "confidence": 82,
-      "reasoning": "...", "currentPrice": 1.3563, "leverage": 3, "entryPrice": 1.3563,
-      "takeProfit": 1.34, "stopLoss": 1.377, "positionSizeUSDT": 26.1,
-      "riskRewardRatio": "1:1.5", "potentialProfit": "+3.6%", "potentialLoss": "-4.5%",
-      "liquidationPrice": 1.81, "warning": "При плече 3x +33% против = ликвидация"
+      "symbol": "SOL", "name": "Solana",
+      "aiScore": 87, "narrativeStrength": 22, "informationAsymmetry": 20, "socialVelocityDelta": 25, "riskReward": 20,
+      "signalType": "intraday", "direction": "LONG", "confidence": "high",
+      "entryZoneMin": 142.0, "entryZoneMax": 143.5, "targetPrice": 155.0, "targetPercent": 8.5, "stopLoss": 138.0,
+      "timeToTargetMinH": 3, "timeToTargetMaxH": 6, "maxHoldTimeH": 8, "invalidAfter": "2025-02-28T14:00:00Z",
+      "leverage": 5, "fundingSensitive": true, "fundingImpact": "medium",
+      "catalyst": "Листинг на новой бирже + рост TVL", "reasoning": "Сильный катализатор...",
+      "currentPrice": 142.5, "volume24h": 5000000, "marketCap": 60000000000, "priceChange24h": 3.5
     }
   ]
 }

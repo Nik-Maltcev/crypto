@@ -3,11 +3,12 @@ import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS } from './c
 import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
 import { fetchChatsPreview } from './services/telegramService';
-import { performCombinedAnalysis, filterTelegramChats, filterDataWithGemini } from './services/geminiService';
+import { performCombinedAnalysis, filterTelegramChats, filterDataWithGemini, filterTradingCoinsWithGemini } from './services/geminiService';
 import { performClaudeAnalysis } from './services/claudeService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
 import CryptoCard from './components/CryptoCard';
+import SmartMoneyCard from './components/SmartMoneyCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
@@ -152,11 +153,19 @@ const App: React.FC = () => {
         throw new Error("Необходим ключ API для Claude");
       }
 
-      setStatus(`AI: Фильтрация мусора через Gemini 2.5 Pro (Пред-анализ)...`);
-      const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
-
-      setStatus(`AI: Генерация финального прогноза (${modeText}) через Claude Opus 4.6...`);
-      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, claudeApiKey, balanceNum, filteredContext);
+      if (mode === 'trading') {
+        // SMART MONEY PIPELINE: Use dedicated trading filter with time windows
+        setStatus(`AI: Smart Money фильтрация (Gemini 2.5 Pro) — временные окна + топ-15 монет...`);
+        const filteredContext = await filterTradingCoinsWithGemini(posts, tweets, telegramMsgs);
+        setStatus(`AI: Smart Money анализ (Claude Opus 4.6) — 4-pillar scoring...`);
+        analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey, balanceNum, filteredContext);
+      } else {
+        // STANDARD PIPELINE: Generic Gemini filter -> Claude
+        setStatus(`AI: Фильтрация мусора через Gemini 2.5 Pro (Пред-анализ)...`);
+        const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
+        setStatus(`AI: Генерация финального прогноза (${modeText}) через Claude Opus 4.6...`);
+        analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, claudeApiKey, balanceNum, filteredContext);
+      }
     } else {
       setStatus(`AI: Генерация (${modeText}) через Gemini 2.5 Pro...`);
       // If user chose Gemini directly, we just do it in one pass (since Gemini easily handles 2M tokens)
@@ -781,7 +790,7 @@ const App: React.FC = () => {
                   </>
                 )}
 
-                {/* TRADING RECOMMENDATIONS VIEW */}
+                {/* LEGACY TRADING RECOMMENDATIONS */}
                 {result.trades && result.trades.length > 0 && (
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
@@ -793,6 +802,28 @@ const App: React.FC = () => {
                         <TradingCard key={`${trade.symbol}-${idx}`} trade={trade} />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* SMART MONEY TRADING VIEW */}
+                {result.smartTrades && result.smartTrades.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                      <span className="text-yellow-400">🧠</span> Smart Money Сигналы (Bybit Futures)
+                    </h3>
+                    <p className="text-xs text-gray-400 mb-6">AI Score ≥ 75 • 4-Pillar Analysis • Time-Based Targets</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {result.smartTrades
+                        .filter(t => t.volume24h >= 100_000) // Post-AI: exclude low liquidity
+                        .map((trade, idx) => (
+                          <SmartMoneyCard key={`${trade.symbol}-${idx}`} trade={trade} />
+                        ))}
+                    </div>
+                    {result.smartTrades.filter(t => t.volume24h >= 100_000).length === 0 && (
+                      <div className="text-center p-10 text-gray-500 bg-gray-900/50 rounded-xl border border-dashed border-gray-700">
+                        Нет монет с AI Score ≥ 75 и достаточной ликвидностью. Рынок не даёт чётких сигналов.
+                      </div>
+                    )}
                   </div>
                 )}
 

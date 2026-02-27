@@ -535,3 +535,137 @@ OUTPUT RULES:
     throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
   }
 };
+
+// --- PIPELINE: SMART MONEY TRADING PRE-FILTER ---
+// Splits data into 3 time windows and asks Gemini to find top-15 coins by mention velocity
+export const filterTradingCoinsWithGemini = async (
+  posts: RedditPost[],
+  tweets: Tweet[],
+  telegramMsgs: TelegramMessage[]
+): Promise<string> => {
+  const ai = new GoogleGenAI({
+    apiKey: process.env.API_KEY
+  });
+
+  const now = Date.now();
+  const HOUR = 3600 * 1000;
+
+  // --- SPLIT BY TIME WINDOWS ---
+  const splitByTime = <T extends { created_utc?: number; created_at?: string; date?: string }>(
+    items: T[]
+  ): { last4h: T[]; h4to12: T[]; h12to18: T[] } => {
+    const last4h: T[] = [];
+    const h4to12: T[] = [];
+    const h12to18: T[] = [];
+
+    items.forEach(item => {
+      let ts: number;
+      if ('created_utc' in item && item.created_utc) {
+        ts = item.created_utc * 1000; // Reddit uses seconds
+      } else if ('created_at' in item && item.created_at) {
+        ts = new Date(item.created_at).getTime();
+      } else if ('date' in item && item.date) {
+        ts = new Date(item.date).getTime();
+      } else {
+        ts = now - 6 * HOUR; // Default to mid-range if no timestamp
+      }
+
+      const ageH = (now - ts) / HOUR;
+      if (ageH <= 4) last4h.push(item);
+      else if (ageH <= 12) h4to12.push(item);
+      else if (ageH <= 18) h12to18.push(item);
+      // >18h ignored
+    });
+
+    return { last4h, h4to12, h12to18 };
+  };
+
+  const redditWindows = splitByTime(posts);
+  const twitterWindows = splitByTime(tweets);
+  const telegramWindows = splitByTime(telegramMsgs);
+
+  const formatReddit = (items: RedditPost[]) => items.map(p => ({
+    title: p.title, text: (p.selftext || "").substring(0, 300), sub: p.subreddit, score: p.score
+  }));
+  const formatTweets = (items: Tweet[]) => items.map(t => ({ text: t.text, user: t.user }));
+  const formatTg = (items: TelegramMessage[]) => items.map(m => ({ chat: m.chat_title, text: m.text }));
+
+  const timeWindowsPayload = JSON.stringify({
+    last_4h: {
+      weight: 0.5,
+      reddit: formatReddit(redditWindows.last4h),
+      twitter: formatTweets(twitterWindows.last4h),
+      telegram: formatTg(telegramWindows.last4h),
+      counts: {
+        reddit: redditWindows.last4h.length,
+        twitter: twitterWindows.last4h.length,
+        telegram: telegramWindows.last4h.length
+      }
+    },
+    "4h_to_12h": {
+      weight: 0.3,
+      reddit: formatReddit(redditWindows.h4to12),
+      twitter: formatTweets(twitterWindows.h4to12),
+      telegram: formatTg(telegramWindows.h12to18),
+      counts: {
+        reddit: redditWindows.h4to12.length,
+        twitter: twitterWindows.h4to12.length,
+        telegram: telegramWindows.h4to12.length
+      }
+    },
+    "12h_to_18h": {
+      weight: 0.2,
+      reddit: formatReddit(redditWindows.h12to18),
+      twitter: formatTweets(twitterWindows.h12to18),
+      telegram: formatTg(telegramWindows.h12to18),
+      counts: {
+        reddit: redditWindows.h12to18.length,
+        twitter: twitterWindows.h12to18.length,
+        telegram: telegramWindows.h12to18.length
+      }
+    }
+  });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: `
+TIME-WINDOWED SOCIAL DATA (18 HOURS):
+${timeWindowsPayload}
+
+TASK:
+You are the FIRST STAGE of a Smart Money trading pipeline.
+
+1. Count mentions of EVERY crypto coin/token across ALL 3 time windows.
+2. Calculate "Social Velocity Delta" for each coin:
+   velocity = (mentions_last_4h * 0.5) / max((mentions_4h_12h * 0.3 + mentions_12h_18h * 0.2), 1)
+   Higher velocity = coin is gaining traction RIGHT NOW.
+
+3. Select TOP-15 coins by velocity (exclude stablecoins USDT, USDC, DAI, BUSD).
+
+4. For each of the top-15, provide a DENSE summary:
+   - Coin symbol and name
+   - Mention counts per time window
+   - Velocity score
+   - Key narratives/catalysts mentioned (listings, partnerships, upgrades, whale activity)
+   - Dominant sentiment per time window (bullish/bearish/neutral)
+   - Movement type: "explosive" (sudden spike in last 4h), "steady" (growing across all windows), "accumulation" (quiet but increasing)
+
+OUTPUT: Pure Markdown text grouped by coin. Russian language. Under 4000 words.
+Do NOT make price predictions. You are a data extractor only.
+      `,
+      config: {
+        systemInstruction: "You are an elite crypto social data analyst. Extract signal from noise. Focus on velocity of mentions, not absolute volume.",
+        temperature: 0.1,
+      }
+    });
+
+    const text = response.text || "";
+    if (!text) throw new Error("Empty response from Gemini Trading Filter");
+    return text.trim();
+
+  } catch (error) {
+    console.error("Gemini Trading Filter Error:", error);
+    throw new Error("Ошибка при фильтрации торговых данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
+  }
+};
