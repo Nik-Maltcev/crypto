@@ -323,17 +323,20 @@ export const performCombinedAnalysis = async (
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-pro',
       contents: `
-  CONTEXT: ${marketContext}
-      REDDIT DATA: ${redditPayload}
-      TWITTER DATA: ${twitterPayload}
-      TELEGRAM DATA: ${telegramPayload}
+CURRENT REAL-TIME MARKET PRICES (USE THESE AS YOUR BASELINE):
+${marketContext}
 
-  TASK: ${task}
-  OUTPUT: JSON matching schema.
+REDDIT DATA: ${redditPayload}
+TWITTER DATA: ${twitterPayload}
+TELEGRAM DATA: ${telegramPayload}
 
-    ${modeInstructions}
+TASK: ${task}
+OUTPUT: JSON matching schema.
 
-  RULES: Russian language for text.Extremely concise.
+${modeInstructions}
+CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above. Calculate your targetChange based strictly on these current prices, not on social media hype numbers.
+
+RULES: Russian language for text. Extremely concise.
       `,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,

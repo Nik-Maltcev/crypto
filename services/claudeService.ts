@@ -226,10 +226,14 @@ For 'trading' mode, output a JSON object:
   `;
 
   const userPrompt = `
+CURRENT REAL-TIME MARKET PRICES (USE THESE AS YOUR BASELINE):
+${marketContext}
+
 TASK: ${task}
 OUTPUT: JSON matching schema.
 
 ${modeInstructions}
+CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above. Calculate your targetChange based strictly on these current prices, not on social media hype numbers.
 
 RULES: Russian language for text. Extremely concise.
   `;
