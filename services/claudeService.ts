@@ -229,6 +229,9 @@ For 'trading' mode, output a JSON object:
 CURRENT REAL-TIME MARKET PRICES (USE THESE AS YOUR BASELINE):
 ${marketContext}
 
+SOCIAL SENTIMENT & NEWS DATA:
+${rawDataText}
+
 TASK: ${task}
 OUTPUT: JSON matching schema.
 
