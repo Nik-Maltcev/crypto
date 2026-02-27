@@ -191,7 +191,7 @@ export const performCombinedAnalysis = async (
     apiKey: process.env.API_KEY
   });
 
-  // Input Data - INCREASED LIMIT from 40 to 300 posts to use Gemini 3 Pro large context
+  // Input Data - User explicitly requested NO limits for Reddit posts
   const redditPayload = JSON.stringify(posts.map(p => ({
     title: p.title,
     text: p.selftext ? p.selftext.substring(0, 500) : "",
@@ -458,5 +458,77 @@ export const filterTelegramChats = async (
   } catch (error) {
     console.error("Gemini Chat Filter Error:", error);
     throw new Error("Ошибка при оценке чатов AI.");
+  }
+};
+
+// --- PIPELINE STEP 1: COMPRESSION/FILTERING ---
+// Used when Claude is the main engine but data exceeds its context window
+export const filterDataWithGemini = async (
+  posts: RedditPost[],
+  tweets: Tweet[],
+  telegramMsgs: TelegramMessage[],
+  targetCoinSymbol?: string
+): Promise<string> => {
+  const ai = new GoogleGenAI({
+    apiKey: process.env.API_KEY
+  });
+
+  // NO LIMITS during data staging for Gemini 2.5 Pro (2M Token Context)
+  const redditPayload = JSON.stringify(posts.map(p => ({
+    title: p.title,
+    text: p.selftext ? p.selftext.substring(0, 1000) : "",
+    subreddit: p.subreddit,
+    score: p.score
+  })));
+
+  const twitterPayload = tweets.length > 0
+    ? JSON.stringify(tweets.map(t => ({ text: t.text, user: t.user })))
+    : "No Twitter Data.";
+
+  const telegramPayload = telegramMsgs.length > 0
+    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: msg.text })))
+    : "No Telegram Data.";
+
+  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL (и любые крупные Altcoins)";
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: `
+INPUT RAW DATA:
+  --- REDDIT ---
+  ${redditPayload}
+  --- TWITTER ---
+  ${twitterPayload}
+  --- TELEGRAM ---
+  ${telegramPayload}
+
+TASK: 
+You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 24 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
+Filter out all spam, useless hype, unrelated chatter, and noise.
+Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
+
+OUTPUT RULES:
+- Output ONLY pure dense Markdown text. No JSON.
+- Group the summary logically by coin (e.g., BTC, ETH, SOL, XRP, and a general Altcoins section).
+- Cite specific metrics if they appear (e.g. "On Reddit, strong bullish sentiment for SOL due to 1.5M volume...").
+- Do NOT make your own price predictions here. You are just a summarizer for Claude.
+- Language: Russian.
+- Keep the final output under 5,000 words.
+      `,
+      config: {
+        systemInstruction: "You are an elite data extraction engine. You filter noise and keep pure signal.",
+        temperature: 0.1, // Low temp for factual extraction
+      }
+    });
+
+    const text = response.text || "";
+    if (!text) throw new Error("Empty response from Gemini Filter");
+
+    return text.trim();
+
+  } catch (error) {
+    console.error("Gemini Pre-Filter Error:", error);
+    throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
   }
 };

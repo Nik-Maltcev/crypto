@@ -3,7 +3,7 @@ import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS } from './c
 import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
 import { fetchChatsPreview } from './services/telegramService';
-import { performCombinedAnalysis } from './services/geminiService';
+import { performCombinedAnalysis, filterTelegramChats, filterDataWithGemini } from './services/geminiService';
 import { performClaudeAnalysis } from './services/claudeService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
@@ -134,7 +134,8 @@ const App: React.FC = () => {
     telegramMsgs: TelegramMessage[],
     marketContext: string,
     coinMap: Map<string, CMCCoinData>,
-    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading'
+    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading' | 'single_coin',
+    targetCoinSymbol?: string
   ) => {
     let modeText = 'Общий прогноз (24ч)';
     if (mode === 'hourly') modeText = 'Почасовая детализация';
@@ -143,8 +144,6 @@ const App: React.FC = () => {
     if (mode === 'today_24msk') modeText = 'Прогноз на 24:00 МСК';
     if (mode === 'trading') modeText = 'Торговые рекомендации';
 
-    setStatus(`AI: Генерация (${modeText}) через ${aiModel === 'gemini' ? 'Gemini 2.5 Pro' : 'Claude Opus 4.6'}...`);
-
     const balanceNum = parseFloat(userBalance) || 10;
 
     let analysis: CombinedAnalysisResponse;
@@ -152,9 +151,16 @@ const App: React.FC = () => {
       if (!claudeApiKey) {
         throw new Error("Необходим ключ API для Claude");
       }
-      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey, balanceNum);
+
+      setStatus(`AI: Фильтрация мусора через Gemini 2.5 Pro (Пред-анализ)...`);
+      const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
+
+      setStatus(`AI: Генерация финального прогноза (${modeText}) через Claude Opus 4.6...`);
+      analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, claudeApiKey, balanceNum, filteredContext);
     } else {
-      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, balanceNum);
+      setStatus(`AI: Генерация (${modeText}) через Gemini 2.5 Pro...`);
+      // If user chose Gemini directly, we just do it in one pass (since Gemini easily handles 2M tokens)
+      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, balanceNum);
     }
 
     // Merge Real-time Prices only if coins exist (standard mode)

@@ -8,7 +8,8 @@ export const performClaudeAnalysis = async (
   mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'single_coin' | 'trading' = 'simple',
   targetCoinSymbol?: string,
   apiKey?: string,
-  userBalance?: number
+  userBalance?: number,
+  filteredContext?: string
 ): Promise<CombinedAnalysisResponse> => {
   if ((!posts || posts.length === 0) && (!tweets || tweets.length === 0) && (!telegramMsgs || telegramMsgs.length === 0)) {
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
@@ -18,27 +19,45 @@ export const performClaudeAnalysis = async (
     throw new Error("Отсутствует API ключ Claude.");
   }
 
-  // Input Data - unlimited Reddit posts
-  const redditPayload = JSON.stringify(posts.map(p => ({
-    title: p.title,
-    text: p.selftext ? p.selftext.substring(0, 500) : "",
-    subreddit: p.subreddit,
-    score: p.score
-  })));
+  // Input Data - User explicitly requested NO limits for Reddit posts
+  // If filteredContext is passed, we use THAT instead of building these giant raw strings
+  let rawDataText = "";
 
-  const twitterPayload = tweets.length > 0
-    ? JSON.stringify(tweets.slice(0, 50).map(t => ({
-      text: t.text.substring(0, 150),
-      user: t.user
-    })))
-    : "No Twitter Data.";
+  if (filteredContext) {
+    rawDataText = `
+--- FILTERED CONTEXT FROM GEMINI ---
+${filteredContext}
+    `;
+  } else {
+    // Fallback to old behavior if no filter is provided
+    const redditPayload = JSON.stringify(posts.map(p => ({
+      title: p.title,
+      text: p.selftext ? p.selftext.substring(0, 500) : "",
+      subreddit: p.subreddit,
+      score: p.score
+    })));
 
-  const telegramPayload = telegramMsgs.length > 0
-    ? JSON.stringify(telegramMsgs.slice(0, 200).map(msg => ({
-      chat: msg.chat_title,
-      text: msg.text.substring(0, 150)
-    })))
-    : "No Telegram Data.";
+    const twitterPayload = tweets.length > 0
+      ? JSON.stringify(tweets.slice(0, 50).map(t => ({
+        text: t.text.substring(0, 150),
+        user: t.user
+      })))
+      : "No Twitter Data.";
+
+    const telegramPayload = telegramMsgs.length > 0
+      ? JSON.stringify(telegramMsgs.slice(0, 200).map(msg => ({
+        chat: msg.chat_title,
+        text: msg.text.substring(0, 150)
+      })))
+      : "No Telegram Data.";
+
+    rawDataText = `
+--- RAW DATA ---
+Reddit: ${redditPayload}
+Twitter: ${twitterPayload}
+Telegram: ${telegramPayload}
+    `;
+  }
 
   // Mode-specific prompts
   let modeInstructions = "";
@@ -207,11 +226,6 @@ For 'trading' mode, output a JSON object:
   `;
 
   const userPrompt = `
-CONTEXT: ${marketContext}
-REDDIT DATA: ${redditPayload}
-TWITTER DATA: ${twitterPayload}
-TELEGRAM DATA: ${telegramPayload}
-
 TASK: ${task}
 OUTPUT: JSON matching schema.
 
