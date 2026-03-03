@@ -136,6 +136,8 @@ const NAMED_ACCOUNTS: TwitterAccountOption[] = [
   { username: "Polygon", id: "1232319080637616128", url: "https://twitter.com/0xPolygon" }
 ];
 
+export const TELEGRAM_BATCH_SIZE = 20;
+
 export const DEFAULT_TELEGRAM_CHATS: string[] = [
   "cryptobarnospam", "SuperExOfficial_CN", "mewchina", "J9officialgroup",
   "HTX_DAO1", "bobadaolfg", "Aptos_CN_Official", "panewslab", "a36522",

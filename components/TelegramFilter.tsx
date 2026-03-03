@@ -11,6 +11,8 @@ const FilterIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
 );
 
+import { TELEGRAM_BATCH_SIZE } from '../constants';
+
 const TelegramFilter: React.FC = () => {
     const [chatListText, setChatListText] = useState("t.me/CryptoBoom\nt.me/ScamCoinChat\nhttps://t.me/BitcoinNews");
     const [days, setDays] = useState(2);
@@ -33,47 +35,85 @@ const TelegramFilter: React.FC = () => {
         try {
             setIsProcessing(true);
             setResults([]);
+            setStatus('Подготовка к парсингу...');
 
-            // Step 1: Fetch messages
-            setStatus(`1/2: Парсинг ${rawChats.length} чатов (за ${days} дн.)... Это может занять время.`);
-            const fetchedData = await fetchChatsPreview(rawChats, days);
-
-            if (!fetchedData.data || Object.keys(fetchedData.data).length === 0) {
-                throw new Error("Не удалось получить сообщения из предоставленных чатов.");
+            const totalChats = rawChats.length;
+            const chunks = [];
+            for (let i = 0; i < rawChats.length; i += TELEGRAM_BATCH_SIZE) {
+                chunks.push(rawChats.slice(i, i + TELEGRAM_BATCH_SIZE));
             }
 
-            // Step 2: Filter out abandoned chats
-            const activeChats: Record<string, any> = {};
-            const deadChats: ChatFilterResult[] = [];
+            let processedCount = 0;
+            let allResults: ChatFilterResult[] = [];
 
-            for (const [title, messages] of Object.entries(fetchedData.data)) {
-                if ((messages as any[]).length === 0) {
-                    deadChats.push({
-                        chatTitle: title,
-                        isSpam: true,
-                        category: "Flood", // We classify abandoned chats as useless/flood
-                        reason: `Чат заброшен. Нет новых сообщений за последние ${days} дн.`
-                    });
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                setStatus(`Чанк ${i + 1} из ${chunks.length}: Парсинг ${chunk.length} чатов...`);
+
+                // Step 1: Fetch messages for this chunk
+                const fetchedData = await fetchChatsPreview(chunk, days);
+
+                // Step 2: Separate active vs dead chats
+                const activeChats: Record<string, any> = {};
+                const deadChats: ChatFilterResult[] = [];
+
+                if (fetchedData.data && Object.keys(fetchedData.data).length > 0) {
+                    for (const [title, messages] of Object.entries(fetchedData.data)) {
+                        if ((messages as any[]).length === 0) {
+                            deadChats.push({
+                                chatTitle: title,
+                                isSpam: true,
+                                category: "Flood",
+                                reason: `Чат заброшен (за ${days} дн. пусто).`
+                            });
+                        } else {
+                            activeChats[title] = messages;
+                        }
+                    }
                 } else {
-                    activeChats[title] = messages;
+                    // All in this chunk failed to fetch or returned empty
+                    chunk.forEach(ch => {
+                        deadChats.push({
+                            chatTitle: ch,
+                            isSpam: true,
+                            category: "Flood",
+                            reason: "Чат не найден или недоступен."
+                        });
+                    });
                 }
+
+                // Step 3: Analyze active chats with AI
+                let analysisResults: ChatFilterResult[] = [];
+                const activeChatsCount = Object.keys(activeChats).length;
+
+                if (activeChatsCount > 0) {
+                    setStatus(`Чанк ${i + 1} из ${chunks.length}: AI Анализ ${activeChatsCount} чатов...`);
+                    try {
+                        analysisResults = await filterTelegramChats(activeChats as any);
+                    } catch (aiError) {
+                        console.error(`AI Error for chunk ${i + 1}:`, aiError);
+                        // Fallback marking for failed AI chunk
+                        Object.keys(activeChats).forEach(title => {
+                            analysisResults.push({
+                                chatTitle: title,
+                                isSpam: true,
+                                category: "Flood",
+                                reason: "Ошибка AI при анализе этого списка."
+                            });
+                        });
+                    }
+                }
+
+                // Append local results dynamically
+                const chunkResults = [...analysisResults, ...deadChats];
+                allResults = [...allResults, ...chunkResults];
+                setResults([...allResults]); // trigger re-render
+
+                processedCount += chunk.length;
+                setStatus(`Обработано ${processedCount} из ${totalChats} чатов... (${Math.round((processedCount / totalChats) * 100)}%)`);
             }
 
-            // Step 3: Send to Gemini Flash
-            let analysisResults: ChatFilterResult[] = [];
-            const activeChatsCount = Object.keys(activeChats).length;
-
-            if (activeChatsCount > 0) {
-                setStatus(`2/2: AI Анализ ${activeChatsCount} активных чатов через Gemini...`);
-                analysisResults = await filterTelegramChats(activeChats as any);
-            } else {
-                setStatus(`2/2: Нет активных чатов для AI анализа.`);
-            }
-
-            // Combine AI results and locally identified dead chats
-            setResults([...analysisResults, ...deadChats]);
-            setStatus('Готово!');
-
+            setStatus(`Готово! Отфильтровано ${totalChats} чатов.`);
         } catch (error) {
             console.error(error);
             setStatus('Ошибка!');

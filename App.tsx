@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS } from './constants';
+import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS, TELEGRAM_BATCH_SIZE } from './constants';
 import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
 import { fetchChatsPreview } from './services/telegramService';
@@ -282,24 +282,45 @@ const App: React.FC = () => {
           if (selectedTelegramChats.length === 0) return [];
 
           try {
-            const response = await fetchChatsPreview(selectedTelegramChats, 1); // Only last 24h
-            setTelegramProgress({ current: 1, total: 1 });
-
             const allMsgs: TelegramMessage[] = [];
-            // API returns { data: { "chat_username": [...msgs] } }
-            Object.values(response.data).forEach(msgs => {
-              if (msgs && Array.isArray(msgs)) {
-                allMsgs.push(...msgs);
-              }
-            });
+            const totalChats = selectedTelegramChats.length;
 
-            // If data directly has an array (fallback for different API response structures)
-            if (Array.isArray(response.data)) {
-              allMsgs.push(...response.data);
+            // Create chunks
+            const chunks = [];
+            for (let i = 0; i < totalChats; i += TELEGRAM_BATCH_SIZE) {
+              chunks.push(selectedTelegramChats.slice(i, i + TELEGRAM_BATCH_SIZE));
             }
+
+            let processedCount = 0;
+
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              setStatus(`TG: Сбор данных... (Батч ${i + 1}/${chunks.length})`);
+
+              try {
+                const response = await fetchChatsPreview(chunk, 1); // Only last 24h
+
+                // API returns { data: { "chat_username": [...msgs] } }
+                if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+                  Object.values(response.data).forEach(msgs => {
+                    if (msgs && Array.isArray(msgs)) {
+                      allMsgs.push(...msgs);
+                    }
+                  });
+                } else if (Array.isArray(response.data)) {
+                  allMsgs.push(...response.data);
+                }
+              } catch (err) {
+                console.warn(`Failed to fetch TG chunk ${i + 1}:`, err);
+              }
+
+              processedCount += chunk.length;
+              setTelegramProgress({ current: processedCount, total: totalChats });
+            }
+
             return allMsgs;
           } catch (err) {
-            console.warn("Failed to fetch Telegram", err);
+            console.warn("Failed to complete Telegram task completely", err);
             return [];
           }
         };
