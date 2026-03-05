@@ -33,3 +33,26 @@ class ParseLog(Base):
 
     def __repr__(self) -> str:
         return f"<ParseLog(id={self.id}, status='{self.status}')>"
+
+
+class AnalysisLog(Base):
+    """Model for storing scheduled/manual AI analysis results."""
+
+    __tablename__ = "analysis_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    mode: Mapped[str] = mapped_column(String(50), default="simple")
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reddit_posts_count: Mapped[int] = mapped_column(Integer, default=0)
+    twitter_tweets_count: Mapped[int] = mapped_column(Integer, default=0)
+    telegram_msgs_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trigger: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled / manual
+
+    def __repr__(self) -> str:
+        return f"<AnalysisLog(id={self.id}, mode='{self.mode}', status='{self.status}')>"

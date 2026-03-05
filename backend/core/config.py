@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     REDDIT_CLIENT_ID: str = ""
     REDDIT_CLIENT_SECRET: str = ""
 
+    # AI API Keys (for server-side auto-analysis)
+    CLAUDE_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def convert_database_url(cls, v: str) -> str:

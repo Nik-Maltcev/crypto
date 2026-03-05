@@ -14,6 +14,7 @@ import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
 import SingleCoinAnalysis from './components/SingleCoinAnalysis';
 import TradingCard from './components/TradingCard';
+import AnalysisHistory from './components/AnalysisHistory';
 
 // Icons
 const RefreshIcon = () => (
@@ -45,7 +46,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin'>('singleCoin');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin' | 'history'>('singleCoin');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -445,6 +446,12 @@ const App: React.FC = () => {
               >
                 Мнение о монете
               </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'history' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📊 История
+              </button>
             </div>
           </div>
 
@@ -572,7 +579,9 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {activeTab === 'singleCoin' ? (
+        {activeTab === 'history' ? (
+          <AnalysisHistory />
+        ) : activeTab === 'singleCoin' ? (
           <SingleCoinAnalysis />
         ) : activeTab === 'chatFilter' ? (
           <TelegramFilter />

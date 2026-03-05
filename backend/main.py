@@ -1,4 +1,4 @@
-"""Combined service: API + Background Parser."""
+"""Combined service: API + Background Parser + Scheduled Analysis."""
 
 import asyncio
 import logging
@@ -14,11 +14,12 @@ from sqlalchemy import select
 
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
-from core.models import ParseLog
+from core.models import ParseLog, AnalysisLog
 from worker.jobs.parser import ChatParser
 from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
+from auto_analysis import run_scheduled_analysis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -79,11 +80,37 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database ready")
     
+    # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
+    scheduler = None
+    settings = get_settings()
+    if settings.CLAUDE_API_KEY and settings.GEMINI_API_KEY:
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from apscheduler.triggers.cron import CronTrigger
+            
+            scheduler = AsyncIOScheduler()
+            scheduler.add_job(
+                run_scheduled_analysis,
+                trigger=CronTrigger(hour=5, minute=0),  # 05:00 UTC = 08:00 MSK
+                id="daily_analysis",
+                name="Daily 08:00 MSK Analysis",
+                kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
+            scheduler.start()
+            logger.info("APScheduler started — daily analysis at 08:00 MSK (05:00 UTC)")
+        except Exception as e:
+            logger.error(f"Failed to start APScheduler: {e}")
+    else:
+        logger.warning("CLAUDE_API_KEY or GEMINI_API_KEY not set. Scheduled analysis DISABLED.")
+    
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
     yield
     
     # Shutdown
+    if scheduler:
+        scheduler.shutdown(wait=False)
     await close_telethon_client()
     logger.info("Service stopped")
 
@@ -439,6 +466,88 @@ async def proxy_gemini_request(path: str, request: Request):
     except Exception as e:
         logger.error(f"Gemini Proxy error: {e}")
         raise HTTPException(500, f"Gemini Proxy error: {str(e)}")
+
+
+# ==================== ANALYSIS HISTORY ENDPOINTS ====================
+
+@app.get("/api/analysis/history")
+async def get_analysis_history(limit: int = 30):
+    """Get list of past analyses."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+        
+        items = []
+        for log in logs:
+            items.append({
+                "id": log.id,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "finished_at": log.finished_at.isoformat() if log.finished_at else None,
+                "mode": log.mode,
+                "status": log.status,
+                "trigger": log.trigger,
+                "reddit_posts_count": log.reddit_posts_count,
+                "twitter_tweets_count": log.twitter_tweets_count,
+                "telegram_msgs_count": log.telegram_msgs_count,
+                "error_message": log.error_message,
+                "has_result": log.result_json is not None,
+            })
+        
+        return {"success": True, "items": items}
+
+
+@app.get("/api/analysis/{analysis_id}")
+async def get_analysis_detail(analysis_id: int):
+    """Get a specific analysis result by ID."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog).where(AnalysisLog.id == analysis_id)
+        )
+        log = result.scalar_one_or_none()
+        
+        if not log:
+            raise HTTPException(404, "Analysis not found")
+        
+        result_data = None
+        if log.result_json:
+            try:
+                result_data = json.loads(log.result_json)
+            except json.JSONDecodeError:
+                result_data = None
+        
+        return {
+            "success": True,
+            "id": log.id,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "finished_at": log.finished_at.isoformat() if log.finished_at else None,
+            "mode": log.mode,
+            "status": log.status,
+            "trigger": log.trigger,
+            "reddit_posts_count": log.reddit_posts_count,
+            "twitter_tweets_count": log.twitter_tweets_count,
+            "telegram_msgs_count": log.telegram_msgs_count,
+            "error_message": log.error_message,
+            "result": result_data,
+        }
+
+
+@app.post("/api/analysis/run")
+async def trigger_analysis():
+    """Manually trigger an analysis (for testing)."""
+    settings = get_settings()
+    if not settings.CLAUDE_API_KEY:
+        raise HTTPException(400, "CLAUDE_API_KEY not configured on server")
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(400, "GEMINI_API_KEY not configured on server")
+    
+    asyncio.create_task(run_scheduled_analysis(trigger="manual"))
+    return {"status": "started", "message": "Analysis triggered. Check /api/analysis/history for results."}
 
 
 if __name__ == "__main__":
