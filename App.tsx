@@ -208,7 +208,21 @@ const App: React.FC = () => {
     // Check if we need to fetch new data
     const shouldFetch = forceFullPipeline || sourcePosts.length === 0;
 
+    let analysisLogId: number | null = null;
     try {
+      // --- PHASE 0: LOG START IN BACKEND ---
+      try {
+        const startResp = await fetch(`${import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000'}/api/analysis/log/start`, {
+            method: 'POST'
+        });
+        if (startResp.ok) {
+           const startData = await startResp.json();
+           analysisLogId = startData.id;
+        }
+      } catch (e) {
+        console.warn("Could not start analysis log", e);
+      }
+
       // --- PHASE 1: MARKET DATA ---
       // Always refresh market data as it's fast
       setStatus('1/4 Получение рыночных данных...');
@@ -380,31 +394,51 @@ const App: React.FC = () => {
 
       // --- PHASE 5: SAVE TO HISTORY ---
       setStatus('Сохранение в историю...');
-      try {
-        await fetch(`${import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000'}/api/analysis/log`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: mode,
-            reddit_count: finalPosts.length,
-            twitter_count: finalTweets.length,
-            telegram_count: finalTelegram.length,
-            result: analysis
-          })
-        });
-      } catch (err) {
-        console.error("Не удалось сохранить в историю", err);
+      if (analysisLogId) {
+        try {
+          await fetch(`${import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000'}/api/analysis/log/${analysisLogId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: mode,
+              status: 'success',
+              reddit_count: finalPosts.length,
+              twitter_count: finalTweets.length,
+              telegram_count: finalTelegram.length,
+              result: analysis
+            })
+          });
+        } catch (err) {
+          console.error("Не удалось сохранить в историю", err);
+        }
       }
 
       setStatus(`Готово! (Потрачено токенов: ~${(finalPosts.length * 150 + finalTweets.length * 50 + finalTelegram.length * 30) * 0.75 | 0})`);
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Ошибка анализа";
       if (abortRef.current) {
         setStatus("Отменено пользователем.");
       } else {
         console.error(error);
-        alert(error instanceof Error ? error.message : "Ошибка анализа");
+        alert(errorMessage);
         setStatus("Ошибка.");
+      }
+
+      if (typeof analysisLogId !== 'undefined' && analysisLogId !== null) {
+        try {
+          await fetch(`${import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000'}/api/analysis/log/${analysisLogId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: mode,
+              status: 'failed',
+              error_message: errorMessage
+            })
+          });
+        } catch (err) {
+          console.error("Не удалось обновить статус ошибки", err);
+        }
       }
     } finally {
       setIsProcessing(false);

@@ -564,31 +564,56 @@ async def trigger_analysis():
     asyncio.create_task(run_scheduled_analysis(trigger="manual"))
     return {"status": "started", "message": "Analysis triggered. Check /api/analysis/history for results."}
 
-@app.post("/api/analysis/log")
-async def log_frontend_analysis(request: Request):
+@app.post("/api/analysis/log/start")
+async def start_frontend_analysis_log():
+    """Create a new running analysis log for frontend tracking."""
+    try:
+        async_session = get_async_session()
+        async with async_session() as session:
+            log = AnalysisLog(
+                mode="simple",  # default
+                status="running",
+                trigger="manual",
+            )
+            session.add(log)
+            await session.commit()
+            await session.refresh(log)
+            return {"success": True, "id": log.id}
+    except Exception as e:
+        logger.error(f"Failed to start frontend analysis log: {e}")
+        raise HTTPException(500, f"Error starting log: {str(e)}")
+
+@app.post("/api/analysis/log/{analysis_id}")
+async def complete_frontend_analysis_log(analysis_id: int, request: Request):
     """Save an analysis that was executed on the frontend into the database."""
     try:
         data = await request.json()
         
         async_session = get_async_session()
         async with async_session() as session:
-            log = AnalysisLog(
-                mode=data.get("mode", "simple"),
-                status="success",
-                trigger="manual",
-                reddit_posts_count=data.get("reddit_count", 0),
-                twitter_tweets_count=data.get("twitter_count", 0),
-                telegram_msgs_count=data.get("telegram_count", 0),
-                result_json=json.dumps(data.get("result", {}), ensure_ascii=False),
-                finished_at=datetime.utcnow()
+            result = await session.execute(
+                select(AnalysisLog).where(AnalysisLog.id == analysis_id)
             )
-            session.add(log)
+            log = result.scalar_one_or_none()
+            
+            if not log:
+                raise HTTPException(404, "Analysis log not found")
+                
+            log.mode = data.get("mode", "simple")
+            log.status = data.get("status", "success")
+            log.reddit_posts_count = data.get("reddit_count", 0)
+            log.twitter_tweets_count = data.get("twitter_count", 0)
+            log.telegram_msgs_count = data.get("telegram_count", 0)
+            log.result_json = json.dumps(data.get("result", {}), ensure_ascii=False) if data.get("result") else None
+            log.error_message = data.get("error_message")
+            log.finished_at = datetime.utcnow()
+            
             await session.commit()
             
         return {"success": True, "message": "Analysis saved to history."}
     except Exception as e:
-        logger.error(f"Failed to log frontend analysis: {e}")
-        raise HTTPException(500, f"Error saving analysis: {str(e)}")
+        logger.error(f"Failed to complete frontend analysis log: {e}")
+        raise HTTPException(500, f"Error completing log: {str(e)}")
 
 
 
