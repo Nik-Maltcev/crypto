@@ -136,7 +136,7 @@ const App: React.FC = () => {
     coinMap: Map<string, CMCCoinData>,
     mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading' | 'single_coin',
     targetCoinSymbol?: string
-  ) => {
+  ): Promise<CombinedAnalysisResponse> => {
     let modeText = 'Общий прогноз (24ч)';
     if (mode === 'hourly') modeText = 'Почасовая детализация';
     if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
@@ -191,11 +191,11 @@ const App: React.FC = () => {
     }
 
     setResult(analysis);
-    setStatus('Готово!');
+    return analysis;
   };
 
   // Generic function to Fetch Data AND Run Analysis
-  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading', forceRefresh = true) => {
+  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading' = 'simple', forceFullPipeline: boolean = false) => {
     if (selectedSubreddits.length === 0) {
       alert("Выберите хотя бы один сабреддит.");
       return;
@@ -206,7 +206,7 @@ const App: React.FC = () => {
     abortRef.current = false;
 
     // Check if we need to fetch new data
-    const shouldFetch = forceRefresh || sourcePosts.length === 0;
+    const shouldFetch = forceFullPipeline || sourcePosts.length === 0;
 
     try {
       // --- PHASE 1: MARKET DATA ---
@@ -376,7 +376,27 @@ const App: React.FC = () => {
       }
 
       // --- PHASE 4: COMBINED AI ANALYSIS ---
-      await runAIAnalysis(finalPosts, finalTweets, finalTelegram, marketContext, coinMap, mode);
+      const analysis = await runAIAnalysis(finalPosts, finalTweets, finalTelegram, marketContext, coinMap, mode);
+
+      // --- PHASE 5: SAVE TO HISTORY ---
+      setStatus('Сохранение в историю...');
+      try {
+        await fetch(`${import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000'}/api/analysis/log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: mode,
+            reddit_count: finalPosts.length,
+            twitter_count: finalTweets.length,
+            telegram_count: finalTelegram.length,
+            result: analysis
+          })
+        });
+      } catch (err) {
+        console.error("Не удалось сохранить в историю", err);
+      }
+
+      setStatus(`Готово! (Потрачено токенов: ~${(finalPosts.length * 150 + finalTweets.length * 50 + finalTelegram.length * 30) * 0.75 | 0})`);
 
     } catch (error) {
       if (abortRef.current) {

@@ -103,25 +103,6 @@ const AnalysisHistory: React.FC = () => {
         }
     };
 
-    const handleManualRun = async () => {
-        setTriggeringManual(true);
-        try {
-            const resp = await fetch(`${BACKEND_URL}/api/analysis/run`, { method: 'POST' });
-            if (!resp.ok) {
-                const data = await resp.json().catch(() => ({}));
-                alert(data.detail || `Ошибка: ${resp.status}`);
-                return;
-            }
-            alert('Анализ запущен! Результат появится в истории через 1-2 минуты.');
-            // Refresh in 5 seconds
-            setTimeout(fetchHistory, 5000);
-        } catch (e: any) {
-            alert('Ошибка запуска: ' + (e.message || e));
-        } finally {
-            setTriggeringManual(false);
-        }
-    };
-
     const getStatusBadge = (status: string) => {
         if (status === 'success') return <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">✅ Успешно</span>;
         if (status === 'failed') return <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">❌ Ошибка</span>;
@@ -155,18 +136,6 @@ const AnalysisHistory: React.FC = () => {
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" /></svg>
                         Обновить
-                    </button>
-                    <button
-                        onClick={handleManualRun}
-                        disabled={triggeringManual}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 text-orange-400 border border-orange-500/30 transition-all"
-                    >
-                        {triggeringManual ? (
-                            <span className="animate-spin">⏳</span>
-                        ) : (
-                            <span>🚀</span>
-                        )}
-                        Запустить анализ
                     </button>
                 </div>
             </div>
@@ -204,7 +173,7 @@ const AnalysisHistory: React.FC = () => {
                     </div>
                     <h3 className="text-xl font-semibold text-white mb-2">Нет анализов</h3>
                     <p className="text-gray-400 max-w-md">
-                        Автоматический анализ запустится в 08:00 МСК, или нажмите «Запустить анализ» для ручного запуска.
+                        Автоматический анализ запустится в 08:00 МСК, или нажмите «Сбор + Анализ (24ч)» на главной вкладке, чтобы ручной анализ сохранился здесь.
                     </p>
                 </div>
             )}

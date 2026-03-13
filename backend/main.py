@@ -564,6 +564,32 @@ async def trigger_analysis():
     asyncio.create_task(run_scheduled_analysis(trigger="manual"))
     return {"status": "started", "message": "Analysis triggered. Check /api/analysis/history for results."}
 
+@app.post("/api/analysis/log")
+async def log_frontend_analysis(request: Request):
+    """Save an analysis that was executed on the frontend into the database."""
+    try:
+        data = await request.json()
+        
+        async_session = get_async_session()
+        async with async_session() as session:
+            log = AnalysisLog(
+                mode=data.get("mode", "simple"),
+                status="success",
+                trigger="manual",
+                reddit_posts_count=data.get("reddit_count", 0),
+                twitter_tweets_count=data.get("twitter_count", 0),
+                telegram_msgs_count=data.get("telegram_count", 0),
+                result_json=json.dumps(data.get("result", {}), ensure_ascii=False),
+                finished_at=datetime.utcnow()
+            )
+            session.add(log)
+            await session.commit()
+            
+        return {"success": True, "message": "Analysis saved to history."}
+    except Exception as e:
+        logger.error(f"Failed to log frontend analysis: {e}")
+        raise HTTPException(500, f"Error saving analysis: {str(e)}")
+
 
 
 # ==================== POLYMARKET ENDPOINTS ====================
