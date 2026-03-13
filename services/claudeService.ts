@@ -64,10 +64,14 @@ Telegram: ${telegramPayload}
   let task = "";
 
   if (mode === 'simple') {
-    task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
+    const nowInput = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
     modeInstructions = `
-      FORECAST TASK: Provide ONLY ONE target price for exactly 24 hours from now.
-      FIELDS: "targetPrice24h" (number), "targetChange24h" (number).
+      FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
+      MSK CONTEXT: Current time is UTC+3 (Moscow). 
+      The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now in Moscow time.
+      Example: If now is 20:15 MSK, hourOffset 1 is 21:00 MSK.
+      FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %), "hourlyForecast" (array of exactly 24 objects). 
       "forecastLabel": "Прогноз (24ч)"
     `;
   } else if (mode === 'hourly') {

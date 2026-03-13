@@ -160,6 +160,36 @@ const PolymarketDashboard: React.FC = () => {
                                         <span>Current Yes: <span className="text-white">${pred.current_yes_price?.toFixed(3) || '0.00'}</span></span>
                                         <span>Current No: <span className="text-white">${pred.current_no_price?.toFixed(3) || '0.00'}</span></span>
                                     </div>
+
+                                    {/* Hourly Hits History */}
+                                    {pred.price_history && (
+                                        <div className="pt-3 border-t border-gray-800/50">
+                                            <p className="text-[10px] text-gray-500 uppercase font-bold mb-2 tracking-wider text-center">Прогноз vs Рынок (за 24ч)</p>
+                                            <div className="flex gap-1 justify-center">
+                                                {(() => {
+                                                    try {
+                                                        const history = JSON.parse(pred.price_history) as any[];
+                                                        // Show last 12 points
+                                                        return history.slice(-12).map((p, i) => (
+                                                            <div 
+                                                                key={i} 
+                                                                title={`${new Date(p.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}: ${p.matched ? 'СОВПАЛО' : 'НЕ СОВПАЛО'}`}
+                                                                className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-opacity ${
+                                                                    p.matched === true ? 'bg-emerald-500' : 
+                                                                    p.matched === false ? 'bg-red-500' : 
+                                                                    'bg-gray-700'
+                                                                }`}
+                                                            />
+                                                        ));
+                                                    } catch (e) { return null; }
+                                                })()}
+                                            </div>
+                                            <div className="flex justify-center gap-4 mt-2 text-[8px] text-gray-600 uppercase font-bold">
+                                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-px"></span> Совпало</span>
+                                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-red-500 rounded-px"></span> Мимо</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

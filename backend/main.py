@@ -79,6 +79,30 @@ async def lifespan(app: FastAPI):
     
     # Init database
     await init_db()
+    
+    # Automated schema migrations for existing tables
+    try:
+        from sqlalchemy import text
+        from core.database import get_async_engine
+        engine = get_async_engine()
+        async with engine.begin() as conn:
+            # Check for price_history column in polymarket_predictions
+            res = await conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='polymarket_predictions' AND column_name='price_history';"
+            ))
+            if not res.fetchone():
+                logger.info("Railway Migration: Adding price_history column to polymarket_predictions...")
+                # Try PG syntax
+                try:
+                    await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
+                except:
+                    # Fallback for SQLite
+                    await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
+                logger.info("Railway Migration: Successfully added price_history column.")
+    except Exception as e:
+        logger.error(f"Post-init migration failed: {e}")
+
     logger.info("Database ready")
     
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---

@@ -152,15 +152,18 @@ async def run_polymarket_predictions_job():
          logger.info("No predictions generated.")
          return
          
-    logger.info(f"Generated {len(predictions)} predictions. Saving to DB...")
+    logger.info(f"[Polymarket AI] Generated {len(predictions)} predictions. Saving to DB...")
 
     # 3. Save to DB
     async_session = get_async_session()
     async with async_session() as session:
         for pred in predictions:
              market_id = pred.get("market_id")
+             question = pred.get("question", "Unknown")
              
-             if not market_id: continue
+             if not market_id:
+                 logger.warning(f"[Polymarket DB] Prediction missing market_id: {pred}")
+                 continue
              
              # Locate original market for initial prices
              original_market = next((m for m in markets if m.get("condition_id") == market_id), None)
@@ -188,10 +191,12 @@ async def run_polymarket_predictions_job():
              if existing:
                  # Update confidence if higher
                  if pred.get("confidence", 0) > existing.confidence:
+                     logger.info(f"[Polymarket DB] Updating EXISTING prediction: {question} (New Conf: {pred.get('confidence')}%)")
                      existing.confidence = pred.get("confidence", 0)
                      existing.bet_amount = pred.get("bet_amount", 0.0)
                      existing.predicted_outcome = pred.get("predicted_outcome", "Yes")
              else:
+                 logger.info(f"[Polymarket DB] Saving NEW prediction: {question} -> {pred.get('predicted_outcome')} ({pred.get('confidence')}%)")
                  new_pred = PolymarketPrediction(
                      market_id=market_id,
                      question=pred.get("question", "Unknown Question"),
@@ -205,7 +210,7 @@ async def run_polymarket_predictions_job():
                  session.add(new_pred)
                  
         await session.commit()
-    logger.info("=== Finished Polymarket Predictions ===")
+    logger.info("=== Finished Polymarket Predictions Job ===")
 
 
 async def update_polymarket_prices_job():
@@ -227,13 +232,18 @@ async def update_polymarket_prices_job():
         logger.info(f"Updating {len(active_preds)} active predictions...")
         
         for pred in active_preds:
+             logger.info(f"[Polymarket Update] Fetching latest for: {pred.question[:50]}...")
              market_data = await get_market_prices(pred.market_id)
              if not market_data:
+                 logger.warning(f"[Polymarket Update] Failed to get data for ID: {pred.market_id}")
                  continue
-                 
+                  
              # Update prices
              outcomes = market_data.get("outcomes", [])
              prices = market_data.get("outcomePrices", [])
+             
+             old_yes = pred.current_yes_price or 0
+             old_no = pred.current_no_price or 0
              
              if "Yes" in outcomes and len(prices) == len(outcomes):
                  try: pred.current_yes_price = float(prices[outcomes.index("Yes")])
@@ -242,18 +252,44 @@ async def update_polymarket_prices_job():
                  try: pred.current_no_price = float(prices[outcomes.index("No")])
                  except: pass
                  
+             # Update price history (Snapshots)
+             history = []
+             if pred.price_history:
+                 try: history = json.loads(pred.price_history)
+                 except: history = []
+             
+             # Determine "matched" for this snapshot
+             matched = None
+             if history:
+                 last = history[-1]
+                 if pred.predicted_outcome == "Yes":
+                     if pred.current_yes_price and last.get("yes_price"):
+                         matched = pred.current_yes_price >= last["yes_price"]
+                 elif pred.predicted_outcome == "No":
+                     if pred.current_no_price and last.get("no_price"):
+                         matched = pred.current_no_price >= last["no_price"]
+             
+             history.append({
+                 "timestamp": datetime.utcnow().isoformat(),
+                 "yes_price": pred.current_yes_price,
+                 "no_price": pred.current_no_price,
+                 "matched": matched
+             })
+             
+             # Keep only last 48 hours of history to save DB space
+             if len(history) > 48: history = history[-48:]
+             pred.price_history = json.dumps(history)
+             
+             logger.info(f"[Polymarket Update] {pred.question[:30]}: Yes ${old_yes:.3f}->${pred.current_yes_price or 0:.3f}, No ${old_no:.3f}->${pred.current_no_price or 0:.3f} | Matched: {matched}")
+                 
              # Check if resolved
              closed = market_data.get("closed", False)
              active = market_data.get("active", True)
              
              if closed or not active:
+                 logger.info(f"[Polymarket Resolve] Market CLOSED/INACTIVE: {pred.question}")
                  pred.status = "resolved"
                  pred.resolved_at = datetime.utcnow()
-                 
-                 # Determine if worked out based on final prices or tokens
-                 # Usually if a market resolves Yes, the Yes price hits 1.0 or similar.
-                 # Gamma API might provide the winning outcome in tokens or tokens traded.
-                 # A simple heuristic: if 'Yes' price is near 1.0, 'Yes' won.
                  
                  yes_p = pred.current_yes_price or 0.0
                  no_p = pred.current_no_price or 0.0
@@ -263,11 +299,16 @@ async def update_polymarket_prices_job():
                  if yes_p > 0.9: actual_outcome = "Yes"
                  elif no_p > 0.9: actual_outcome = "No"
                  
+                 logger.info(f"[Polymarket Resolve] Final Prices: Yes ${yes_p:.3f}, No ${no_p:.3f} | Final Outcome: {actual_outcome}")
+                 
                  if pred.predicted_outcome == actual_outcome:
+                     logger.info(f"[Polymarket Resolve] SUCCESS! AI predicted {pred.predicted_outcome} correctly.")
                      pred.worked_out = True
                  elif actual_outcome != "Unknown":
+                     logger.info(f"[Polymarket Resolve] FAILED. AI predicted {pred.predicted_outcome}, but market resolved {actual_outcome}.")
                      pred.worked_out = False
-                 # else None = unresolved/unknown
-                     
+                 else:
+                     logger.warning("[Polymarket Resolve] Resolution status UNKNOWN (prices inconsistent).")
+                      
         await session.commit()
-    logger.info("=== Finished Polymarket updates ===")
+    logger.info("=== Finished Polymarket Hourly Update Job ===")

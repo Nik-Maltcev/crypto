@@ -199,8 +199,17 @@ Response Format:
        "prediction": "Bullish" | "Bearish" | "Neutral",
        "confidence": 90,
        "reasoning": "String (Russian) - Why this prediction?",
+       "currentPrice": 96500,
        "targetPrice24h": 100000,
-       "targetChange24h": 2.5
+       "targetChange24h": 2.5,
+       "hourlyForecast": [
+         {
+           "hourOffset": 1,
+           "price": 98000,
+           "change": 0.5,
+           "confidence": 80
+         }
+       ]
     }
   ]
 }"""
@@ -215,13 +224,15 @@ SOCIAL SENTIMENT & NEWS DATA:
 TASK: Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: {now_utc}.
 OUTPUT: JSON matching schema.
 
-FORECAST TASK: Provide ONLY ONE target price for exactly 24 hours from now.
-FIELDS: "targetPrice24h" (number), "targetChange24h" (number).
-"forecastLabel": "Авто-прогноз (24ч)"
+FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
+MSK CONTEXT: Current time is UTC+3 (Moscow). 
+The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now in Moscow time.
+Example: If now is 20:15 MSK, hourOffset 1 is 21:00 MSK.
+FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %), "hourlyForecast" (array of exactly 24 objects). 
 
 CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above.
 
-RULES: Russian language for text. Extremely concise."""
+RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-анализ (24ч)""""
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(

@@ -13,9 +13,22 @@ const SIMPLE_COIN_SCHEMA: Schema = {
     confidence: { type: Type.NUMBER },
     reasoning: { type: Type.STRING, description: "Анализ (1-2 предложения). На русском." },
     targetPrice24h: { type: Type.NUMBER, description: "Predicted price in exactly 24 hours." },
-    targetChange24h: { type: Type.NUMBER, description: "Predicted % change in exactly 24 hours." }
+    targetChange24h: { type: Type.NUMBER, description: "Predicted % change in exactly 24 hours." },
+    hourlyForecast: {
+      type: Type.ARRAY,
+      description: "24 data points (hourly) for the next 24h.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          hourOffset: { type: Type.NUMBER },
+          price: { type: Type.NUMBER },
+          change: { type: Type.NUMBER },
+          confidence: { type: Type.NUMBER }
+        }
+      }
+    }
   },
-  required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "targetPrice24h", "targetChange24h"]
+  required: ["symbol", "name", "sentimentScore", "prediction", "confidence", "reasoning", "targetPrice24h", "targetChange24h", "hourlyForecast"]
 };
 
 // --- SCHEMA 2: TARGET (Specific Time, e.g. 20:00 MSK) ---
@@ -222,13 +235,17 @@ export const performCombinedAnalysis = async (
   let thinkingBudget = 2048; // Default for simple tasks
 
   if (mode === 'simple') {
-    task = "Analyze sentiment for BTC, ETH, XRP, SOL.";
+    const nowInput = new Date();
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
     modeInstructions = `
-      FORECAST TASK: Provide ONLY ONE target price for exactly 24 hours from now.
-      FIELDS: "targetPrice24h" (number), "targetChange24h" (number).
+      FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
+      MSK CONTEXT: Current time is UTC+3 (Moscow). 
+      The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now in Moscow time.
+      Example: If now is 20:15 MSK, hourOffset 1 is 21:00 MSK.
+      FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %), "hourlyForecast" (array of exactly 24 objects). 
       "forecastLabel": "Прогноз (24ч)"
     `;
-    thinkingBudget = 2048;
+    thinkingBudget = 4096; // Increased budget for array generation
   } else if (mode === 'hourly') {
     const nowInput = new Date();
     task = `Analyze sentiment for BTC, ETH, XRP, SOL. CURRENT UTC TIME: ${nowInput.toISOString()}.`;

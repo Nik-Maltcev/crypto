@@ -78,6 +78,9 @@ class PolymarketPrediction(Base):
     status: Mapped[str] = mapped_column(String(50), default="active") # active, resolved, closed
     worked_out: Mapped[bool | None] = mapped_column(Boolean, nullable=True) # True = Won, False = Lost
     
+    # Hourly tracking history (JSON list of snapshots)
+    price_history: Mapped[str | None] = mapped_column(Text, nullable=True) 
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
