@@ -8,12 +8,9 @@ import { performClaudeAnalysis } from './services/claudeService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
 import CryptoCard from './components/CryptoCard';
-import SmartMoneyCard from './components/SmartMoneyCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
-import SingleCoinAnalysis from './components/SingleCoinAnalysis';
-import TradingCard from './components/TradingCard';
 import AnalysisHistory from './components/AnalysisHistory';
 import PolymarketDashboard from './components/PolymarketDashboard';
 
@@ -47,7 +44,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin' | 'history' | 'polymarket'>('polymarket');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'polymarket'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -394,24 +391,6 @@ const App: React.FC = () => {
     }
   }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, aiModel, claudeApiKey, userBalance]);
 
-  // Hourly Analysis (Uses existing data)
-  const handleHourlyAnalysis = async () => {
-    if (sourcePosts.length === 0) return;
-    setIsProcessing(true);
-    abortRef.current = false;
-    try {
-      setStatus('Обновление рыночных цен...');
-      const { summary: marketContext, coinMap } = await fetchCryptoMarketData();
-      await runAIAnalysis(sourcePosts, tweets, telegramMessages, marketContext, coinMap, 'hourly');
-    } catch (error) {
-      console.error(error);
-      alert("Ошибка при почасовом анализе");
-      setStatus("Ошибка.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
 
@@ -440,12 +419,6 @@ const App: React.FC = () => {
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'chatFilter' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
                 Анализ чатов
-              </button>
-              <button
-                onClick={() => setActiveTab('singleCoin')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'singleCoin' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                Мнение о монете
               </button>
               <button
                 onClick={() => setActiveTab('history')}
@@ -530,35 +503,6 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
 
-                  {/* Hourly Trigger */}
-                  {sourcePosts.length > 0 && result?.coins && !result.coins[0]?.hourlyForecast && (
-                    <button
-                      onClick={handleHourlyAnalysis}
-                      className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 hover:bg-gray-700 text-blue-400 border border-blue-500/30 transition-all"
-                    >
-                      <AnalysisIcon />
-                      <span className="hidden lg:inline">Почасово</span>
-                    </button>
-                  )}
-
-                  {/* Today 20:00 MSK */}
-                  <button
-                    onClick={() => executeAnalysisPipeline('today_20msk', true)}
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all"
-                  >
-                    <ClockIcon />
-                    <span>20:00 МСК</span>
-                  </button>
-
-                  {/* Today 24:00 MSK */}
-                  <button
-                    onClick={() => executeAnalysisPipeline('today_24msk', true)}
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition-all"
-                  >
-                    <ClockIcon />
-                    <span>24:00 МСК</span>
-                  </button>
-
                   {/* Trading Mode */}
                   <button
                     onClick={() => executeAnalysisPipeline('trading', true)}
@@ -588,8 +532,6 @@ const App: React.FC = () => {
 
         {activeTab === 'history' ? (
           <AnalysisHistory />
-        ) : activeTab === 'singleCoin' ? (
-          <SingleCoinAnalysis />
         ) : activeTab === 'chatFilter' ? (
           <TelegramFilter />
         ) : activeTab === 'polymarket' ? (
@@ -828,44 +770,7 @@ const App: React.FC = () => {
                     )}
                   </>
                 )}
-
-                {/* LEGACY TRADING RECOMMENDATIONS */}
-                {result.trades && result.trades.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                      <span className="text-purple-400">📊</span> Торговые рекомендации (Futures)
-                    </h3>
-                    <p className="text-xs text-gray-400 mb-6">Баланс: {userBalance} USDT • Рекомендации на ближайшие 24 часа</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {result.trades.map((trade, idx) => (
-                        <TradingCard key={`${trade.symbol}-${idx}`} trade={trade} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* SMART MONEY TRADING VIEW */}
-                {result.smartTrades && result.smartTrades.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                      <span className="text-yellow-400">🧠</span> Smart Money Сигналы (Bybit Futures)
-                    </h3>
-                    <p className="text-xs text-gray-400 mb-6">AI Score ≥ 75 • 4-Pillar Analysis • Time-Based Targets</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {result.smartTrades
-                        .filter(t => t.volume24h >= 100_000) // Post-AI: exclude low liquidity
-                        .map((trade, idx) => (
-                          <SmartMoneyCard key={`${trade.symbol}-${idx}`} trade={trade} />
-                        ))}
-                    </div>
-                    {result.smartTrades.filter(t => t.volume24h >= 100_000).length === 0 && (
-                      <div className="text-center p-10 text-gray-500 bg-gray-900/50 rounded-xl border border-dashed border-gray-700">
-                        Нет монет с AI Score ≥ 75 и достаточной ликвидностью. Рынок не даёт чётких сигналов.
-                      </div>
-                    )}
-                  </div>
-                )}
-
+                
                 {/* Source Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 opacity-70">
                   <div className="bg-brand-card border border-gray-800 rounded-xl p-4">

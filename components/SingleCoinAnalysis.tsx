@@ -85,6 +85,7 @@ const SingleCoinAnalysis: React.FC = () => {
             const analysis = await performCombinedAnalysis(
                 finalPosts,
                 finalTweets,
+                [], // telegram requests not supported in single coin mode yet
                 marketContext,
                 'single_coin',
                 symbol
