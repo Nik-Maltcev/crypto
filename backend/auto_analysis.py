@@ -232,7 +232,7 @@ FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %),
 
 CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above.
 
-RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-анализ (24ч)""""
+RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-анализ (24ч)"""
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
