@@ -223,3 +223,18 @@ export interface SingleCoinAnalysisResult {
   hasEnoughData: boolean;
 }
 
+export interface PolymarketPrediction {
+  id: number;
+  market_id: string;
+  question: string;
+  predicted_outcome: string;
+  confidence: number;
+  bet_amount: number;
+  current_yes_price: number | null;
+  current_no_price: number | null;
+  status: 'active' | 'resolved' | 'closed';
+  worked_out: boolean | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+

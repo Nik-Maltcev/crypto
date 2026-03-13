@@ -15,6 +15,7 @@ import TelegramFilter from './components/TelegramFilter';
 import SingleCoinAnalysis from './components/SingleCoinAnalysis';
 import TradingCard from './components/TradingCard';
 import AnalysisHistory from './components/AnalysisHistory';
+import PolymarketDashboard from './components/PolymarketDashboard';
 
 // Icons
 const RefreshIcon = () => (
@@ -46,7 +47,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin' | 'history'>('singleCoin');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'singleCoin' | 'history' | 'polymarket'>('polymarket');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -452,6 +453,12 @@ const App: React.FC = () => {
               >
                 📊 История
               </button>
+              <button
+                onClick={() => setActiveTab('polymarket')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'polymarket' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🔮 Polymarket
+              </button>
             </div>
           </div>
 
@@ -585,6 +592,8 @@ const App: React.FC = () => {
           <SingleCoinAnalysis />
         ) : activeTab === 'chatFilter' ? (
           <TelegramFilter />
+        ) : activeTab === 'polymarket' ? (
+          <PolymarketDashboard />
         ) : (
           <>
             {/* Progress Display */}
