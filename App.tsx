@@ -66,10 +66,10 @@ const App: React.FC = () => {
 
   // Selection
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>(
-    TARGET_SUBREDDITS.slice(0, 10).map(s => s.name)
+    TARGET_SUBREDDITS.map(s => s.name)
   );
   const [selectedTwitterIds, setSelectedTwitterIds] = useState<string[]>(
-    TWITTER_ACCOUNTS.slice(0, 5).map(t => t.id)
+    TWITTER_ACCOUNTS.map(t => t.id)
   );
   const [selectedTelegramChats, setSelectedTelegramChats] = useState<string[]>(
     DEFAULT_TELEGRAM_CHATS
