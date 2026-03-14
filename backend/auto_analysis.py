@@ -357,6 +357,11 @@ The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now
 FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %), "hourlyForecast" (array of exactly 24 objects). 
 
 CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above.
+ZERO GAPS POLICY: For EACH of the 24 objects in "hourlyForecast", you MUST provide valid numeric values for ALL fields: "price", "change", and "confidence". 
+- "confidence" MUST be an integer from 0 to 100.
+- "change" MUST be the percentage deviation from the current price.
+- "price" MUST be the absolute predicted price.
+DO NOT use null. DO NOT skip any hour. DO NOT provide "undefined". Every single point in the 24-hour sequence must be complete and mathematically consistent. If you provide less than 24 points or any missing fields, the analysis is a FAILURE.
 
 RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-анализ (24ч)"""
 

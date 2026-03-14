@@ -224,29 +224,6 @@ export interface SingleCoinAnalysisResult {
   hasEnoughData: boolean;
 }
 
-export interface PolymarketPrediction {
-  id: number;
-  market_id: string;
-  question: string;
-  predicted_outcome: string;
-  confidence: number;
-  bet_amount: number;
-  current_yes_price: number | null;
-  current_no_price: number | null;
-  status: 'active' | 'resolved' | 'closed';
-  worked_out: boolean | null;
-  price_history?: string; // JSON string from DB
-  created_at: string;
-  resolved_at: string | null;
-}
-
-export interface PolymarketPricePoint {
-  timestamp: string;
-  yes_price: number | null;
-  no_price: number | null;
-  matched: boolean | null;
-}
-
 export interface ForecastTracking {
   id: number;
   analysis_id: number;

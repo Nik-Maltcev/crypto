@@ -6,7 +6,7 @@ Messages are stored in JSON files, not in DB.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, Float, Boolean, func
+from sqlalchemy import DateTime, Integer, String, Text, Float, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -56,38 +56,6 @@ class AnalysisLog(Base):
 
     def __repr__(self) -> str:
         return f"<AnalysisLog(id={self.id}, mode='{self.mode}', status='{self.status}')>"
-
-
-class PolymarketPrediction(Base):
-    """Model for storing Polymarket AI predictions and their resolution status."""
-
-    __tablename__ = "polymarket_predictions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    market_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    question: Mapped[str] = mapped_column(Text, nullable=False)
-    
-    # Prediction details
-    predicted_outcome: Mapped[str] = mapped_column(String(50), nullable=False) # 'Yes' or 'No'
-    confidence: Mapped[int] = mapped_column(Integer, default=0) # 0-100
-    bet_amount: Mapped[float] = mapped_column(Float, default=0.0) # Evaluated amount in USDT
-    
-    # Market status and resolution
-    current_yes_price: Mapped[float | None] = mapped_column(Float, nullable=True)
-    current_no_price: Mapped[float | None] = mapped_column(Float, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="active") # active, resolved, closed
-    worked_out: Mapped[bool | None] = mapped_column(Boolean, nullable=True) # True = Won, False = Lost
-    
-    # Hourly tracking history (JSON list of snapshots)
-    price_history: Mapped[str | None] = mapped_column(Text, nullable=True) 
-    
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    def __repr__(self) -> str:
-        return f"<PolymarketPrediction({self.market_id}, {self.predicted_outcome}, status='{self.status}')>"
 
 
 class ForecastTracking(Base):

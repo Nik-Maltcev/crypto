@@ -7,7 +7,7 @@ from core.database import (
     get_async_session,
     init_db,
 )
-from core.models import Base, ParseLog, AnalysisLog, PolymarketPrediction, ForecastTracking
+from core.models import Base, ParseLog, AnalysisLog, ForecastTracking
 
 __all__ = [
     "Settings",
@@ -20,6 +20,5 @@ __all__ = [
     "Base",
     "ParseLog",
     "AnalysisLog",
-    "PolymarketPrediction",
     "ForecastTracking",
 ]

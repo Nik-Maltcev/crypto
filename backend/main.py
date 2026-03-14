@@ -14,13 +14,12 @@ from sqlalchemy import select
 
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
-from core.models import ParseLog, AnalysisLog, PolymarketPrediction, ForecastTracking
+from core.models import ParseLog, AnalysisLog, ForecastTracking
 from worker.jobs.parser import ChatParser
 from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis
-from polymarket_service import run_polymarket_predictions_job, update_polymarket_prices_job
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -81,28 +80,6 @@ async def lifespan(app: FastAPI):
     # Init database
     await init_db()
     
-    # Automated schema migrations for existing tables
-    try:
-        from sqlalchemy import text, inspect
-        from core.database import get_async_engine
-        engine = get_async_engine()
-        async with engine.begin() as conn:
-            # Check for price_history column using SQLAlchemy inspector (works with both PG and SQLite)
-            def _check_column(sync_conn):
-                insp = inspect(sync_conn)
-                if "polymarket_predictions" not in insp.get_table_names():
-                    return True  # Table doesn't exist yet, create_all will handle it
-                columns = [c["name"] for c in insp.get_columns("polymarket_predictions")]
-                return "price_history" in columns
-
-            has_column = await conn.run_sync(_check_column)
-            if not has_column:
-                logger.info("Railway Migration: Adding price_history column to polymarket_predictions...")
-                await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
-                logger.info("Railway Migration: Successfully added price_history column.")
-    except Exception as e:
-        logger.error(f"Post-init migration failed: {e}")
-
     logger.info("Database ready")
     
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
@@ -120,20 +97,6 @@ async def lifespan(app: FastAPI):
                 id="daily_analysis",
                 name="Daily 08:00 MSK Analysis",
                 kwargs={"trigger": "scheduled"},
-                replace_existing=True,
-            )
-            scheduler.add_job(
-                run_polymarket_predictions_job,
-                trigger=CronTrigger(hour=5, minute=0),  # 05:00 UTC = 08:00 MSK
-                id="daily_polymarket_predictions",
-                name="Daily 08:00 MSK Polymarket Predictions",
-                replace_existing=True,
-            )
-            scheduler.add_job(
-                update_polymarket_prices_job,
-                trigger=CronTrigger(minute=0),  # Every hour at XX:00
-                id="hourly_polymarket_updates",
-                name="Hourly Polymarket Prices Update",
                 replace_existing=True,
             )
             scheduler.add_job(
@@ -652,52 +615,6 @@ async def complete_frontend_analysis_log(analysis_id: int, request: Request):
         logger.error(f"Failed to complete frontend analysis log: {e}")
         raise HTTPException(500, f"Error completing log: {str(e)}")
 
-
-
-# ==================== POLYMARKET ENDPOINTS ====================
-
-@app.get("/api/polymarket/predictions")
-async def get_polymarket_predictions(limit: int = 50):
-    async_session = get_async_session()
-    async with async_session() as session:
-        result = await session.execute(
-            select(PolymarketPrediction)
-            .order_by(PolymarketPrediction.created_at.desc())
-            .limit(limit)
-        )
-        preds = result.scalars().all()
-        return {
-             "success": True,
-             "items": [
-                 {
-                     "id": p.id,
-                     "market_id": p.market_id,
-                     "question": p.question,
-                     "predicted_outcome": p.predicted_outcome,
-                     "confidence": p.confidence,
-                     "bet_amount": p.bet_amount,
-                     "current_yes_price": p.current_yes_price,
-                     "current_no_price": p.current_no_price,
-                     "status": p.status,
-                     "worked_out": p.worked_out,
-                     "price_history": p.price_history,
-                     "created_at": p.created_at.isoformat(),
-                     "resolved_at": p.resolved_at.isoformat() if p.resolved_at else None,
-                 } for p in preds
-             ]
-        }
-
-@app.post("/api/polymarket/force_update")
-async def force_polymarket_update():
-    """Manually trigger an hourly price update."""
-    asyncio.create_task(update_polymarket_prices_job())
-    return {"status": "started", "message": "Hourly update job triggered."}
-
-@app.post("/api/polymarket/force_predict")
-async def force_polymarket_predict():
-    """Manually trigger the daily 8 AM predictions."""
-    asyncio.create_task(run_polymarket_predictions_job())
-    return {"status": "started", "message": "Daily prediction job triggered."}
 
 
 # ==================== FORECAST TRACKING ENDPOINTS ====================

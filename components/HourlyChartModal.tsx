@@ -18,17 +18,22 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
     const hasHourlyData = coin.hourlyForecast && coin.hourlyForecast.length >= 6;
 
     const chartData = hasHourlyData ? coin.hourlyForecast!.map((point) => {
-        const now = new Date();
-        const mskOffset = 3 * 60;
-        const nowMsk = new Date(now.getTime() + (mskOffset + now.getTimezoneOffset()) * 60000);
-        const startHourMsk = (nowMsk.getHours() + 1) % 24;
+        // Use analysisDate if provided, otherwise fallback to now
+        const baseDate = coin.analysisDate ? new Date(coin.analysisDate) : new Date();
+        
+        // Ensure we are working with MSK for label generation
+        // If analysisDate is from backend, it's UTC.
+        const mskOffset = 3 * 60; // 3 hours in minutes
+        const baseMsk = new Date(baseDate.getTime() + (mskOffset + baseDate.getTimezoneOffset()) * 60000);
+        
+        const startHourMsk = (baseMsk.getHours() + 1) % 24;
         const targetHour = (startHourMsk + point.hourOffset - 1) % 24;
 
         return {
             time: `${targetHour.toString().padStart(2, '0')}:00`,
-            price: point.price,
-            change: point.change,
-            confidence: point.confidence,
+            price: point.price !== undefined && point.price !== null ? point.price : (coin.currentPrice || 0),
+            change: point.change !== undefined && point.change !== null ? point.change : 0,
+            confidence: point.confidence !== undefined && point.confidence !== null ? point.confidence : (coin.confidence || 50),
             hourOffset: point.hourOffset
         };
     }) : [];

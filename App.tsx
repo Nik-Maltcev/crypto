@@ -12,7 +12,6 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
 import AnalysisHistory from './components/AnalysisHistory';
-import PolymarketDashboard from './components/PolymarketDashboard';
 import ForecastTracker from './components/ForecastTracker';
 
 // Icons
@@ -45,7 +44,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'polymarket' | 'forecast'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'forecast'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -486,12 +485,6 @@ const App: React.FC = () => {
                 📊 История
               </button>
               <button
-                onClick={() => setActiveTab('polymarket')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'polymarket' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🔮 Polymarket
-              </button>
-              <button
                 onClick={() => setActiveTab('forecast')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'forecast' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -599,8 +592,6 @@ const App: React.FC = () => {
           <AnalysisHistory />
         ) : activeTab === 'chatFilter' ? (
           <TelegramFilter />
-        ) : activeTab === 'polymarket' ? (
-          <PolymarketDashboard />
         ) : activeTab === 'forecast' ? (
           <ForecastTracker />
         ) : (
