@@ -13,6 +13,7 @@ import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
 import AnalysisHistory from './components/AnalysisHistory';
 import PolymarketDashboard from './components/PolymarketDashboard';
+import ForecastTracker from './components/ForecastTracker';
 
 // Icons
 const RefreshIcon = () => (
@@ -44,7 +45,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'polymarket'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'polymarket' | 'forecast'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -190,6 +191,10 @@ const App: React.FC = () => {
       analysis.coins = enrichedCoins;
     }
 
+    const nowIso = new Date().toISOString();
+    if (analysis.coins) {
+      analysis.coins = analysis.coins.map(c => ({...c, analysisDate: nowIso}));
+    }
     setResult(analysis);
     return analysis;
   };
@@ -486,6 +491,12 @@ const App: React.FC = () => {
               >
                 🔮 Polymarket
               </button>
+              <button
+                onClick={() => setActiveTab('forecast')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'forecast' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📈 Прогноз vs Реальность
+              </button>
             </div>
           </div>
 
@@ -590,6 +601,8 @@ const App: React.FC = () => {
           <TelegramFilter />
         ) : activeTab === 'polymarket' ? (
           <PolymarketDashboard />
+        ) : activeTab === 'forecast' ? (
+          <ForecastTracker />
         ) : (
           <>
             {/* Progress Display */}

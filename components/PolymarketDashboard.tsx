@@ -52,11 +52,12 @@ const PolymarketDashboard: React.FC = () => {
     const forceUpdate = async () => {
         setIsTriggering(true);
         try {
-            await fetch('/api/polymarket/force_update', { method: 'POST' });
-            setTimeout(fetchPredictions, 5000); // 5 sec is usually enough for price fetch
+            const resp = await fetch('/api/polymarket/force_update', { method: 'POST' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            setTimeout(fetchPredictions, 5000);
             alert("Цены обновляются в фоне. Обновите страницу через 5 секунд.");
         } catch (e: any) {
-            alert("Ошибка: " + e.message);
+            alert("Ошибка обновления цен: " + e.message);
         } finally {
             setIsTriggering(false);
         }

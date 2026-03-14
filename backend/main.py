@@ -14,13 +14,14 @@ from sqlalchemy import select
 
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
-from core.models import ParseLog, AnalysisLog, PolymarketPrediction
+from core.models import ParseLog, AnalysisLog, PolymarketPrediction, ForecastTracking
 from worker.jobs.parser import ChatParser
 from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis
 from polymarket_service import run_polymarket_predictions_job, update_polymarket_prices_job
+from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -82,23 +83,22 @@ async def lifespan(app: FastAPI):
     
     # Automated schema migrations for existing tables
     try:
-        from sqlalchemy import text
+        from sqlalchemy import text, inspect
         from core.database import get_async_engine
         engine = get_async_engine()
         async with engine.begin() as conn:
-            # Check for price_history column in polymarket_predictions
-            res = await conn.execute(text(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name='polymarket_predictions' AND column_name='price_history';"
-            ))
-            if not res.fetchone():
+            # Check for price_history column using SQLAlchemy inspector (works with both PG and SQLite)
+            def _check_column(sync_conn):
+                insp = inspect(sync_conn)
+                if "polymarket_predictions" not in insp.get_table_names():
+                    return True  # Table doesn't exist yet, create_all will handle it
+                columns = [c["name"] for c in insp.get_columns("polymarket_predictions")]
+                return "price_history" in columns
+
+            has_column = await conn.run_sync(_check_column)
+            if not has_column:
                 logger.info("Railway Migration: Adding price_history column to polymarket_predictions...")
-                # Try PG syntax
-                try:
-                    await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
-                except:
-                    # Fallback for SQLite
-                    await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
+                await conn.execute(text("ALTER TABLE polymarket_predictions ADD COLUMN price_history TEXT;"))
                 logger.info("Railway Migration: Successfully added price_history column.")
     except Exception as e:
         logger.error(f"Post-init migration failed: {e}")
@@ -134,6 +134,13 @@ async def lifespan(app: FastAPI):
                 trigger=CronTrigger(minute=0),  # Every hour at XX:00
                 id="hourly_polymarket_updates",
                 name="Hourly Polymarket Prices Update",
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                update_forecast_tracking_job,
+                trigger=CronTrigger(minute=5),  # Every hour at XX:05 (after CMC data settles)
+                id="hourly_forecast_tracking",
+                name="Hourly Forecast vs Reality Tracker",
                 replace_existing=True,
             )
             scheduler.start()
@@ -525,8 +532,8 @@ async def get_analysis_history(limit: int = 30):
         for log in logs:
             items.append({
                 "id": log.id,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-                "finished_at": log.finished_at.isoformat() if log.finished_at else None,
+                "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+                "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
                 "mode": log.mode,
                 "status": log.status,
                 "trigger": log.trigger,
@@ -563,8 +570,8 @@ async def get_analysis_detail(analysis_id: int):
         return {
             "success": True,
             "id": log.id,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-            "finished_at": log.finished_at.isoformat() if log.finished_at else None,
+            "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+            "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
             "mode": log.mode,
             "status": log.status,
             "trigger": log.trigger,
@@ -634,6 +641,12 @@ async def complete_frontend_analysis_log(analysis_id: int, request: Request):
             
             await session.commit()
             
+        # Auto-start forecast tracking in background
+        try:
+            asyncio.create_task(save_forecast_from_analysis(analysis_id))
+        except Exception as track_err:
+            logger.warning(f"Failed to auto-start forecast tracking: {track_err}")
+
         return {"success": True, "message": "Analysis saved to history."}
     except Exception as e:
         logger.error(f"Failed to complete frontend analysis log: {e}")
@@ -667,6 +680,7 @@ async def get_polymarket_predictions(limit: int = 50):
                      "current_no_price": p.current_no_price,
                      "status": p.status,
                      "worked_out": p.worked_out,
+                     "price_history": p.price_history,
                      "created_at": p.created_at.isoformat(),
                      "resolved_at": p.resolved_at.isoformat() if p.resolved_at else None,
                  } for p in preds
@@ -684,6 +698,61 @@ async def force_polymarket_predict():
     """Manually trigger the daily 8 AM predictions."""
     asyncio.create_task(run_polymarket_predictions_job())
     return {"status": "started", "message": "Daily prediction job triggered."}
+
+
+# ==================== FORECAST TRACKING ENDPOINTS ====================
+
+@app.get("/api/forecast/active")
+async def get_active_forecasts():
+    """Get all active and recent forecast trackings."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(ForecastTracking)
+            .order_by(ForecastTracking.created_at.desc())
+            .limit(50)
+        )
+        trackings = result.scalars().all()
+        return {
+            "success": True,
+            "items": [
+                {
+                    "id": t.id,
+                    "analysis_id": t.analysis_id,
+                    "symbol": t.symbol,
+                    "prediction": t.prediction,
+                    "confidence": t.confidence,
+                    "start_price": t.start_price,
+                    "target_price_24h": t.target_price_24h,
+                    "target_change_24h": t.target_change_24h,
+                    "hourly_forecast": json.loads(t.hourly_forecast_json) if t.hourly_forecast_json else [],
+                    "actual_prices": json.loads(t.actual_prices_json) if t.actual_prices_json else [],
+                    "status": t.status,
+                    "hours_tracked": t.hours_tracked,
+                    "hits": t.hits,
+                    "misses": t.misses,
+                    "created_at": t.created_at.isoformat() + "Z",
+                    "completed_at": (t.completed_at.isoformat() + "Z") if t.completed_at else None,
+                } for t in trackings
+            ],
+        }
+
+
+@app.post("/api/forecast/start/{analysis_id}")
+async def start_forecast_tracking(analysis_id: int):
+    """Create forecast trackings from a completed analysis."""
+    count = await save_forecast_from_analysis(analysis_id)
+    if count == 0:
+        raise HTTPException(400, "No trackable forecasts found in this analysis. "
+                                 "Ensure it has hourlyForecast data for BTC/ETH/SOL/XRP.")
+    return {"success": True, "trackings_created": count}
+
+
+@app.post("/api/forecast/force_update")
+async def force_forecast_update():
+    """Manually trigger a forecast tracking update."""
+    asyncio.create_task(update_forecast_tracking_job())
+    return {"status": "started", "message": "Forecast tracking update triggered."}
 
 
 if __name__ == "__main__":

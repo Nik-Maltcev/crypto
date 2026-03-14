@@ -59,6 +59,7 @@ export interface CryptoAnalysis {
   change7d?: number;
   volume24h?: number;
   marketCap?: number;
+  analysisDate?: string; // ISO timestamp of when the analysis was generated
 }
 
 // New Interface for Altcoin Mode
@@ -244,5 +245,32 @@ export interface PolymarketPricePoint {
   yes_price: number | null;
   no_price: number | null;
   matched: boolean | null;
+}
+
+export interface ForecastTracking {
+  id: number;
+  analysis_id: number;
+  symbol: string;
+  prediction: 'Bullish' | 'Bearish' | 'Neutral';
+  confidence: number;
+  start_price: number;
+  target_price_24h: number | null;
+  target_change_24h: number | null;
+  hourly_forecast: { hourOffset: number; price: number; change: number; confidence: number }[];
+  actual_prices: {
+    timestamp: string;
+    hour: number;
+    real_price: number;
+    predicted_price: number | null;
+    predicted_change: number | null;
+    actual_change: number;
+    matched: boolean | null;
+  }[];
+  status: 'active' | 'completed' | 'expired';
+  hours_tracked: number;
+  hits: number;
+  misses: number;
+  created_at: string;
+  completed_at: string | null;
 }
 
