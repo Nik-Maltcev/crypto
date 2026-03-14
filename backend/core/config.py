@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     CLAUDE_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
 
+    # Analysis Settings
+    ANALYSIS_LOOKBACK_HOURS: int = 16
+
+    # Twitter RapidAPI (for auto-analysis)
+    TWITTER_RAPID_API_KEY: str = ""
+    TWITTER_HOST: str = "twitter241.p.rapidapi.com"
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def convert_database_url(cls, v: str) -> str:

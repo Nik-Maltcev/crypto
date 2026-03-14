@@ -1,10 +1,12 @@
 """Automated analysis pipeline.
 
 Runs the full data collection + AI analysis server-side:
-1. Reddit (OAuth) — top subreddits
-2. CoinMarketCap — market prices
-3. Gemini 2.5 Pro — data filtering
-4. Claude Opus 4.6 — final analysis
+1. Reddit (OAuth) — top subreddits (16h)
+2. Twitter (RapidAPI) — top accounts (16h)
+3. Telegram (Telethon) — crypto chats (16h)
+4. CoinMarketCap — market prices
+5. Gemini 2.5 Pro — data filtering
+6. Claude Opus 4.6 — final analysis
 
 Results are stored in the AnalysisLog database table.
 """
@@ -12,13 +14,16 @@ Results are stored in the AnalysisLog database table.
 import asyncio
 import json
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from core.config import get_settings
+from core.config import get_settings, load_chats_config
 from core.database import get_async_session
 from core.models import AnalysisLog
+from worker.telethon_client import get_telethon_client
+from worker.jobs.parser import ChatParser
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +35,22 @@ DEFAULT_SUBREDDITS = [
     "CryptoMoonShots", "Ripple", "litecoin", "Polkadot",
 ]
 
+# Default Twitter accounts if none provided
+DEFAULT_TWITTER_ACCOUNTS = [
+    "VitalikButerin", "cz_binance", "brian_armstrong", "aantonop",
+    "crypto", "CoinDesk", "Cointelegraph", "TheBlock__",
+    "MessariCrypto", "glassnode", "santimentfeed", "whale_alert"
+]
+
 CMC_API_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 
-async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str) -> list[dict]:
+async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback_hours: int = 16) -> list[dict]:
     """Fetch recent posts from Reddit using OAuth token."""
-    import time
     all_posts = []
-    one_day_ago = time.time() - (24 * 3600)
+    cutoff_time = time.time() - (lookback_hours * 3600)
 
     async with httpx.AsyncClient(timeout=30) as client:
         for sub in subreddits:
@@ -60,7 +71,7 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str) -> list[
                 for child in children:
                     p = child.get("data", {})
                     created = p.get("created_utc", 0)
-                    if created < one_day_ago:
+                    if created < cutoff_time:
                         continue
                     if "Daily Discussion" in (p.get("title") or ""):
                         continue
@@ -69,13 +80,119 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str) -> list[
                         "selftext": (p.get("selftext") or "")[:500],
                         "subreddit": p.get("subreddit", sub),
                         "score": p.get("score", 0),
+                        "source": "Reddit"
                     })
             except Exception as e:
                 logger.warning(f"Reddit r/{sub} error: {e}")
 
-    # Sort by score
-    all_posts.sort(key=lambda x: x.get("score", 0), reverse=True)
     return all_posts
+
+
+async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) -> list[dict]:
+    """Fetch recent tweets using RapidAPI."""
+    settings = get_settings()
+    if not settings.TWITTER_RAPID_API_KEY:
+        logger.warning("TWITTER_RAPID_API_KEY not set, skipping Twitter fetch")
+        return []
+
+    all_tweets = []
+    # Current limit: parse up to 10 tweets per user to avoid hitting RapidAPI limits too hard
+    count_per_user = 10
+    cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        for username in accounts:
+            try:
+                # Using twitter241.p.rapidapi.com/user-tweets
+                url = f"https://{settings.TWITTER_HOST}/user-tweets?user={username}&count={count_per_user}"
+                headers = {
+                    "X-RapidAPI-Key": settings.TWITTER_RAPID_API_KEY,
+                    "X-RapidAPI-Host": settings.TWITTER_HOST
+                }
+                
+                resp = await client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    logger.warning(f"Twitter @{username}: {resp.status_code}")
+                    continue
+
+                data = resp.json()
+                # Simplified parsing based on twitter241 structure
+                instructions = data.get("result", {}).get("timeline", {}).get("instructions", [])
+                if not instructions:
+                    instructions = data.get("data", {}).get("user", {}).get("result", {}).get("timeline_v2", {}).get("timeline", {}).get("instructions", [])
+
+                for instr in instructions:
+                    if instr.get("type") == "TimelineAddEntries":
+                        for entry in instr.get("entries", []):
+                            tweet_data = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {}).get("legacy", {})
+                            if not tweet_data: continue
+                            
+                            created_at_str = tweet_data.get("created_at")
+                            if created_at_str:
+                                # Twitter date format: "Wed Oct 10 20:19:24 +0000 2018"
+                                created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                                if created_at < cutoff_date:
+                                    continue
+                                
+                                all_tweets.append({
+                                    "text": tweet_data.get("full_text") or tweet_data.get("text"),
+                                    "user": username,
+                                    "created_at": created_at.isoformat(),
+                                    "source": "Twitter"
+                                })
+                
+                # Sleep briefly between users to be polite
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"Twitter @{username} error: {e}")
+
+    return all_tweets
+
+
+async def _fetch_telegram_posts(lookback_hours: int = 16) -> list[dict]:
+    """Fetch recent messages from configured Telegram chats."""
+    try:
+        client = await get_telethon_client()
+        parser = ChatParser(client)
+        
+        # Load chats from config
+        config = load_chats_config()
+        chat_ids = config.get("chats", [])
+        
+        if not chat_ids:
+            logger.warning("No Telegram chats configured")
+            return []
+
+        # Convert hours to days for parser (approximation)
+        days = (lookback_hours / 24.0) + 0.1 # Add a bit of buffer
+        
+        logger.info(f"Starting Telegram parsing for {len(chat_ids)} chats...")
+        messages = await parser.parse_all_chats(
+            chat_ids, 
+            days=days, 
+            max_messages_per_chat=15
+        )
+        
+        # Exact 16h filtering
+        cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        filtered_msgs = []
+        for msg in messages:
+            msg_date = datetime.fromisoformat(msg["date"])
+            if msg_date.tzinfo is None:
+                msg_date = msg_date.replace(tzinfo=timezone.utc)
+            
+            if msg_date >= cutoff_date:
+                filtered_msgs.append({
+                    "text": msg["text"],
+                    "chat": msg["chat_title"],
+                    "date": msg["date"],
+                    "source": "Telegram"
+                })
+        
+        return filtered_msgs
+    except Exception as e:
+        logger.error(f"Telegram fetch failed: {e}")
+        return []
 
 
 async def _get_reddit_token(client_id: str, client_secret: str) -> str:
@@ -121,23 +238,33 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_gemini(posts: list[dict], gemini_api_key: str) -> str:
-    """Use Gemini to filter and compress Reddit data."""
-    reddit_payload = json.dumps(posts[:300], ensure_ascii=False)  # Cap at 300 posts
+async def _filter_with_gemini(all_data: list[dict], gemini_api_key: str) -> str:
+    """Use Gemini to filter and compress multi-source social data."""
+    # Group by source for better prompt structure
+    sources = {"Reddit": [], "Twitter": [], "Telegram": []}
+    for item in all_data:
+        sources[item["source"]].append(item)
 
-    prompt = f"""INPUT RAW DATA:
---- REDDIT ---
-{reddit_payload}
+    payload_summary = []
+    for src, items in sources.items():
+        if items:
+            payload_summary.append(f"--- {src.upper()} ({len(items)} items) ---")
+            # Cap each source to avoid blowing context limits
+            limited_items = items[:150]
+            payload_summary.append(json.dumps(limited_items, ensure_ascii=False))
+
+    prompt = f"""INPUT RAW DATA (Last 16 Hours):
+{chr(10).join(payload_summary)}
 
 TASK:
-You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 24 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
+You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
 Filter out all spam, useless hype, unrelated chatter, and noise.
 Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL (и любые крупные Altcoins).
 
 OUTPUT RULES:
 - Output ONLY pure dense Markdown text. No JSON.
 - Group the summary logically by coin.
-- Cite specific metrics if they appear.
+- Cite specific trends and mentions from specific platforms (e.g. "В Telegram обсуждают...", "В Twitter заметили...").
 - Do NOT make your own price predictions. You are just a summarizer for Claude.
 - Language: Russian.
 - Keep the final output under 3,000 words."""
@@ -149,7 +276,7 @@ OUTPUT RULES:
             url,
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
-                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise and keep pure signal."}]},
+                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
                 "generationConfig": {"temperature": 0.1},
             },
         )
@@ -217,7 +344,7 @@ Response Format:
     user_prompt = f"""CURRENT REAL-TIME MARKET PRICES (USE THESE AS YOUR BASELINE):
 {market_context}
 
-SOCIAL SENTIMENT & NEWS DATA:
+SOCIAL SENTIMENT & NEWS DATA (LAST 16 HOURS):
 --- FILTERED CONTEXT FROM GEMINI ---
 {filtered_context}
 
@@ -227,7 +354,6 @@ OUTPUT: JSON matching schema.
 FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
 MSK CONTEXT: Current time is UTC+3 (Moscow). 
 The FIRST point (hourOffset: 1) MUST be the price at the NEXT full hour from now in Moscow time.
-Example: If now is 20:15 MSK, hourOffset 1 is 21:00 MSK.
 FIELDS: "targetPrice24h" (final point price), "targetChange24h" (final point %), "hourlyForecast" (array of exactly 24 objects). 
 
 CRITICAL INSTRUCTION: Your predicted target prices MUST be realistically anchored to the Real-Time Prices listed above.
@@ -281,73 +407,63 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     """Execute the full auto-analysis pipeline and save results to DB."""
     logger.info(f"=== Starting auto-analysis (trigger: {trigger}) ===")
     settings = get_settings()
+    lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys
-    if not settings.CLAUDE_API_KEY:
-        logger.error("CLAUDE_API_KEY not configured. Skipping analysis.")
-        return
-    if not settings.GEMINI_API_KEY:
-        logger.error("GEMINI_API_KEY not configured. Skipping analysis.")
+    if not settings.CLAUDE_API_KEY or not settings.GEMINI_API_KEY:
+        logger.error("AI API keys missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
     async with async_session() as session:
-        # Create log entry
-        log = AnalysisLog(
-            mode="simple",
-            status="running",
-            trigger=trigger,
-        )
+        log = AnalysisLog(mode="multi-source", status="running", trigger=trigger)
         session.add(log)
         await session.commit()
         await session.refresh(log)
 
         try:
-            # 1. Reddit data
-            logger.info("Step 1/4: Fetching Reddit data...")
-            reddit_token = None
-            posts = []
+            # 1. Reddit & Twitter (Parallel)
+            logger.info(f"Step 1/4: Fetching Reddit & Twitter (Window: {lookback}h)...")
+            
+            reddit_task = asyncio.Future()
+            reddit_task.set_result([])
             if settings.REDDIT_CLIENT_ID and settings.REDDIT_CLIENT_SECRET:
-                try:
-                    reddit_token = await _get_reddit_token(
-                        settings.REDDIT_CLIENT_ID, settings.REDDIT_CLIENT_SECRET
-                    )
-                    posts = await _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token)
-                    logger.info(f"Reddit: {len(posts)} posts fetched")
-                except Exception as e:
-                    logger.warning(f"Reddit fetch failed: {e}")
-            else:
-                logger.warning("Reddit credentials not configured, skipping Reddit")
-
-            # 2. Market data
-            logger.info("Step 2/4: Fetching market data...")
+                reddit_token = await _get_reddit_token(settings.REDDIT_CLIENT_ID, settings.REDDIT_CLIENT_SECRET)
+                reddit_task = _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
+            
+            twitter_task = _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
+            
+            # Wait for parallel tasks
+            reddit_posts, twitter_posts = await asyncio.gather(reddit_task, twitter_task)
+            
+            # 2. Telegram (Sequential/Separate after Reddit & Twitter)
+            logger.info(f"Step 2/4: Fetching Telegram (Window: {lookback}h)...")
+            telegram_posts = await _fetch_telegram_posts(lookback)
+            
+            # 3. Market context
+            logger.info("Market Context...")
             market_context = "MARKET CONTEXT: Data unavailable."
             if settings.CMC_API_KEY:
-                try:
-                    market_context = await _fetch_market_data(settings.CMC_API_KEY)
-                except Exception as e:
-                    logger.warning(f"CMC fetch failed: {e}")
+                market_context = await _fetch_market_data(settings.CMC_API_KEY)
 
-            if len(posts) == 0:
-                raise RuntimeError("No data collected from any source. Cannot analyze.")
+            combined_data = reddit_posts + twitter_posts + telegram_posts
+            if not combined_data:
+                raise RuntimeError("No social data collected. Cannot analyze.")
 
-            # 3. Gemini filtering
-            logger.info("Step 3/4: Filtering with Gemini...")
-            filtered_context = await _filter_with_gemini(posts, settings.GEMINI_API_KEY)
-            logger.info(f"Gemini filter done ({len(filtered_context)} chars)")
-
-            # 4. Claude analysis
-            logger.info("Step 4/4: Claude Opus 4.6 analysis...")
-            result = await _analyze_with_claude(
-                filtered_context, market_context, settings.CLAUDE_API_KEY, mode="simple"
-            )
-            logger.info("Claude analysis complete!")
+            # 4. Filters & AI
+            logger.info("Step 3/4: Gemini Filtration...")
+            filtered_context = await _filter_with_gemini(combined_data, settings.GEMINI_API_KEY)
+            
+            logger.info("Step 4/4: Claude Analysis...")
+            result = await _analyze_with_claude(filtered_context, market_context, settings.CLAUDE_API_KEY)
 
             # Save
             log.finished_at = datetime.utcnow()
             log.status = "success"
             log.result_json = json.dumps(result, ensure_ascii=False)
-            log.reddit_posts_count = len(posts)
+            log.reddit_posts_count = len(reddit_posts)
+            log.twitter_tweets_count = len(twitter_posts)
+            log.telegram_msgs_count = len(telegram_posts)
             await session.commit()
 
             logger.info(f"=== Auto-analysis complete (ID: {log.id}) ===")
