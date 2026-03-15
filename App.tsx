@@ -3,7 +3,7 @@ import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS, DEFAULT_TELEGRAM_CHATS, TELEGRAM_B
 import { fetchSubredditPosts } from './services/redditService';
 import { fetchBatchTweets } from './services/twitterService';
 import { fetchChatsPreview } from './services/telegramService';
-import { performCombinedAnalysis, filterTelegramChats, filterDataWithGemini, filterTradingCoinsWithGemini } from './services/geminiService';
+import { filterDataWithGemini, filterTelegramChats } from './services/geminiService';
 import { performClaudeAnalysis } from './services/claudeService';
 import { fetchCryptoMarketData } from './services/coinMarketCapService';
 import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessage } from './types';
@@ -48,9 +48,7 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
-  // Setup Model Preference
-  const [aiModel, setAiModel] = useState<'gemini' | 'claude'>('gemini');
-  const [claudeApiKey, setClaudeApiKey] = useState('');
+  // Setup
   const [userBalance, setUserBalance] = useState('10');
 
   // Progress states for different phases
@@ -134,7 +132,7 @@ const App: React.FC = () => {
     telegramMsgs: TelegramMessage[],
     marketContext: string,
     coinMap: Map<string, CMCCoinData>,
-    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading' | 'single_coin',
+    mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'single_coin',
     targetCoinSymbol?: string
   ): Promise<CombinedAnalysisResponse> => {
     let modeText = 'Общий прогноз (24ч)';
@@ -142,34 +140,14 @@ const App: React.FC = () => {
     if (mode === 'altcoins') modeText = 'Поиск Альткоинов (7 дней)';
     if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
     if (mode === 'today_24msk') modeText = 'Прогноз на 24:00 МСК';
-    if (mode === 'trading') modeText = 'Торговые рекомендации';
 
     const balanceNum = parseFloat(userBalance) || 10;
 
-    let analysis: CombinedAnalysisResponse;
-    if (aiModel === 'claude') {
-      if (!claudeApiKey) {
-        throw new Error("Необходим ключ API для Claude");
-      }
-
-      if (mode === 'trading') {
-        // SMART MONEY PIPELINE: Use dedicated trading filter with time windows
-        setStatus(`AI: Smart Money фильтрация (Gemini 2.5 Pro) — временные окна + топ-15 монет...`);
-        const filteredContext = await filterTradingCoinsWithGemini(posts, tweets, telegramMsgs);
-        setStatus(`AI: Smart Money анализ (Claude Opus 4.6) — 4-pillar scoring...`);
-        analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, undefined, claudeApiKey, balanceNum, filteredContext);
-      } else {
-        // STANDARD PIPELINE: Generic Gemini filter -> Claude
-        setStatus(`AI: Фильтрация мусора через Gemini 2.5 Pro (Пред-анализ)...`);
-        const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
-        setStatus(`AI: Генерация финального прогноза (${modeText}) через Claude Opus 4.6...`);
-        analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, claudeApiKey, balanceNum, filteredContext);
-      }
-    } else {
-      setStatus(`AI: Генерация (${modeText}) через Gemini 2.5 Pro...`);
-      // If user chose Gemini directly, we just do it in one pass (since Gemini easily handles 2M tokens)
-      analysis = await performCombinedAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, balanceNum);
-    }
+    // Always: Gemini filter → Claude Opus 4.6 analysis
+    setStatus(`AI: Фильтрация данных через Gemini 2.5 Pro...`);
+    const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
+    setStatus(`AI: Генерация прогноза (${modeText}) через Claude Opus 4.6...`);
+    const analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, undefined, balanceNum, filteredContext);
 
     // Merge Real-time Prices only if coins exist (standard mode)
     if (analysis.coins) {
@@ -199,7 +177,7 @@ const App: React.FC = () => {
   };
 
   // Generic function to Fetch Data AND Run Analysis
-  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' | 'trading' = 'simple', forceFullPipeline: boolean = false) => {
+  const executeAnalysisPipeline = useCallback(async (mode: 'simple' | 'hourly' | 'altcoins' | 'today_20msk' | 'today_24msk' = 'simple', forceFullPipeline: boolean = false) => {
     if (selectedSubreddits.length === 0) {
       alert("Выберите хотя бы один сабреддит.");
       return;
@@ -447,7 +425,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, aiModel, claudeApiKey, userBalance]);
+  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, userBalance]);
 
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
@@ -510,32 +488,6 @@ const App: React.FC = () => {
               </div>
 
               <div className="w-px h-5 bg-gray-700" />
-
-              {/* AI Model */}
-              <div className="flex items-center bg-gray-800 border border-gray-700/50 rounded-lg overflow-hidden h-7">
-                <button
-                  onClick={() => setAiModel('gemini')}
-                  className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'gemini' ? 'bg-blue-600/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Gemini
-                </button>
-                <button
-                  onClick={() => setAiModel('claude')}
-                  className={`px-3 h-full text-xs font-bold transition-all ${aiModel === 'claude' ? 'bg-orange-600/20 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Claude 4.6
-                </button>
-              </div>
-
-              {aiModel === 'claude' && (
-                <input
-                  type="password"
-                  placeholder="API Key (sk-ant-...)"
-                  value={claudeApiKey}
-                  onChange={(e) => setClaudeApiKey(e.target.value)}
-                  className="w-36 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-orange-500 h-7"
-                />
-              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -560,16 +512,6 @@ const App: React.FC = () => {
                 </button>
               ) : (
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
-
-                  {/* Trading Mode */}
-                  <button
-                    onClick={() => executeAnalysisPipeline('trading', true)}
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-all"
-                  >
-                    <span>📊</span>
-                    <span>Торговля</span>
-                  </button>
-
 
                   {/* Standard Trigger */}
                   <button

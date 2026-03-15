@@ -427,6 +427,13 @@ async def proxy_post_request(url: str, request: Request):
         if b"{" in body[:10]:
             clean_headers['Content-Type'] = 'application/json'
 
+        # Auto-inject Claude API key for Anthropic requests
+        if 'anthropic.com' in url:
+            import os
+            claude_key = os.environ.get('CLAUDE_API_KEY', '')
+            if claude_key:
+                clean_headers['x-api-key'] = claude_key
+
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(url, content=body, headers=clean_headers)
         
