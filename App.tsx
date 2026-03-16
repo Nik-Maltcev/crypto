@@ -48,9 +48,6 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
-  // Setup
-  const [userBalance, setUserBalance] = useState('10');
-
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
   const [twitterProgress, setTwitterProgress] = useState({ current: 0, total: 0 });
@@ -141,7 +138,7 @@ const App: React.FC = () => {
     if (mode === 'today_20msk') modeText = 'Прогноз на 20:00 МСК';
     if (mode === 'today_24msk') modeText = 'Прогноз на 24:00 МСК';
 
-    const balanceNum = parseFloat(userBalance) || 10;
+    const balanceNum = 10;
 
     // Always: Gemini filter → Claude Opus 4.6 analysis
     setStatus(`AI: Фильтрация данных через Gemini 2.5 Pro...`);
@@ -425,7 +422,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, userBalance]);
+  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages]);
 
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
@@ -472,24 +469,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Row 2: Controls */}
-          <div className="h-12 flex items-center justify-between border-t border-gray-800/50">
-            <div className="flex items-center gap-3">
-              {/* Balance */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-gray-500 uppercase font-bold">Баланс</span>
-                <input
-                  type="number"
-                  placeholder="10"
-                  value={userBalance}
-                  onChange={(e) => setUserBalance(e.target.value)}
-                  className="w-16 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-purple-500 h-7 text-center"
-                />
-                <span className="text-[10px] text-gray-500">USDT</span>
-              </div>
-
-              <div className="w-px h-5 bg-gray-700" />
-            </div>
-
+          <div className="h-12 flex items-center justify-end border-t border-gray-800/50">
             <div className="flex items-center gap-2">
               {result && !isProcessing && (
                 <button
