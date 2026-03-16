@@ -168,10 +168,20 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                                 className={`w-full rounded-sm ${getConfidenceColor(d.confidence)} transition-all`}
                                                 style={{ height: `${Math.max(4, d.confidence * 0.3)}px`, opacity: 0.7 }}
                                             />
-                                            <span className="text-[8px] text-gray-500 mt-0.5">{i % 3 === 0 ? d.confidence + '%' : ''}</span>
+                                            <span className="text-[8px] text-gray-500 mt-0.5">
+                                                {i % 3 === 0 ? d.confidence + '%' : ''}
+                                            </span>
+                                            <span className="text-[7px] text-gray-600 font-mono leading-tight">
+                                                {i % 3 === 0 ? (d.price < 1 ? d.price.toFixed(4) : '$' + d.price.toLocaleString('en-US', { maximumFractionDigits: 0 })) : ''}
+                                            </span>
                                             {/* Tooltip on hover */}
-                                            <div className="absolute bottom-full mb-1 bg-gray-800 text-[10px] text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                                                {d.time} — {d.confidence}%
+                                            <div className="absolute bottom-full mb-1 bg-gray-800 text-[10px] text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
+                                                <span className="font-bold">{d.time}</span>
+                                                <span className="text-gray-300">${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString()}</span>
+                                                <span className={`${d.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {d.change > 0 ? '+' : ''}{d.change.toFixed(2)}%
+                                                </span>
+                                                <span className="text-gray-400">Уверенность: {d.confidence}%</span>
                                             </div>
                                         </div>
                                     ))}
