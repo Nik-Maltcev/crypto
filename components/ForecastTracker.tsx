@@ -14,7 +14,7 @@ const ForecastTracker: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const resp = await fetch('/api/forecast/active');
+            const resp = await fetch(`${BACKEND_URL}/api/forecast/active`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             if (data.success) setTrackings(data.items);
@@ -27,7 +27,7 @@ const ForecastTracker: React.FC = () => {
 
     const forceUpdate = async () => {
         try {
-            const resp = await fetch('/api/forecast/force_update', { method: 'POST' });
+            const resp = await fetch(`${BACKEND_URL}/api/forecast/force_update`, { method: 'POST' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             setTimeout(fetchTrackings, 3000);
         } catch (e: any) {

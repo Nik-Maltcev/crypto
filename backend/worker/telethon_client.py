@@ -30,6 +30,7 @@ async def get_telethon_client() -> TelegramClient:
                 StringSession(session_string),
                 settings.TELEGRAM_API_ID,
                 settings.TELEGRAM_API_HASH,
+                receive_updates=False,
             )
         else:
             # Fall back to file session for local dev
@@ -37,6 +38,7 @@ async def get_telethon_client() -> TelegramClient:
                 "crypto_parser",
                 settings.TELEGRAM_API_ID,
                 settings.TELEGRAM_API_HASH,
+                receive_updates=False,
             )
     
     if not _telethon_client.is_connected():
