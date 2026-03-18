@@ -81,8 +81,36 @@ const ForecastTracker: React.FC = () => {
                     Нет активных трекингов. Запустите анализ (24ч) — трекинг начнётся автоматически.
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {trackings.map(t => {
+                <div className="space-y-6">
+                    {/* Group trackings by date */}
+                    {(() => {
+                        const groups: Record<string, ForecastTracking[]> = {};
+                        trackings.forEach(t => {
+                            const dateKey = t.status === 'active'
+                                ? '⏳ Активные'
+                                : new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+                            if (!groups[dateKey]) groups[dateKey] = [];
+                            groups[dateKey].push(t);
+                        });
+                        // Active group first, then dates descending
+                        const sortedKeys = Object.keys(groups).sort((a, b) => {
+                            if (a === '⏳ Активные') return -1;
+                            if (b === '⏳ Активные') return 1;
+                            return b.localeCompare(a);
+                        });
+                        return sortedKeys.map(dateKey => (
+                            <div key={dateKey}>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{dateKey}</h3>
+                                    <div className="flex-1 h-px bg-gray-800"></div>
+                                    {dateKey !== '⏳ Активные' && (
+                                        <span className="text-xs text-gray-600">
+                                            {groups[dateKey].length} монет
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                    {groups[dateKey].map(t => {
                         const color = getColor(t.prediction);
                         const acc = accuracy(t);
                         const isExpanded = expandedId === t.id;
@@ -234,6 +262,10 @@ const ForecastTracker: React.FC = () => {
                             </div>
                         );
                     })}
+                                </div>
+                            </div>
+                        ));
+                    })()}
                 </div>
             )}
         </div>
