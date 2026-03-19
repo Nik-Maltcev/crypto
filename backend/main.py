@@ -15,8 +15,9 @@ from sqlalchemy import select
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
 from core.models import ParseLog, AnalysisLog, ForecastTracking
-from worker.jobs.parser import ChatParser
-from worker.telethon_client import get_telethon_client, close_telethon_client
+# Telethon disabled — lazy import only when telegram endpoints are called
+# from worker.jobs.parser import ChatParser
+# from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 async def parse_chats_job():
     """Background job to parse all chats."""
+    from worker.telethon_client import get_telethon_client
+    from worker.jobs.parser import ChatParser
     logger.info("Starting scheduled parse job...")
     
     async_session = get_async_session()
@@ -120,7 +123,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if scheduler:
         scheduler.shutdown(wait=False)
-    await close_telethon_client()
+    try:
+        from worker.telethon_client import close_telethon_client
+        await close_telethon_client()
+    except Exception:
+        pass
     logger.info("Service stopped")
 
 
@@ -239,6 +246,8 @@ async def parse_reddit(subreddits: list[str] | None = Body(default=None)):
 @app.post("/api/telegram/preview_chats")
 async def preview_chats(chats: list[str] = Body(...), days: int = Body(default=7)):
     """Fetch messages from a custom list of chats for preview/filtering."""
+    from worker.telethon_client import get_telethon_client
+    from worker.jobs.parser import ChatParser
     logger.info(f"Preview chats request received. Chats: {chats}, days: {days}")
     
     if not chats:
