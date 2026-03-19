@@ -344,19 +344,10 @@ const App: React.FC = () => {
           setStatus('Ошибка Twitter, продолжаем...');
         }
 
-        // 2. Run Telegram sequentially afterwards
-        setStatus('3/4 Сканирование Telegram (Последовательно)...');
-        if (selectedTelegramChats.length > 0) {
-          try {
-            // Directly await the task instead of Promise.allSettled
-            finalTelegram = await telegramTask();
-            console.log("Telegram messages fetched:", finalTelegram.length);
-            setTelegramMessages(finalTelegram);
-          } catch (telegramErr) {
-            console.error("Telegram fetch failed:", telegramErr);
-            setStatus('Ошибка Telegram, продолжаем...');
-          }
-        }
+        // 2. Telegram — TEMPORARILY DISABLED
+        // Telegram parsing skipped to avoid FloodWait issues
+        // To re-enable: uncomment the telegramTask block below
+        finalTelegram = [];
 
         if (abortRef.current) throw new Error("Stopped by user");
       } else {
@@ -364,7 +355,7 @@ const App: React.FC = () => {
       }
 
       // Final Check: Do we have ANY data to analyze?
-      if (finalPosts.length === 0 && finalTweets.length === 0 && finalTelegram.length === 0) {
+      if (finalPosts.length === 0 && finalTweets.length === 0) {
         throw new Error("Не удалось получить данные ни из одного источника. Проверьте настройки или подождите.");
       }
 
@@ -542,15 +533,7 @@ const App: React.FC = () => {
                       ></div>
                     </div>
                   )}
-                  {/* Telegram Bar */}
-                  {selectedTelegramChats.length > 0 && (
-                    <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className="bg-brand-accent h-1.5 transition-all duration-800"
-                        style={{ width: `${telegramProgress.total ? (telegramProgress.current / telegramProgress.total) * 100 : 0}%` }}
-                      ></div>
-                    </div>
-                  )}
+                  {/* Telegram Bar — temporarily disabled */}
                 </div>
               </div>
             )}
@@ -619,7 +602,7 @@ const App: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedTwitterIds.length}</p>
               </div>
 
-              {/* Telegram Selection */}
+              {/* Telegram Selection — temporarily disabled
               <div className="bg-brand-card border border-gray-800 rounded-xl p-6 max-h-[400px] flex flex-col">
                 <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
                   <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -649,6 +632,7 @@ const App: React.FC = () => {
                 </div>
                 <p className="text-xs text-gray-500 mt-2 text-right">Выбрано: {selectedTelegramChats.length}</p>
               </div>
+              */}
             </section>
 
             {/* Combined Result Display */}

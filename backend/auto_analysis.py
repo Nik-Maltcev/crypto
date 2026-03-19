@@ -441,9 +441,9 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             # Wait for parallel tasks
             reddit_posts, twitter_posts = await asyncio.gather(reddit_task, twitter_task)
             
-            # 2. Telegram (Sequential/Separate after Reddit & Twitter)
-            logger.info(f"Step 2/4: Fetching Telegram (Window: {lookback}h)...")
-            telegram_posts = await _fetch_telegram_posts(lookback)
+            # 2. Telegram — TEMPORARILY DISABLED
+            logger.info("Step 2/4: Telegram SKIPPED (temporarily disabled)")
+            telegram_posts = []
             
             # 3. Market context
             logger.info("Market Context...")
