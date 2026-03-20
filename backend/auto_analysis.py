@@ -23,6 +23,7 @@ from core.config import get_settings, load_chats_config
 from core.database import get_async_session
 from core.models import AnalysisLog
 from worker.telethon_client import get_telethon_client
+from forecast_tracker import save_forecast_from_analysis
 from worker.jobs.parser import ChatParser
 
 logger = logging.getLogger(__name__)
@@ -472,6 +473,13 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             await session.commit()
 
             logger.info(f"=== Auto-analysis complete (ID: {log.id}) ===")
+
+            # Auto-start forecast tracking from this analysis
+            try:
+                count = await save_forecast_from_analysis(log.id)
+                logger.info(f"[ForecastTracker] Created {count} trackings from auto-analysis ID={log.id}")
+            except Exception as track_err:
+                logger.error(f"[ForecastTracker] Failed to create trackings: {track_err}")
 
         except Exception as e:
             logger.error(f"Auto-analysis failed: {e}")
