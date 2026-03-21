@@ -308,8 +308,8 @@ const App: React.FC = () => {
             setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
           }
 
-          // Remove the hardcoded 500 limit and keep all posts
-          const topPosts = allPosts.sort((a, b) => b.score - a.score);
+          // Keep top 200 posts by score to avoid noise and reduce AI token usage
+          const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 200);
           return topPosts;
         };
 
@@ -542,22 +542,13 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
 
-                  {/* Standard Trigger (frontend pipeline, 24h) */}
+                  {/* Standard Trigger (frontend pipeline, 16h) */}
                   <button
                     onClick={() => executeAnalysisPipeline('simple', true)}
                     className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
                   >
                     <RefreshIcon />
                     <span>Сбор + Анализ (16ч)</span>
-                  </button>
-
-                  {/* Server-side analysis (backend pipeline, 16h) */}
-                  <button
-                    onClick={runServerAnalysis}
-                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition-all"
-                  >
-                    <AnalysisIcon />
-                    <span>Серверный (16ч)</span>
                   </button>
                 </div>
               )}
