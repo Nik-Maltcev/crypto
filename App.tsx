@@ -308,8 +308,8 @@ const App: React.FC = () => {
             setRedditProgress({ current: processedCount, total: selectedSubreddits.length });
           }
 
-          // Keep top 200 posts by score to avoid noise and reduce AI token usage
-          const topPosts = allPosts.sort((a, b) => b.score - a.score).slice(0, 200);
+          // Keep all posts from last 16h, sorted by score (Gemini will filter the noise)
+          const topPosts = allPosts.sort((a, b) => b.score - a.score);
           return topPosts;
         };
 
