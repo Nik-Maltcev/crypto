@@ -29,8 +29,8 @@ export const fetchSubredditPosts = async (subredditName: string, searchQuery?: s
       return [];
     }
 
-    // Filter for posts within last 24 hours
-    const oneDayAgo = Math.floor((Date.now() / 1000) - (1 * 24 * 60 * 60));
+    // Filter for posts within last 16 hours (consistent with backend pipeline)
+    const cutoffTime = Math.floor((Date.now() / 1000) - (16 * 60 * 60));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const posts: RedditPost[] = data.data.children
@@ -49,7 +49,7 @@ export const fetchSubredditPosts = async (subredditName: string, searchQuery?: s
       })
       .filter((post: RedditPost) => {
         const isDiscussion = post.title.includes("Daily Discussion");
-        const isRecent = post.created_utc >= oneDayAgo;
+        const isRecent = post.created_utc >= cutoffTime;
         return !isDiscussion && isRecent;
       });
 

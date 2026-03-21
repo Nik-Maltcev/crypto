@@ -548,7 +548,7 @@ const App: React.FC = () => {
                     className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
                   >
                     <RefreshIcon />
-                    <span>Сбор + Анализ (24ч)</span>
+                    <span>Сбор + Анализ (16ч)</span>
                   </button>
 
                   {/* Server-side analysis (backend pipeline, 16h) */}
