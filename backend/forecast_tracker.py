@@ -185,21 +185,28 @@ async def update_forecast_tracking_job():
                 predicted_change = point.get("change")
 
             # Determine if direction matched
-            # "matched" = predicted direction from start matches actual direction from start
+            # Compare predicted price vs start price direction with actual price vs start price direction
             actual_change_from_start = ((real_price - tracking.start_price) / tracking.start_price) * 100
             
             matched = None
-            if predicted_change is not None:
-                # Both positive = both predict up = match
-                # Both negative = both predict down = match
-                if predicted_change > 0 and actual_change_from_start > 0:
-                    matched = True
-                elif predicted_change < 0 and actual_change_from_start < 0:
-                    matched = True
-                elif predicted_change == 0 or abs(actual_change_from_start) < 0.1:
-                    matched = True  # Neutral zone
+            if predicted_price is not None:
+                predicted_direction = predicted_price - tracking.start_price  # positive = up, negative = down
+                actual_direction = real_price - tracking.start_price  # positive = up, negative = down
+                
+                # Neutral zone: if BOTH predicted and actual moved less than 0.03% from start — neutral (skip)
+                pred_pct = abs(predicted_direction / tracking.start_price) * 100 if tracking.start_price else 0
+                actual_pct = abs(actual_direction / tracking.start_price) * 100 if tracking.start_price else 0
+                
+                if pred_pct < 0.03 and actual_pct < 0.03:
+                    matched = True  # Both essentially flat — neutral
+                elif predicted_direction > 0 and actual_direction > 0:
+                    matched = True  # Both up
+                elif predicted_direction < 0 and actual_direction < 0:
+                    matched = True  # Both down
+                elif pred_pct < 0.03:
+                    matched = True  # Prediction was essentially flat, any small move is ok
                 else:
-                    matched = False
+                    matched = False  # Directions disagree
 
             actual.append({
                 "timestamp": now.isoformat(),
