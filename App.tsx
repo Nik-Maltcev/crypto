@@ -77,6 +77,64 @@ const App: React.FC = () => {
     setStatus('Остановка...');
   };
 
+  // Server-side analysis: backend collects Reddit+Twitter (16h) → Gemini → Claude
+  const runServerAnalysis = useCallback(async () => {
+    const BACKEND = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+    setIsProcessing(true);
+    setResult(null);
+    setStatus('Серверный анализ: запуск (Reddit + Twitter 16ч → Gemini → Claude)...');
+
+    try {
+      const resp = await fetch(`${BACKEND}/api/analysis/run`, { method: 'POST' });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || err.error || `HTTP ${resp.status}`);
+      }
+
+      // Poll history until the latest analysis completes
+      setStatus('Серверный анализ: сбор данных и AI-обработка (может занять 2-3 мин)...');
+      const startTime = Date.now();
+      const TIMEOUT = 5 * 60 * 1000; // 5 min max
+
+      while (Date.now() - startTime < TIMEOUT) {
+        await new Promise(r => setTimeout(r, 5000)); // poll every 5s
+
+        const histResp = await fetch(`${BACKEND}/api/analysis/history?limit=1`);
+        if (!histResp.ok) continue;
+        const histData = await histResp.json();
+        const latest = histData.items?.[0];
+
+        if (!latest) continue;
+
+        if (latest.status === 'success' && latest.has_result) {
+          // Fetch full result
+          const detailResp = await fetch(`${BACKEND}/api/analysis/${latest.id}`);
+          if (detailResp.ok) {
+            const detail = await detailResp.json();
+            if (detail.result) {
+              setResult(detail.result);
+              setStatus(`Серверный анализ завершён! (Reddit: ${latest.reddit_posts_count}, Twitter: ${latest.twitter_tweets_count})`);
+              break;
+            }
+          }
+        } else if (latest.status === 'failed') {
+          throw new Error(latest.error_message || 'Серверный анализ завершился с ошибкой');
+        }
+        // still running — keep polling
+      }
+
+      if (!result && Date.now() - startTime >= TIMEOUT) {
+        setStatus('Таймаут — проверьте вкладку "История"');
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message);
+      setStatus('Ошибка серверного анализа');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, []);
+
   const handleDownloadJSON = () => {
     if (!result) return;
 
@@ -484,13 +542,22 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
 
-                  {/* Standard Trigger */}
+                  {/* Standard Trigger (frontend pipeline, 24h) */}
                   <button
                     onClick={() => executeAnalysisPipeline('simple', true)}
                     className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
                   >
                     <RefreshIcon />
                     <span>Сбор + Анализ (24ч)</span>
+                  </button>
+
+                  {/* Server-side analysis (backend pipeline, 16h) */}
+                  <button
+                    onClick={runServerAnalysis}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition-all"
+                  >
+                    <AnalysisIcon />
+                    <span>Серверный (16ч)</span>
                   </button>
                 </div>
               )}
