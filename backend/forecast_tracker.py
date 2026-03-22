@@ -176,26 +176,44 @@ async def update_forecast_tracking_job():
                 except:
                     actual = []
 
-            # Find predicted price for this hour
+            # Find predicted price for this hour and previous hour
             predicted_price = None
             predicted_change = None
+            prev_predicted_price = None
             if hour_index < len(forecast):
                 point = forecast[hour_index]
                 predicted_price = point.get("price")
                 predicted_change = point.get("change")
+            if hour_index > 0 and (hour_index - 1) < len(forecast):
+                prev_predicted_price = forecast[hour_index - 1].get("price")
 
-            # Determine if prediction was accurate
-            # Compare predicted price vs real price directly (not direction from start)
-            # Hit = predicted price is within THRESHOLD% of real price
+            # Get previous real price (from last actual entry, or start_price for hour 0)
+            prev_real_price = tracking.start_price
+            if actual:
+                prev_real_price = actual[-1].get("real_price", tracking.start_price)
+
+            # Direction matching: compare predicted direction vs actual direction
+            # Predicted direction: did AI think price goes up or down from previous hour?
+            # Actual direction: did price actually go up or down from previous hour?
             actual_change_from_start = ((real_price - tracking.start_price) / tracking.start_price) * 100
-            
-            ACCURACY_THRESHOLD_PCT = 0.5  # 0.5% tolerance
-            
+
             matched = None
-            if predicted_price is not None and real_price > 0:
-                # How far off was the prediction from reality?
-                price_error_pct = abs(predicted_price - real_price) / real_price * 100
-                matched = price_error_pct <= ACCURACY_THRESHOLD_PCT
+            if predicted_price is not None and prev_real_price is not None:
+                # For hour 0: compare with start_price
+                # For hour N: compare with previous hour's predicted and real prices
+                ref_predicted = prev_predicted_price if prev_predicted_price is not None else tracking.start_price
+                
+                predicted_direction = predicted_price - ref_predicted  # AI thought: up or down?
+                actual_direction = real_price - prev_real_price  # Reality: up or down?
+
+                if predicted_direction > 0 and actual_direction > 0:
+                    matched = True   # Both up
+                elif predicted_direction < 0 and actual_direction < 0:
+                    matched = True   # Both down
+                elif predicted_direction == 0 and actual_direction == 0:
+                    matched = True   # Both flat
+                else:
+                    matched = False  # Directions disagree
 
             actual.append({
                 "timestamp": now.isoformat(),
@@ -215,11 +233,12 @@ async def update_forecast_tracking_job():
                 tracking.misses += 1
 
             status_icon = "✅" if matched else "❌" if matched is False else "➖"
-            price_error = abs(predicted_price - real_price) / real_price * 100 if predicted_price and real_price else 0
+            pred_dir = "↑" if (predicted_price or 0) > (ref_predicted if 'ref_predicted' in dir() else tracking.start_price) else "↓"
+            real_dir = "↑" if real_price > prev_real_price else "↓"
             logger.info(
                 f"[ForecastTracker] {tracking.symbol} h{hour_index+1}: "
                 f"real=${real_price:.2f} pred=${predicted_price or 0:.2f} "
-                f"error={price_error:.2f}% (threshold={ACCURACY_THRESHOLD_PCT}%) "
+                f"pred_dir={pred_dir} real_dir={real_dir} "
                 f"{status_icon} ({tracking.hits}/{tracking.hours_tracked})"
             )
 
