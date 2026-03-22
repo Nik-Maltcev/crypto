@@ -57,7 +57,7 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
         for sub in subreddits:
             try:
                 resp = await client.get(
-                    f"https://oauth.reddit.com/r/{sub}/new.json?limit=50",
+                    f"https://oauth.reddit.com/r/{sub}/new.json?limit=100",
                     headers={
                         "Authorization": f"Bearer {reddit_token}",
                         "User-Agent": "CryptoPulseAI/1.0",
@@ -98,7 +98,7 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
 
     all_tweets = []
     # Current limit: parse up to 10 tweets per user to avoid hitting RapidAPI limits too hard
-    count_per_user = 10
+    count_per_user = 50
     cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
     async with httpx.AsyncClient(timeout=60) as client:

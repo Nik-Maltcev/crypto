@@ -318,7 +318,7 @@ const App: React.FC = () => {
           if (selectedTwitterIds.length === 0) return [];
 
           try {
-            return await fetchBatchTweets(selectedTwitterIds, 5, (curr, total) => {
+            return await fetchBatchTweets(selectedTwitterIds, 50, (curr, total) => {
               setTwitterProgress({ current: curr, total: total });
             });
           } catch (err) {

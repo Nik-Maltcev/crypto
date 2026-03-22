@@ -184,29 +184,18 @@ async def update_forecast_tracking_job():
                 predicted_price = point.get("price")
                 predicted_change = point.get("change")
 
-            # Determine if direction matched
-            # Compare predicted price vs start price direction with actual price vs start price direction
+            # Determine if prediction was accurate
+            # Compare predicted price vs real price directly (not direction from start)
+            # Hit = predicted price is within THRESHOLD% of real price
             actual_change_from_start = ((real_price - tracking.start_price) / tracking.start_price) * 100
             
+            ACCURACY_THRESHOLD_PCT = 0.5  # 0.5% tolerance
+            
             matched = None
-            if predicted_price is not None:
-                predicted_direction = predicted_price - tracking.start_price  # positive = up, negative = down
-                actual_direction = real_price - tracking.start_price  # positive = up, negative = down
-                
-                # Neutral zone: if BOTH predicted and actual moved less than 0.03% from start — neutral (skip)
-                pred_pct = abs(predicted_direction / tracking.start_price) * 100 if tracking.start_price else 0
-                actual_pct = abs(actual_direction / tracking.start_price) * 100 if tracking.start_price else 0
-                
-                if pred_pct < 0.03 and actual_pct < 0.03:
-                    matched = True  # Both essentially flat — neutral
-                elif predicted_direction > 0 and actual_direction > 0:
-                    matched = True  # Both up
-                elif predicted_direction < 0 and actual_direction < 0:
-                    matched = True  # Both down
-                elif pred_pct < 0.03:
-                    matched = True  # Prediction was essentially flat, any small move is ok
-                else:
-                    matched = False  # Directions disagree
+            if predicted_price is not None and real_price > 0:
+                # How far off was the prediction from reality?
+                price_error_pct = abs(predicted_price - real_price) / real_price * 100
+                matched = price_error_pct <= ACCURACY_THRESHOLD_PCT
 
             actual.append({
                 "timestamp": now.isoformat(),
@@ -226,10 +215,11 @@ async def update_forecast_tracking_job():
                 tracking.misses += 1
 
             status_icon = "✅" if matched else "❌" if matched is False else "➖"
+            price_error = abs(predicted_price - real_price) / real_price * 100 if predicted_price and real_price else 0
             logger.info(
                 f"[ForecastTracker] {tracking.symbol} h{hour_index+1}: "
                 f"real=${real_price:.2f} pred=${predicted_price or 0:.2f} "
-                f"actual_chg={actual_change_from_start:+.2f}% pred_chg={predicted_change or 0:+.2f}% "
+                f"error={price_error:.2f}% (threshold={ACCURACY_THRESHOLD_PCT}%) "
                 f"{status_icon} ({tracking.hits}/{tracking.hours_tracked})"
             )
 
