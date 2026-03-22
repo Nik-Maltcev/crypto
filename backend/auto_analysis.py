@@ -28,13 +28,61 @@ from worker.jobs.parser import ChatParser
 
 logger = logging.getLogger(__name__)
 
-# Default subreddits for scheduled analysis
-DEFAULT_SUBREDDITS = [
-    "CryptoCurrency", "Bitcoin", "ethereum", "solana",
-    "CryptoMarkets", "altcoin", "defi", "ethtrader",
-    "binance", "cardano", "dogecoin", "SatoshiStreetBets",
-    "CryptoMoonShots", "Ripple", "litecoin", "Polkadot",
-]
+# All 404 subreddits (same as frontend constants.ts)
+DEFAULT_SUBREDDITS = list(set([
+    "CryptoCurrencies", "Ripple", "Monero", "crypto", "BitcoinMarkets", "RocketLeagueExchange", "NiceHash", "RealDayTrading",
+    "cosmosnetwork", "gpumining", "GoldandBlack", "UniSwap", "decentraland", "LitecoinMarkets", "ethstaker", "cryptomining",
+    "crypto_currency", "EnoughLibertarianSpam", "dogelon", "CryptoGamersCommunity", "AMPToken", "TsumTsum", "coingecko",
+    "CryptoScamReport", "CoinWithUs", "OfficialTrumpCoin", "defisignals", "Sologenic", "XBlockChain", "Defiance", "CryptoHorde",
+    "CryptoUnicornFinders", "BitcoinFrance", "BitcoinABC", "EthereumGang", "Malaysia_Crypto", "ethmemecoins", "NFT",
+    "BitcoinBeginners", "NFTsMarketplace", "Stellar", "EtherMining", "BitcoinMining", "nanocurrency", "Metamask", "0xPolygon",
+    "Avax", "thewallstreet", "ExodusWallet", "CardanoTrading", "CryptoAnarchy", "CryptoMexico", "ethereum", "XRP", "SHIBArmy",
+    "litecoin", "FuturesTrading", "ASX_Bets", "Bitcoincash", "Crypto_General", "NFTExchange", "algorand", "AltStreetBets",
+    "CoinMarketCap", "cro", "lastofuspart2", "jupiterexchange", "BitcoinBrasil", "MedievalCoin", "AirdropCryptoAlpha", "algotrading",
+    "cryptocurrencymemes", "Cryptozoology", "Crypto_com", "CryptoCurrencyTrading", "Chainlink", "cryptography", "MarioKartTour",
+    "mindcrack", "daytrade", "CryptoGrab", "Rblxcross_trading_", "CryptoTechnology", "PiNetwork", "CryptoMoon", "rocket_league_trading",
+    "binance", "cardano", "CryptoIndia", "StocksAndTrading", "ledgerwallet", "CryptoMars", "CryptoMarsShots", "AlgorandOfficial",
+    "RatchetAndClank", "CryptoNewsandTalk", "MemeCoinJunkies", "ethtrader", "altcoin", "swingtrading", "Slothana", "CryptoInvesting",
+    "CryptoMoonShots", "Crypto_Currency_News", "dogecoin", "Anarcho_Capitalism", "defi", "kucoin", "MaddenUltimateTeam", "ethdev",
+    "Polkadot", "CryptoScams", "BlockchainStartups", "RoyaleHigh_Trading", "Jobs4Bitcoins", "northcounty", "CrossTrading_inRoblox",
+    "ARK_Trading", "options", "AllCryptoBets", "toshicoin", "Forex", "AvakinOfficial", "CoinMasterGame", "BinanceCrypto", "coinerrors",
+    "GlobalOffensiveTrade", "Buttcoin", "Memecoinhub", "CryptoExchange", "phinvest", "Hedera", "RoyaleHigh_Roblox", "memecoins",
+    "RobloxGAGTrading", "CryptoMarkets", "TradingView", "investing", "AnimalCrossingTrading", "CoinBase", "trading212", "pennystocks",
+    "RoyaleHighTrading", "pokemontrades", "solana", "SolanaMemeCoins", "ReferralCodesCrypto", "IndianStreetBets", "Trading",
+    "AncientCoins", "btc", "BloxFruitsTradingHub", "CryptoCurrency", "giftcardexchange", "MaddenMobileForums", "Bitcoin", "coins",
+    "Daytrading", "TheTowerGame", "coincollecting", "conspiracy", "geometrydash", "hardwareswap", "CallOfDutyMobile", "FUTMobile",
+    "Forexstrategy", "Pmsforsale", "PokemonGoTrade", "AdoptMeTrading", "AdoptMeRBX", "PubeFinance", "PublishProtocol", "PulseBitcoin",
+    "Pulsechain", "PumpCrypto", "PURPEcryptocurrency", "QuantumBlockchain", "QuarkCoin", "QuiddTrading", "R6Marketplace_Trading",
+    "RadiantBlockchain", "RadioCacaNFT", "RaiBlocks", "RandomActsOfBTC", "RariCapital", "RavenX", "Raydium", "rBitcoin",
+    "rblxcross_trading", "RDAT", "reddCoin", "RedditavatarsNFT", "RedditBlockchain", "ReferenceCodeBinance", "RevalCoin",
+    "ReviewTrading", "RevivalDefi", "Ride_Defi", "rigelprotocol", "RiotBlockchain", "RiperDefi", "Rise_Coin", "RoastmyNFT",
+    "RobloxTrading", "rocketpool", "RopeSolana", "Rotl_Nft", "RoyalHighTrading", "RoyalProtocol", "RsrCoin", "RugEthereum",
+    "RupeeBlockchain", "saadboi", "SaitamaInu_Official", "SaitoCrypto", "SaltBlockchain", "SaltCoin", "SanctumSolana", "SandboxNFT",
+    "SantaCoin", "SargeCoin", "SatoshiStreetBets", "scam_coin", "ScientificCoin", "SeatlabNFT", "Securypto", "ShadowSolana",
+    "ShakaiNFT", "ShibaDino", "Shibainucoin", "ShibaInuCrypto", "SHIBArmyNFT", "ShibaSikkaToken", "Shieldtoken_official",
+    "ShinyTrading", "shitcoin_memecoin", "shouldaethereum", "ShpingCoin", "ShrimpSwap", "SigloCoin", "SimpleDefi", "SkyNetBinance",
+    "SmileCoin", "smTrading", "snoofi", "SnowgeCoin", "solanabeach", "solanabitcoin", "SolanaBitcone", "solanaboobs", "SolanaCanada",
+    "solanacasinos", "SolanaCBDC", "SolanaCryptoMemeCoin", "solanadev", "solanadoge", "solanaeas", "SolanaIndia", "SolanaInsights",
+    "solanamemecoincalls", "SolanaMemeMoonshots", "Solana_Memes", "SolanaMonkeyApes", "SolanaNFT", "solanapepe", "SolanaPresale",
+    "SolanaSniper", "SolanaSniperBots", "solanatools", "SolanaUK", "SolanaWalletTracker", "solanium", "SolarCoin", "SolCoins",
+    "SoldierOfSolana", "Solible", "SolSeaNFT", "solwork", "sombraNFT", "SorareTrading", "SourceLessBlockchain", "Spacefy_NFT",
+    "SpacePortCoin", "SpadesCoin", "SpearMoon", "spot_trading", "StakingAlertBinance", "StarverseNFT", "SteamTradingCards",
+    "StellarCannaCoin", "StellarNFT", "StepFinance_", "StepN", "sterwers_Solana", "STICKYtoken", "stockTrading", "StockTradingIdeas",
+    "stock_trading_India", "StoneDefi", "StonksTrading", "STOX", "suBitcoin", "SuccessKidSolana", "SushiSwap", "SwftCoin",
+    "SwitchBlockchain", "SwoleDogeSolana", "Swop_Defi", "SysCoin", "TacoEnergy", "Tau_coin", "TcgCoin", "Telefy_Defi",
+    "TeraWulfMiningBTC", "ternio", "Terra_Luna_crypto", "tezos", "TF2_Trading", "TheBinanceNFT", "TheDao", "thefaircoin", "thegraph",
+    "TheosNFT", "ThePepeFamilyASA", "tildethine", "TokenFinders", "TomketAirdropID", "TonicCrypto", "TonysolpranoSolana",
+    "TopCryptoSites", "TopNFT", "TosaInuCoin", "ToyotaBlockchain", "ToyotaBlockchainLab", "TradingAdvice", "TradingAI", "TradingAlerts",
+    "tradingcardcommunity", "Tradingcards", "Trading_Courses_", "TradingDesk", "TradingEdge", "Trading_es", "Trading_Futures",
+    "TradingInterview", "TradingLegends", "TradingPi", "TradingPost76", "TradingPsychologie", "TradingSignals",
+    "TradingSiteReviewsCom", "trading_strategy", "TradingTechniques", "TradingViewSignals", "TradingVolatility",
+    "TransformersTrading", "TreeDefi", "trenchors", "TriangleBitcoin", "TriasBlockchain", "Tronix", "trustapp", "trustNFT",
+    "TycoonTrading", "UKcoins", "ULEI_COIN", "ULIT_COIN_", "UltraBlockchain", "UltraNFT", "UnifiDeFi", "UnitedBTC", "UNIUM_NFT",
+    "Universa_Blockchain", "unlimited_defi", "UnturnedTrading", "UpcomingNFT", "UselessCrypto", "ValereumBlockchain", "Valinity_defi",
+    "velarBTC", "VerusCoin", "VoxiesNFT", "VoyagerCrypto", "VstTrading", "vyper", "WallStreetBetsCrypto", "Wavesplatform",
+    "Web3DeBankDefi", "WenLamboDefi", "Whitelist_Airdrop", "Wizard_bsc", "WoofCoin", "WSB_defi", "XcelDefi", "XendFinance",
+    "XMax_Blockchain", "X_Token", "YBAOfficial", "YearnNFT", "YetuSwap", "yGOAT", "Yield_Farming", "zebec", "ZunaCoin",
+]))
 
 # Default Twitter accounts if none provided
 DEFAULT_TWITTER_ACCOUNTS = [
