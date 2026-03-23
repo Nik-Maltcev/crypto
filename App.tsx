@@ -47,6 +47,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'forecast'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
+  const [useGeminiFilter, setUseGeminiFilter] = useState(true); // true = Gemini+Claude, false = Claude Only
 
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
@@ -198,10 +199,13 @@ const App: React.FC = () => {
 
     const balanceNum = 10;
 
-    // Always: Gemini filter → Claude Opus 4.6 analysis
-    setStatus(`AI: Фильтрация данных через Gemini 2.5 Pro...`);
-    const filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
-    setStatus(`AI: Генерация прогноза (${modeText}) через Claude Opus 4.6...`);
+    // Pipeline: optionally filter through Gemini, then Claude analysis
+    let filteredContext: string | undefined = undefined;
+    if (useGeminiFilter) {
+      setStatus(`AI: Фильтрация данных через Gemini 2.5 Pro...`);
+      filteredContext = await filterDataWithGemini(posts, tweets, telegramMsgs, mode === 'single_coin' ? targetCoinSymbol : undefined);
+    }
+    setStatus(`AI: Генерация прогноза (${modeText}) через Claude Opus 4.6${useGeminiFilter ? '' : ' (без Gemini)'}...`);
     const analysis = await performClaudeAnalysis(posts, tweets, telegramMsgs, marketContext, mode, targetCoinSymbol, undefined, balanceNum, filteredContext);
 
     // Merge Real-time Prices only if coins exist (standard mode)
@@ -471,7 +475,7 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages]);
+  }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages, useGeminiFilter]);
 
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
@@ -541,6 +545,19 @@ const App: React.FC = () => {
                 </button>
               ) : (
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
+
+                  {/* Gemini toggle */}
+                  <button
+                    onClick={() => setUseGeminiFilter(prev => !prev)}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                      useGeminiFilter
+                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                        : 'bg-gray-800 text-gray-400 border-gray-700'
+                    }`}
+                    title={useGeminiFilter ? 'Gemini фильтрует → Claude анализирует' : 'Claude получает сырые данные напрямую'}
+                  >
+                    {useGeminiFilter ? 'Gemini + Claude' : 'Claude Only'}
+                  </button>
 
                   {/* Standard Trigger (frontend pipeline, 16h) */}
                   <button

@@ -2,6 +2,14 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { RedditPost, CombinedAnalysisResponse, Tweet, TelegramMessage, ChatFilterResult } from '../types';
 import { SYSTEM_INSTRUCTION } from '../constants';
 
+const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+
+// Route Gemini requests through backend proxy to bypass geo-restrictions
+const createGeminiClient = () => new GoogleGenAI({
+  apiKey: process.env.API_KEY,
+  httpOptions: { baseUrl: `${BACKEND_URL}/api/proxy/gemini` },
+});
+
 // --- SCHEMA 1: SIMPLE (Single Target 24h) ---
 const SIMPLE_COIN_SCHEMA: Schema = {
   type: Type.OBJECT,
@@ -200,9 +208,7 @@ export const performCombinedAnalysis = async (
     throw new Error("Нет данных для анализа ни из одного источника (Reddit, Twitter, Telegram пустые).");
   }
 
-  const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY
-  });
+  const ai = createGeminiClient();
 
   // Input Data - User explicitly requested NO limits for Reddit posts
   const redditPayload = JSON.stringify(posts.map(p => ({
@@ -421,9 +427,7 @@ const CHAT_FILTER_SCHEMA: Schema = {
 export const filterTelegramChats = async (
   chatData: Record<string, TelegramMessage[]>
 ): Promise<ChatFilterResult[]> => {
-  const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY
-  });
+  const ai = createGeminiClient();
 
   // Format the chat data into a dense context
   let contextText = "TELEGRAM CHATS HISTORY FOR ANALYSIS:\n\n";
@@ -489,9 +493,7 @@ export const filterDataWithGemini = async (
   telegramMsgs: TelegramMessage[],
   targetCoinSymbol?: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY
-  });
+  const ai = createGeminiClient();
 
   // NO LIMITS during data staging for Gemini 2.5 Pro (2M Token Context)
   const redditPayload = JSON.stringify(posts.map(p => ({
@@ -560,9 +562,7 @@ export const filterTradingCoinsWithGemini = async (
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[]
 ): Promise<string> => {
-  const ai = new GoogleGenAI({
-    apiKey: process.env.API_KEY
-  });
+  const ai = createGeminiClient();
 
   const now = Date.now();
   const HOUR = 3600 * 1000;
