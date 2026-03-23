@@ -25,17 +25,19 @@ export const performClaudeAnalysis = async (
 ${filteredContext}
     `;
   } else {
-    // Fallback to old behavior if no filter is provided
-    const redditPayload = JSON.stringify(posts.map(p => ({
+    // Claude Only mode: send raw data directly, but compress to fit context
+    // Sort Reddit by score, take top 300, trim text aggressively
+    const topReddit = [...posts].sort((a, b) => b.score - a.score).slice(0, 300);
+    const redditPayload = JSON.stringify(topReddit.map(p => ({
       title: p.title,
-      text: p.selftext ? p.selftext.substring(0, 500) : "",
-      subreddit: p.subreddit,
+      text: p.selftext ? p.selftext.substring(0, 200) : "",
+      sub: p.subreddit,
       score: p.score
     })));
 
     const twitterPayload = tweets.length > 0
-      ? JSON.stringify(tweets.slice(0, 50).map(t => ({
-        text: t.text.substring(0, 150),
+      ? JSON.stringify(tweets.slice(0, 200).map(t => ({
+        text: t.text.substring(0, 200),
         user: t.user
       })))
       : "No Twitter Data.";
@@ -48,9 +50,9 @@ ${filteredContext}
       : "No Telegram Data.";
 
     rawDataText = `
---- RAW DATA ---
-Reddit: ${redditPayload}
-Twitter: ${twitterPayload}
+--- RAW DATA (Claude Only, top posts by score) ---
+Reddit (${posts.length} total, top 300): ${redditPayload}
+Twitter (${tweets.length} total): ${twitterPayload}
 Telegram: ${telegramPayload}
     `;
   }
@@ -207,7 +209,7 @@ RULES: Russian language for text. Extremely concise.
       },
       body: JSON.stringify({
         model: "claude-opus-4-6",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [
           { role: "user", content: userPrompt }
