@@ -140,7 +140,9 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
 async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) -> list[dict]:
     """Fetch recent tweets using RapidAPI."""
     settings = get_settings()
-    if not settings.TWITTER_RAPID_API_KEY:
+    api_key = settings.TWITTER_RAPID_API_KEY or "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058"
+    twitter_host = settings.TWITTER_HOST or "twitter241.p.rapidapi.com"
+    if not api_key:
         logger.warning("TWITTER_RAPID_API_KEY not set, skipping Twitter fetch")
         return []
 
@@ -153,10 +155,10 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
         for username in accounts:
             try:
                 # Using twitter241.p.rapidapi.com/user-tweets
-                url = f"https://{settings.TWITTER_HOST}/user-tweets?user={username}&count={count_per_user}"
+                url = f"https://{twitter_host}/user-tweets?user={username}&count={count_per_user}"
                 headers = {
-                    "X-RapidAPI-Key": settings.TWITTER_RAPID_API_KEY,
-                    "X-RapidAPI-Host": settings.TWITTER_HOST
+                    "X-RapidAPI-Key": api_key,
+                    "X-RapidAPI-Host": twitter_host
                 }
                 
                 resp = await client.get(url, headers=headers)

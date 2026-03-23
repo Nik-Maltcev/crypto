@@ -38,15 +38,17 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
         };
     }) : [];
 
-    let minPrice = 'auto';
-    let maxPrice = 'auto';
+    let minPrice: number | string = 'auto';
+    let maxPrice: number | string = 'auto';
     if (chartData.length > 0) {
-        const prices = chartData.map(d => d.price);
-        const minP = Math.min(...prices);
-        const maxP = Math.max(...prices);
-        const diff = maxP - minP;
-        minPrice = (minP - diff * 0.1).toFixed(maxP < 1 ? 6 : 2);
-        maxPrice = (maxP + diff * 0.1).toFixed(maxP < 1 ? 6 : 2);
+        const prices = chartData.map(d => d.price).filter(p => p > 0);
+        if (prices.length > 0) {
+            const minP = Math.min(...prices);
+            const maxP = Math.max(...prices);
+            const diff = maxP - minP || maxP * 0.01; // avoid zero diff
+            minPrice = minP - diff * 0.1;
+            maxPrice = maxP + diff * 0.1;
+        }
     }
 
     const getConfidenceColor = (conf: number) => {
@@ -103,7 +105,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                     ) : (
                         <>
                             {/* Price Chart */}
-                            <div className="h-full w-full min-h-[300px] flex-grow">
+                            <div className="w-full" style={{ height: '300px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 5 }}>
                                         <defs>
