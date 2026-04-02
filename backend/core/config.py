@@ -37,8 +37,16 @@ class Settings(BaseSettings):
     def convert_database_url(cls, v: str) -> str:
         """Convert postgres:// to postgresql+asyncpg:// for async support."""
         import logging
+        import os
         logger = logging.getLogger(__name__)
+        
+        # Force read from env — pydantic may not pick it up in some Railway configs
+        env_val = os.environ.get("DATABASE_URL", "")
+        if env_val:
+            v = env_val
+            
         logger.info(f"DATABASE_URL raw value: '{v[:60] if v else 'EMPTY'}'")
+        
         if not v:
             return "sqlite+aiosqlite:///./data.db"
         if v.startswith("postgres://"):
