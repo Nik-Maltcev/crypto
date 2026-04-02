@@ -29,8 +29,23 @@ class Settings(BaseSettings):
     TELEGRAM_API_HASH: str
     TELEGRAM_PHONE: str = ""  # Optional when using StringSession
 
-    # Database — use Railway Volume path if available for persistence across deploys
-    DATABASE_URL: str = ""
+    # Database
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data.db"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def convert_database_url(cls, v: str) -> str:
+        """Convert postgres:// to postgresql+asyncpg:// for async support."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"DATABASE_URL raw value: '{v[:60] if v else 'EMPTY'}'")
+        if not v:
+            return "sqlite+aiosqlite:///./data.db"
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # CoinMarketCap
     CMC_API_KEY: str = ""
@@ -49,24 +64,6 @@ class Settings(BaseSettings):
     # Twitter RapidAPI (for auto-analysis)
     TWITTER_RAPID_API_KEY: str = ""
     TWITTER_HOST: str = "twitter241.p.rapidapi.com"
-
-    @field_validator("DATABASE_URL", mode="before")
-    @classmethod
-    def convert_database_url(cls, v: str) -> str:
-        """Convert postgres:// to postgresql+asyncpg:// for async support.
-        If empty, default to SQLite in persistent volume or local dir."""
-        import os
-        if not v:
-            # Use Railway volume for persistence if available
-            volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "")
-            if volume_path:
-                return f"sqlite+aiosqlite:///{volume_path}/data.db"
-            return "sqlite+aiosqlite:///./data.db"
-        if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
-        if v.startswith("postgresql://"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return v
 
     # Worker settings
     PARSE_DAYS: int = 2  # Today + yesterday
