@@ -31,7 +31,7 @@ const CryptoCard: React.FC<CryptoCardProps> = ({ coin, forecastLabel }) => {
     if (price === undefined) return "Н/Д";
     return price < 1
       ? `$${price.toFixed(6)}`
-      : `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      : `$${price.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
   };
 
   // Determine forecast values

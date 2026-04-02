@@ -128,7 +128,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             stroke="#4B5563"
                                             fontSize={12}
                                             width={80}
-                                            tickFormatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 2, maximumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 2 })}`}
+                                            tickFormatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 3, maximumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 3 })}`}
                                         />
 
                                         <Tooltip
@@ -140,7 +140,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             }}
                                             labelStyle={{ color: '#9CA3AF', marginBottom: '8px', fontWeight: 'bold' }}
                                             formatter={(value: any, name: any) => {
-                                                if (name === 'price') return [`$${value < 1 ? Number(value).toFixed(6) : Number(value).toLocaleString()}`, 'Цена'];
+                                                if (name === 'price') return [`$${value < 1 ? Number(value).toFixed(6) : Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`, 'Цена'];
                                                 if (name === 'change') return [`${value > 0 ? '+' : ''}${Number(value).toFixed(2)}%`, 'Изменение'];
                                                 return [value, name];
                                             }}
