@@ -19,21 +19,22 @@ _async_session: async_sessionmaker[AsyncSession] | None = None
 
 
 def get_async_engine() -> AsyncEngine:
-    """Get or create the async database engine.
-
-    Returns:
-        AsyncEngine instance connected to PostgreSQL.
-    """
+    """Get or create the async database engine."""
     global _async_engine
     if _async_engine is None:
         settings = get_settings()
-        _async_engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=False,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-        )
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Creating DB engine for: {settings.DATABASE_URL[:60]}...")
+        
+        kwargs = {"echo": False}
+        # Pool settings only for PostgreSQL, not SQLite
+        if "sqlite" not in settings.DATABASE_URL:
+            kwargs["pool_pre_ping"] = True
+            kwargs["pool_size"] = 5
+            kwargs["max_overflow"] = 10
+        
+        _async_engine = create_async_engine(settings.DATABASE_URL, **kwargs)
     return _async_engine
 
 

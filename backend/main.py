@@ -81,6 +81,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting service...")
     
     # Init database
+    settings = get_settings()
+    logger.info(f"DATABASE_URL: {settings.DATABASE_URL[:50]}...")
     await init_db()
     
     logger.info("Database ready")
