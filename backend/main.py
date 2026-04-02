@@ -80,6 +80,12 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown."""
     logger.info("Starting service...")
     
+    # Debug: dump all env vars that contain DATABASE or POSTGRES
+    import os
+    for k, v in os.environ.items():
+        if "DATABASE" in k.upper() or "POSTGRES" in k.upper() or "PG" in k.upper():
+            logger.info(f"ENV: {k}={v[:60]}...")
+    
     # Init database
     settings = get_settings()
     logger.info(f"DATABASE_URL: {settings.DATABASE_URL[:50]}...")
