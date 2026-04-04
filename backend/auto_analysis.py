@@ -390,12 +390,11 @@ OUTPUT RULES:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "kimi-k2.5",
+                "model": "kimi-k2-thinking",
                 "messages": [
                     {"role": "system", "content": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."},
                     {"role": "user", "content": prompt},
                 ],
-                "thinking": {"type": "disabled"},
             },
         )
         if resp.status_code != 200:
