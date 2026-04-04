@@ -4,30 +4,11 @@ import { SYSTEM_INSTRUCTION } from '../constants';
 
 const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
-// Kimi K2.5 filter via backend proxy (OpenAI-compatible API)
-const callKimiFilter = async (prompt: string, systemPrompt: string): Promise<string> => {
-  const resp = await fetch(`${BACKEND_URL}/api/proxy/kimi`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'kimi-k2-thinking',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-    }),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Kimi API error: ${resp.status} - ${err.substring(0, 200)}`);
-  }
-
-  const data = await resp.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('Empty response from Kimi K2.5');
-  return text.trim();
-};
+// Route Gemini requests through backend proxy to bypass geo-restrictions
+const createGeminiClient = () => new GoogleGenAI({
+  apiKey: process.env.API_KEY,
+  httpOptions: { baseUrl: `${BACKEND_URL}/api/proxy/gemini` },
+});
 
 // --- SCHEMA 1: SIMPLE (Single Target 24h) ---
 const SIMPLE_COIN_SCHEMA: Schema = {
@@ -512,6 +493,9 @@ export const filterDataWithGemini = async (
   telegramMsgs: TelegramMessage[],
   targetCoinSymbol?: string
 ): Promise<string> => {
+  const ai = createGeminiClient();
+
+  // NO LIMITS during data staging for Gemini 2.5 Pro (2M Token Context)
   const redditPayload = JSON.stringify(posts.map(p => ({
     title: p.title,
     text: p.selftext ? p.selftext.substring(0, 1000) : "",
@@ -529,16 +513,20 @@ export const filterDataWithGemini = async (
 
   const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL (и любые крупные Altcoins)";
 
-  const prompt = `INPUT RAW DATA:
---- REDDIT ---
-${redditPayload}
---- TWITTER ---
-${twitterPayload}
---- TELEGRAM ---
-${telegramPayload}
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: `
+INPUT RAW DATA:
+  --- REDDIT ---
+  ${redditPayload}
+  --- TWITTER ---
+  ${twitterPayload}
+  --- TELEGRAM ---
+  ${telegramPayload}
 
 TASK: 
-You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
+You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 24 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
 Filter out all spam, useless hype, unrelated chatter, and noise.
 Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
 
@@ -548,13 +536,22 @@ OUTPUT RULES:
 - Cite specific metrics if they appear (e.g. "On Reddit, strong bullish sentiment for SOL due to 1.5M volume...").
 - Do NOT make your own price predictions here. You are just a summarizer for Claude.
 - Language: Russian.
-- Keep the final output under 5,000 words.`;
+- Keep the final output under 5,000 words.
+      `,
+      config: {
+        systemInstruction: "You are an elite data extraction engine. You filter noise and keep pure signal.",
+        temperature: 0.1, // Low temp for factual extraction
+      }
+    });
 
-  try {
-    return await callKimiFilter(prompt, "You are an elite data extraction engine. You filter noise and keep pure signal.");
+    const text = response.text || "";
+    if (!text) throw new Error("Empty response from Gemini Filter");
+
+    return text.trim();
+
   } catch (error) {
-    console.error("Kimi Pre-Filter Error:", error);
-    throw new Error("Ошибка при фильтрации данных через Kimi K2.5: " + (error instanceof Error ? error.message : String(error)));
+    console.error("Gemini Pre-Filter Error:", error);
+    throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
   }
 };
 

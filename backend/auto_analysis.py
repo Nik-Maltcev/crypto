@@ -14,7 +14,6 @@ Results are stored in the AnalysisLog database table.
 import asyncio
 import json
 import logging
-import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -352,8 +351,8 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_kimi(all_data: list[dict], moonshot_api_key: str) -> str:
-    """Use Kimi K2.5 to filter and compress multi-source social data."""
+async def _filter_with_gemini(all_data: list[dict], gemini_api_key: str) -> str:
+    """Use Gemini to filter and compress multi-source social data."""
     # Group by source for better prompt structure
     sources = {"Reddit": [], "Twitter": [], "Telegram": []}
     for item in all_data:
@@ -363,6 +362,7 @@ async def _filter_with_kimi(all_data: list[dict], moonshot_api_key: str) -> str:
     for src, items in sources.items():
         if items:
             payload_summary.append(f"--- {src.upper()} ({len(items)} items) ---")
+            # Cap each source to avoid blowing context limits
             limited_items = items[:150]
             payload_summary.append(json.dumps(limited_items, ensure_ascii=False))
 
@@ -382,29 +382,29 @@ OUTPUT RULES:
 - Language: Russian.
 - Keep the final output under 3,000 words."""
 
-    async with httpx.AsyncClient(timeout=180) as client:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
+
+    async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            "https://api.moonshot.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {moonshot_api_key}",
-                "Content-Type": "application/json",
-            },
+            url,
             json={
-                "model": "kimi-k2-thinking",
-                "messages": [
-                    {"role": "system", "content": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."},
-                    {"role": "user", "content": prompt},
-                ],
+                "contents": [{"parts": [{"text": prompt}]}],
+                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
+                "generationConfig": {"temperature": 0.1},
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Kimi API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Kimi API error: {resp.status_code}")
+            logger.error(f"Gemini API error: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"Gemini API error: {resp.status_code}")
 
         data = resp.json()
-        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise RuntimeError("Empty Gemini response")
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = parts[0].get("text", "") if parts else ""
         if not text:
-            raise RuntimeError("Empty response from Kimi K2.5")
+            raise RuntimeError("Empty text in Gemini response")
         return text.strip()
 
 
@@ -528,13 +528,8 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys
-    if not settings.CLAUDE_API_KEY:
-        logger.error("CLAUDE_API_KEY missing. Skipping analysis.")
-        return
-    
-    moonshot_key = os.environ.get("MOONSHOT_API_KEY", "")
-    if not moonshot_key:
-        logger.error("MOONSHOT_API_KEY missing. Skipping analysis.")
+    if not settings.CLAUDE_API_KEY or not settings.GEMINI_API_KEY:
+        logger.error("AI API keys missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
@@ -574,8 +569,8 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
             # 4. Filters & AI
-            logger.info("Step 3/4: Kimi K2.5 Filtration...")
-            filtered_context = await _filter_with_kimi(combined_data, moonshot_key)
+            logger.info("Step 3/4: Gemini Filtration...")
+            filtered_context = await _filter_with_gemini(combined_data, settings.GEMINI_API_KEY)
             
             logger.info("Step 4/4: Claude Analysis...")
             result = await _analyze_with_claude(filtered_context, market_context, settings.CLAUDE_API_KEY)

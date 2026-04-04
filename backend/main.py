@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -97,7 +96,7 @@ async def lifespan(app: FastAPI):
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
     scheduler = None
     settings = get_settings()
-    if settings.CLAUDE_API_KEY and os.environ.get("MOONSHOT_API_KEY", ""):
+    if settings.CLAUDE_API_KEY and settings.GEMINI_API_KEY:
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
@@ -123,7 +122,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
-        logger.warning("CLAUDE_API_KEY or MOONSHOT_API_KEY not set. Scheduled analysis DISABLED.")
+        logger.warning("CLAUDE_API_KEY or GEMINI_API_KEY not set. Scheduled analysis DISABLED.")
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
@@ -500,33 +499,6 @@ async def proxy_gemini_request(path: str, request: Request):
     except Exception as e:
         logger.error(f"Gemini Proxy error: {e}")
         raise HTTPException(500, f"Gemini Proxy error: {str(e)}")
-
-
-@app.post("/api/proxy/kimi")
-async def proxy_kimi_request(request: Request):
-    """Proxy for Kimi K2.5 API (OpenAI-compatible)."""
-    import httpx
-    import os
-
-    api_key = os.environ.get("MOONSHOT_API_KEY", "")
-    if not api_key:
-        raise HTTPException(500, "MOONSHOT_API_KEY not configured on server")
-
-    try:
-        body = await request.json()
-        async with httpx.AsyncClient(timeout=180) as client:
-            resp = await client.post(
-                "https://api.moonshot.ai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-            )
-        return JSONResponse(content=resp.json(), status_code=resp.status_code)
-    except Exception as e:
-        logger.error(f"Kimi Proxy error: {e}")
-        raise HTTPException(500, f"Kimi Proxy error: {str(e)}")
 
 
 # ==================== ANALYSIS HISTORY ENDPOINTS ====================
