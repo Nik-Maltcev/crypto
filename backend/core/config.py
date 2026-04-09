@@ -39,8 +39,8 @@ class Settings(BaseSettings):
         import os
         logger = logging.getLogger(__name__)
         
-        # Force read from env — pydantic may not pick it up in some Railway configs
-        env_val = os.environ.get("DATABASE_URL", "")
+        # Railway may provide the URL under different names
+        env_val = os.environ.get("DATABASE_URL", "") or os.environ.get("DATABASE_PUBLIC_URL", "") or os.environ.get("DATABASE_PRIVATE_URL", "")
         if env_val:
             v = env_val
             
