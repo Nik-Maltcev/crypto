@@ -487,15 +487,15 @@ export const filterTelegramChats = async (
 
 // --- PIPELINE STEP 1: COMPRESSION/FILTERING ---
 // Used when Claude is the main engine but data exceeds its context window
+// Now uses Qwen 3.6 Plus via OpenRouter (free, 1M context)
 export const filterDataWithGemini = async (
   posts: RedditPost[],
   tweets: Tweet[],
   telegramMsgs: TelegramMessage[],
   targetCoinSymbol?: string
 ): Promise<string> => {
-  const ai = createGeminiClient();
+  const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
-  // NO LIMITS during data staging for Gemini 2.5 Pro (2M Token Context)
   const redditPayload = JSON.stringify(posts.map(p => ({
     title: p.title,
     text: p.selftext ? p.selftext.substring(0, 1000) : "",
@@ -513,20 +513,16 @@ export const filterDataWithGemini = async (
 
   const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL (и любые крупные Altcoins)";
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: `
-INPUT RAW DATA:
-  --- REDDIT ---
-  ${redditPayload}
-  --- TWITTER ---
-  ${twitterPayload}
-  --- TELEGRAM ---
-  ${telegramPayload}
+  const prompt = `INPUT RAW DATA:
+--- REDDIT ---
+${redditPayload}
+--- TWITTER ---
+${twitterPayload}
+--- TELEGRAM ---
+${telegramPayload}
 
 TASK: 
-You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 24 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
+You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
 Filter out all spam, useless hype, unrelated chatter, and noise.
 Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
 
@@ -536,22 +532,34 @@ OUTPUT RULES:
 - Cite specific metrics if they appear (e.g. "On Reddit, strong bullish sentiment for SOL due to 1.5M volume...").
 - Do NOT make your own price predictions here. You are just a summarizer for Claude.
 - Language: Russian.
-- Keep the final output under 5,000 words.
-      `,
-      config: {
-        systemInstruction: "You are an elite data extraction engine. You filter noise and keep pure signal.",
-        temperature: 0.1, // Low temp for factual extraction
-      }
+- Keep the final output under 5,000 words.`;
+
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/proxy/openrouter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.6-plus:free',
+        messages: [
+          { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
+          { role: 'user', content: prompt },
+        ],
+      }),
     });
 
-    const text = response.text || "";
-    if (!text) throw new Error("Empty response from Gemini Filter");
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Qwen API error: ${resp.status} - ${err.substring(0, 200)}`);
+    }
 
+    const data = await resp.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    if (!text) throw new Error('Empty response from Qwen 3.6 Plus');
     return text.trim();
 
   } catch (error) {
-    console.error("Gemini Pre-Filter Error:", error);
-    throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
+    console.error("Qwen Pre-Filter Error:", error);
+    throw new Error("Ошибка при фильтрации данных через Qwen 3.6 Plus: " + (error instanceof Error ? error.message : String(error)));
   }
 };
 
