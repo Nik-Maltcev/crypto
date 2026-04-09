@@ -711,7 +711,7 @@ async def start_forecast_tracking(analysis_id: int):
     count = await save_forecast_from_analysis(analysis_id)
     if count == 0:
         raise HTTPException(400, "No trackable forecasts found in this analysis. "
-                                 "Ensure it has hourlyForecast data for BTC/ETH/SOL/XRP.")
+                                 "Ensure it has hourlyForecast data for BTC/ETH/SOL/XRP/HYPE/DOGE/BNB.")
     return {"success": True, "trackings_created": count}
 
 

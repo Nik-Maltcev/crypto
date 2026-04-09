@@ -21,7 +21,7 @@ from core.models import ForecastTracking, AnalysisLog
 
 logger = logging.getLogger(__name__)
 
-TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP"]
+TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "DOGE", "BNB"]
 CMC_QUOTES_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
 
 

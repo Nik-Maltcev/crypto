@@ -511,7 +511,7 @@ export const filterDataWithGemini = async (
     ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: msg.text })))
     : "No Telegram Data.";
 
-  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL (и любые крупные Altcoins)";
+  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins)";
 
   const prompt = `INPUT RAW DATA:
 --- REDDIT ---
