@@ -351,8 +351,8 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_qwen(all_data: list[dict], openrouter_api_key: str) -> str:
-    """Use Qwen 3.6 Plus via OpenRouter to filter and compress multi-source social data."""
+async def _filter_with_qwen(all_data: list[dict], dashscope_api_key: str) -> str:
+    """Use Qwen 3.5 Plus via Alibaba DashScope to filter and compress multi-source social data."""
     sources = {"Reddit": [], "Twitter": [], "Telegram": []}
     for item in all_data:
         sources[item["source"]].append(item)
@@ -381,13 +381,13 @@ OUTPUT RULES:
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {openrouter_api_key}",
+                "Authorization": f"Bearer {dashscope_api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen/qwen3.6-plus",
+                "model": "qwen3.5-plus",
                 "messages": [
                     {"role": "system", "content": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."},
                     {"role": "user", "content": prompt},
@@ -395,13 +395,13 @@ OUTPUT RULES:
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Qwen/OpenRouter API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Qwen/OpenRouter API error: {resp.status_code}")
+            logger.error(f"Qwen/DashScope API error: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"Qwen/DashScope API error: {resp.status_code}")
 
         data = resp.json()
         text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         if not text:
-            raise RuntimeError("Empty response from Qwen 3.6 Plus")
+            raise RuntimeError("Empty response from Qwen 3.5 Plus")
         return text.strip()
 
 
@@ -525,9 +525,9 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not settings.CLAUDE_API_KEY or not openrouter_key:
-        logger.error("CLAUDE_API_KEY or OPENROUTER_API_KEY missing. Skipping analysis.")
+    dashscope_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not settings.CLAUDE_API_KEY or not dashscope_key:
+        logger.error("CLAUDE_API_KEY or DASHSCOPE_API_KEY missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
@@ -567,8 +567,8 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
             # 4. Filters & AI
-            logger.info("Step 3/4: Qwen 3.6 Plus Filtration (via OpenRouter)...")
-            filtered_context = await _filter_with_qwen(combined_data, openrouter_key)
+            logger.info("Step 3/4: Qwen 3.5 Plus Filtration (via DashScope)...")
+            filtered_context = await _filter_with_qwen(combined_data, dashscope_key)
             
             logger.info("Step 4/4: Claude Analysis...")
             result = await _analyze_with_claude(filtered_context, market_context, settings.CLAUDE_API_KEY)

@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
     scheduler = None
     settings = get_settings()
-    if settings.CLAUDE_API_KEY and os.environ.get("OPENROUTER_API_KEY", ""):
+    if settings.CLAUDE_API_KEY and os.environ.get("DASHSCOPE_API_KEY", ""):
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
-        logger.warning("CLAUDE_API_KEY or OPENROUTER_API_KEY not set. Scheduled analysis DISABLED.")
+        logger.warning("CLAUDE_API_KEY or DASHSCOPE_API_KEY not set. Scheduled analysis DISABLED.")
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
@@ -503,19 +503,19 @@ async def proxy_gemini_request(path: str, request: Request):
 
 
 @app.post("/api/proxy/openrouter")
-async def proxy_openrouter_request(request: Request):
-    """Proxy for OpenRouter API (Qwen 3.6 Plus etc.)."""
+async def proxy_dashscope_request(request: Request):
+    """Proxy for Alibaba DashScope API (Qwen 3.5 Plus)."""
     import httpx
 
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
     if not api_key:
-        raise HTTPException(500, "OPENROUTER_API_KEY not configured on server")
+        raise HTTPException(500, "DASHSCOPE_API_KEY not configured on server")
 
     try:
         body = await request.json()
         async with httpx.AsyncClient(timeout=180) as client:
             resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+                "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
@@ -524,8 +524,8 @@ async def proxy_openrouter_request(request: Request):
             )
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
     except Exception as e:
-        logger.error(f"OpenRouter Proxy error: {e}")
-        raise HTTPException(500, f"OpenRouter Proxy error: {str(e)}")
+        logger.error(f"DashScope Proxy error: {e}")
+        raise HTTPException(500, f"DashScope Proxy error: {str(e)}")
 
 
 # ==================== ANALYSIS HISTORY ENDPOINTS ====================

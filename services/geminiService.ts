@@ -539,7 +539,7 @@ OUTPUT RULES:
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-plus',
+        model: 'qwen3.5-plus',
         messages: [
           { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
           { role: 'user', content: prompt },
@@ -554,12 +554,12 @@ OUTPUT RULES:
 
     const data = await resp.json();
     const text = data.choices?.[0]?.message?.content || '';
-    if (!text) throw new Error('Empty response from Qwen 3.6 Plus');
+    if (!text) throw new Error('Empty response from Qwen 3.5 Plus');
     return text.trim();
 
   } catch (error) {
     console.error("Qwen Pre-Filter Error:", error);
-    throw new Error("Ошибка при фильтрации данных через Qwen 3.6 Plus: " + (error instanceof Error ? error.message : String(error)));
+    throw new Error("Ошибка при фильтрации данных через Qwen 3.5 Plus: " + (error instanceof Error ? error.message : String(error)));
   }
 };
 
