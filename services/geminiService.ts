@@ -539,7 +539,7 @@ OUTPUT RULES:
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-plus:free',
+        model: 'qwen/qwen3.6-plus',
         messages: [
           { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
           { role: 'user', content: prompt },
