@@ -524,10 +524,15 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     settings = get_settings()
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
-    # Validate keys
+    # Validate keys — read directly from os.environ (pydantic may not pick up Railway env vars)
     dashscope_key = os.environ.get("DASHSCOPE_API_KEY", "")
-    if not settings.CLAUDE_API_KEY or not dashscope_key:
-        logger.error("CLAUDE_API_KEY or DASHSCOPE_API_KEY missing. Skipping analysis.")
+    claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
+    reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
+    reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
+    cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
+    
+    if not claude_key or not dashscope_key:
+        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or DASHSCOPE_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
@@ -543,14 +548,17 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             
             reddit_task = asyncio.Future()
             reddit_task.set_result([])
-            if settings.REDDIT_CLIENT_ID and settings.REDDIT_CLIENT_SECRET:
-                reddit_token = await _get_reddit_token(settings.REDDIT_CLIENT_ID, settings.REDDIT_CLIENT_SECRET)
+            if reddit_id and reddit_secret:
+                reddit_token = await _get_reddit_token(reddit_id, reddit_secret)
                 reddit_task = _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
+            else:
+                logger.warning("REDDIT_CLIENT_ID/SECRET not set, skipping Reddit")
             
             twitter_task = _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
             
             # Wait for parallel tasks
             reddit_posts, twitter_posts = await asyncio.gather(reddit_task, twitter_task)
+            logger.info(f"Fetched: Reddit={len(reddit_posts)}, Twitter={len(twitter_posts)}")
             
             # 2. Telegram — TEMPORARILY DISABLED
             logger.info("Step 2/4: Telegram SKIPPED (temporarily disabled)")
@@ -559,19 +567,20 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             # 3. Market context
             logger.info("Market Context...")
             market_context = "MARKET CONTEXT: Data unavailable."
-            if settings.CMC_API_KEY:
-                market_context = await _fetch_market_data(settings.CMC_API_KEY)
+            if cmc_key:
+                market_context = await _fetch_market_data(cmc_key)
 
             combined_data = reddit_posts + twitter_posts + telegram_posts
             if not combined_data:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
             # 4. Filters & AI
-            logger.info("Step 3/4: Qwen 3.5 Plus Filtration (via DashScope)...")
+            logger.info(f"Step 3/4: Qwen 3.6 Plus Filtration (via DashScope, {len(combined_data)} items)...")
             filtered_context = await _filter_with_qwen(combined_data, dashscope_key)
+            logger.info(f"Qwen filter done, output length: {len(filtered_context)} chars")
             
             logger.info("Step 4/4: Claude Analysis...")
-            result = await _analyze_with_claude(filtered_context, market_context, settings.CLAUDE_API_KEY)
+            result = await _analyze_with_claude(filtered_context, market_context, claude_key)
 
             # Save
             log.finished_at = datetime.utcnow()

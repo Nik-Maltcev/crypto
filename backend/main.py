@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
     scheduler = None
     settings = get_settings()
-    if settings.CLAUDE_API_KEY and os.environ.get("DASHSCOPE_API_KEY", ""):
+    if os.environ.get("CLAUDE_API_KEY", "") and os.environ.get("DASHSCOPE_API_KEY", ""):
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
