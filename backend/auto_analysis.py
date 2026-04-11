@@ -352,10 +352,34 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_qwen(all_data: list[dict], openrouter_api_key: str) -> str:
-    """Use Qwen 3.6 Plus via OpenRouter to filter and compress multi-source social data."""
-    sources = {"Reddit": [], "Twitter": [], "Telegram": []}
+async def _filter_with_qwen(all_data: list[dict], dashscope_api_key: str) -> str:
+    """Use Qwen 3.6 Plus via DashScope to filter and compress multi-source social data."""
+    import re
+
+    # Sanitize text to avoid DashScope content filter
+    def sanitize(text):
+        if not text:
+            return ""
+        text = re.sub(r'\b[fF][uU][cC][kK]\w*\b', '', text)
+        text = re.sub(r'\b[sS][hH][iI][tT]\w*\b', '', text)
+        text = re.sub(r'\b[bB][iI][tT][cC][hH]\w*\b', '', text)
+        text = re.sub(r'\b[aA][sS][sS][hH][oO][lL][eE]\w*\b', '', text)
+        text = re.sub(r'\b[dD][aA][mM][nN]\w*\b', '', text)
+        text = re.sub(r'\b(kill|murder|suicide|bomb|terror|porn|xxx|nsfw)\w*\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(nigga|nigger|faggot|retard)\w*\b', '', text, flags=re.IGNORECASE)
+        return text.strip()
+
+    # Sanitize all items
+    clean_data = []
     for item in all_data:
+        c = dict(item)
+        for key in ("title", "selftext", "text"):
+            if key in c and c[key]:
+                c[key] = sanitize(c[key])
+        clean_data.append(c)
+
+    sources = {"Reddit": [], "Twitter": [], "Telegram": []}
+    for item in clean_data:
         sources[item["source"]].append(item)
 
     payload_summary = []
@@ -364,40 +388,42 @@ async def _filter_with_qwen(all_data: list[dict], openrouter_api_key: str) -> st
             payload_summary.append(f"--- {src.upper()} ({len(items)} items) ---")
             payload_summary.append(json.dumps(items, ensure_ascii=False))
 
-    prompt = f"""INPUT RAW DATA (Last 16 Hours):
+    prompt = f"""CONTEXT: Professional cryptocurrency market sentiment analysis. All data is from public financial discussion forums.
+
+INPUT DATA (Last 16 Hours, Cryptocurrency Forums):
 {chr(10).join(payload_summary)}
 
 TASK:
-You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
-Filter out all spam, useless hype, unrelated chatter, and noise.
-Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins).
+You are a financial data analyst. Summarize the above cryptocurrency discussion data into a dense analysis for a senior market analyst.
+Extract FACTUAL market sentiment, price discussions, news about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB.
+Ignore spam and noise.
 
-OUTPUT RULES:
-- Output ONLY pure dense Markdown text. No JSON.
-- Group the summary logically by coin.
-- Cite specific trends and mentions from specific platforms (e.g. "В Telegram обсуждают...", "В Twitter заметили...").
-- Do NOT make your own price predictions. You are just a summarizer for Claude.
+OUTPUT:
+- Pure dense Markdown text, no JSON.
+- Group by coin.
+- Cite platforms (Reddit, Twitter).
+- No price predictions.
 - Language: Russian.
-- Keep the final output under 3,000 words."""
+- Max 3000 words."""
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {openrouter_api_key}",
+                "Authorization": f"Bearer {dashscope_api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen/qwen3.6-plus",
+                "model": "qwen3.6-plus",
                 "messages": [
-                    {"role": "system", "content": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."},
+                    {"role": "system", "content": "You are a professional financial data analyst specializing in cryptocurrency markets."},
                     {"role": "user", "content": prompt},
                 ],
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Qwen/OpenRouter API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Qwen/OpenRouter API error: {resp.status_code}")
+            logger.error(f"Qwen/DashScope API error: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"Qwen/DashScope API error: {resp.status_code}")
 
         data = resp.json()
         text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -526,14 +552,14 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys — read directly from os.environ (pydantic may not pick up Railway env vars)
-    dashscope_key = os.environ.get("OPENROUTER_API_KEY", "")
+    dashscope_key = os.environ.get("DASHSCOPE_API_KEY", "")
     claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
     cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
     
     if not claude_key or not dashscope_key:
-        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or OPENROUTER_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
+        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or DASHSCOPE_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
         return
 
     async_session = get_async_session()

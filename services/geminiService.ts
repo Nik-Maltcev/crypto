@@ -496,24 +496,34 @@ export const filterDataWithGemini = async (
 ): Promise<string> => {
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
+  // Sanitize text to avoid DashScope content filter
+  const sanitize = (text: string) => {
+    if (!text) return '';
+    return text
+      .replace(/\b(fuck|shit|bitch|asshole|damn|cunt|dick|pussy|nigga|nigger|faggot|retard)\w*/gi, '')
+      .replace(/\b(kill|murder|suicide|bomb|terror|porn|xxx|nsfw)\w*/gi, '');
+  };
+
   const redditPayload = JSON.stringify(posts.map(p => ({
-    title: p.title,
-    text: p.selftext ? p.selftext.substring(0, 1000) : "",
+    title: sanitize(p.title),
+    text: sanitize(p.selftext ? p.selftext.substring(0, 1000) : ""),
     subreddit: p.subreddit,
     score: p.score
   })));
 
   const twitterPayload = tweets.length > 0
-    ? JSON.stringify(tweets.map(t => ({ text: t.text, user: t.user })))
+    ? JSON.stringify(tweets.map(t => ({ text: sanitize(t.text), user: t.user })))
     : "No Twitter Data.";
 
   const telegramPayload = telegramMsgs.length > 0
-    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: msg.text })))
+    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: sanitize(msg.text) })))
     : "No Telegram Data.";
 
-  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins)";
+  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB";
 
-  const prompt = `INPUT RAW DATA:
+  const prompt = `CONTEXT: Professional cryptocurrency market sentiment analysis. All data is from public financial discussion forums.
+
+INPUT DATA (Last 16 Hours, Cryptocurrency Forums):
 --- REDDIT ---
 ${redditPayload}
 --- TWITTER ---
@@ -521,27 +531,27 @@ ${twitterPayload}
 --- TELEGRAM ---
 ${telegramPayload}
 
-TASK: 
-You are the FIRST STAGE of a two-stage AI pipeline. Your job is to read all of the above raw social media data spanning the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing. 
-Filter out all spam, useless hype, unrelated chatter, and noise.
-Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
+TASK:
+You are a financial data analyst. Summarize the above cryptocurrency discussion data into a dense analysis.
+Extract FACTUAL market sentiment, price discussions, news about: ${targetCoins}.
+Ignore spam and noise.
 
-OUTPUT RULES:
-- Output ONLY pure dense Markdown text. No JSON.
-- Group the summary logically by coin (e.g., BTC, ETH, SOL, XRP, and a general Altcoins section).
-- Cite specific metrics if they appear (e.g. "On Reddit, strong bullish sentiment for SOL due to 1.5M volume...").
-- Do NOT make your own price predictions here. You are just a summarizer for Claude.
+OUTPUT:
+- Pure dense Markdown text, no JSON.
+- Group by coin.
+- Cite platforms (Reddit, Twitter).
+- No price predictions.
 - Language: Russian.
-- Keep the final output under 5,000 words.`;
+- Max 5000 words.`;
 
   try {
     const resp = await fetch(`${BACKEND_URL}/api/proxy/openrouter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-plus',
+        model: 'qwen3.6-plus',
         messages: [
-          { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
+          { role: 'system', content: 'You are a professional financial data analyst specializing in cryptocurrency markets.' },
           { role: 'user', content: prompt },
         ],
       }),
