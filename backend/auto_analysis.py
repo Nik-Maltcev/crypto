@@ -352,8 +352,8 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_qwen(all_data: list[dict], dashscope_api_key: str) -> str:
-    """Use Qwen 3.5 Plus via Alibaba DashScope to filter and compress multi-source social data."""
+async def _filter_with_qwen(all_data: list[dict], openrouter_api_key: str) -> str:
+    """Use Qwen 3.6 Plus via OpenRouter to filter and compress multi-source social data."""
     sources = {"Reddit": [], "Twitter": [], "Telegram": []}
     for item in all_data:
         sources[item["source"]].append(item)
@@ -382,13 +382,13 @@ OUTPUT RULES:
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
-            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {dashscope_api_key}",
+                "Authorization": f"Bearer {openrouter_api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen3.6-plus",
+                "model": "qwen/qwen3.6-plus",
                 "messages": [
                     {"role": "system", "content": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."},
                     {"role": "user", "content": prompt},
@@ -396,13 +396,13 @@ OUTPUT RULES:
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Qwen/DashScope API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Qwen/DashScope API error: {resp.status_code}")
+            logger.error(f"Qwen/OpenRouter API error: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"Qwen/OpenRouter API error: {resp.status_code}")
 
         data = resp.json()
         text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         if not text:
-            raise RuntimeError("Empty response from Qwen 3.5 Plus")
+            raise RuntimeError("Empty response from Qwen 3.6 Plus")
         return text.strip()
 
 
@@ -526,14 +526,14 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys — read directly from os.environ (pydantic may not pick up Railway env vars)
-    dashscope_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    dashscope_key = os.environ.get("OPENROUTER_API_KEY", "")
     claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
     cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
     
     if not claude_key or not dashscope_key:
-        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or DASHSCOPE_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
+        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or OPENROUTER_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
