@@ -486,7 +486,7 @@ RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-
             },
             json={
                 "model": "claude-opus-4-6",
-                "max_tokens": 4096,
+                "max_tokens": 16384,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
             },
