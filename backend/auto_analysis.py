@@ -476,7 +476,7 @@ DO NOT use null. DO NOT skip any hour. DO NOT provide "undefined". Every single 
 
 RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-анализ (24ч)"""
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
             CLAUDE_API_URL,
             headers={
@@ -516,7 +516,18 @@ RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-
         if not text:
             raise RuntimeError("Empty response from Claude")
 
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.error(f"Claude JSON parse error at pos {e.pos}: {text[max(0,e.pos-50):e.pos+50] if e.pos else text[:100]}")
+            # Try aggressive recovery: find the last valid closing brace
+            for i in range(len(text) - 1, -1, -1):
+                if text[i] == '}':
+                    try:
+                        return json.loads(text[:i+1])
+                    except json.JSONDecodeError:
+                        continue
+            raise RuntimeError(f"Failed to parse Claude response as JSON: {str(e)}")
 
 
 async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
@@ -578,7 +589,7 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             # 4. Filters & AI
             logger.info(f"Step 3/4: Gemini 2.5 Flash Filtration ({len(combined_data)} items)...")
             filtered_context = await _filter_with_gemini(combined_data, gemini_key)
-            logger.info(f"Qwen filter done, output length: {len(filtered_context)} chars")
+            logger.info(f"Gemini filter done, output length: {len(filtered_context)} chars")
             
             logger.info("Step 4/4: Claude Analysis...")
             result = await _analyze_with_claude(filtered_context, market_context, claude_key)
