@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
     scheduler = None
     settings = get_settings()
-    if os.environ.get("CLAUDE_API_KEY", "") and os.environ.get("DASHSCOPE_API_KEY", ""):
+    if os.environ.get("CLAUDE_API_KEY", "") and os.environ.get("GEMINI_API_KEY", ""):
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
-        logger.warning("CLAUDE_API_KEY or DASHSCOPE_API_KEY not set. Scheduled analysis DISABLED.")
+        logger.warning("CLAUDE_API_KEY or GEMINI_API_KEY not set. Scheduled analysis DISABLED.")
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
@@ -503,29 +503,54 @@ async def proxy_gemini_request(path: str, request: Request):
 
 
 @app.post("/api/proxy/openrouter")
-async def proxy_dashscope_request(request: Request):
-    """Proxy for DashScope API (Qwen 3.6 Plus)."""
+async def proxy_gemini_filter_request(request: Request):
+    """Proxy for Gemini API (frontend filter requests)."""
     import httpx
 
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
-        raise HTTPException(500, "DASHSCOPE_API_KEY not configured on server")
+        raise HTTPException(500, "GEMINI_API_KEY not configured on server")
 
     try:
         body = await request.json()
+        # Convert OpenAI format to Gemini format
+        messages = body.get("messages", [])
+        system_text = ""
+        user_text = ""
+        for msg in messages:
+            if msg["role"] == "system":
+                system_text = msg["content"]
+            elif msg["role"] == "user":
+                user_text = msg["content"]
+
+        gemini_body = {
+            "contents": [{"parts": [{"text": user_text}]}],
+            "generationConfig": {"temperature": 0.1},
+        }
+        if system_text:
+            gemini_body["systemInstruction"] = {"parts": [{"text": system_text}]}
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         async with httpx.AsyncClient(timeout=180) as client:
-            resp = await client.post(
-                "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-            )
-        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+            resp = await client.post(url, json=gemini_body)
+
+        if resp.status_code != 200:
+            return JSONResponse(content={"error": resp.text[:500]}, status_code=resp.status_code)
+
+        data = resp.json()
+        candidates = data.get("candidates", [])
+        text = ""
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = parts[0].get("text", "") if parts else ""
+
+        # Return in OpenAI format for frontend compatibility
+        return JSONResponse(content={
+            "choices": [{"message": {"content": text, "role": "assistant"}}]
+        })
     except Exception as e:
-        logger.error(f"DashScope Proxy error: {e}")
-        raise HTTPException(500, f"DashScope Proxy error: {str(e)}")
+        logger.error(f"Gemini Filter Proxy error: {e}")
+        raise HTTPException(500, f"Gemini Filter Proxy error: {str(e)}")
 
 
 # ==================== ANALYSIS HISTORY ENDPOINTS ====================

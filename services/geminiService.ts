@@ -486,8 +486,7 @@ export const filterTelegramChats = async (
 };
 
 // --- PIPELINE STEP 1: COMPRESSION/FILTERING ---
-// Used when Claude is the main engine but data exceeds its context window
-// Now uses Qwen 3.6 Plus via OpenRouter (free, 1M context)
+// Uses Gemini 2.5 Flash via backend proxy
 export const filterDataWithGemini = async (
   posts: RedditPost[],
   tweets: Tweet[],
@@ -496,34 +495,24 @@ export const filterDataWithGemini = async (
 ): Promise<string> => {
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
-  // Sanitize text to avoid DashScope content filter
-  const sanitize = (text: string) => {
-    if (!text) return '';
-    return text
-      .replace(/\b(fuck|shit|bitch|asshole|damn|cunt|dick|pussy|nigga|nigger|faggot|retard)\w*/gi, '')
-      .replace(/\b(kill|murder|suicide|bomb|terror|porn|xxx|nsfw)\w*/gi, '');
-  };
-
   const redditPayload = JSON.stringify(posts.map(p => ({
-    title: sanitize(p.title),
-    text: sanitize(p.selftext ? p.selftext.substring(0, 1000) : ""),
+    title: p.title,
+    text: p.selftext ? p.selftext.substring(0, 1000) : "",
     subreddit: p.subreddit,
     score: p.score
   })));
 
   const twitterPayload = tweets.length > 0
-    ? JSON.stringify(tweets.map(t => ({ text: sanitize(t.text), user: t.user })))
+    ? JSON.stringify(tweets.map(t => ({ text: t.text, user: t.user })))
     : "No Twitter Data.";
 
   const telegramPayload = telegramMsgs.length > 0
-    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: sanitize(msg.text) })))
+    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: msg.text })))
     : "No Telegram Data.";
 
-  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB";
+  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins)";
 
-  const prompt = `CONTEXT: Professional cryptocurrency market sentiment analysis. All data is from public financial discussion forums.
-
-INPUT DATA (Last 16 Hours, Cryptocurrency Forums):
+  const prompt = `INPUT RAW DATA:
 --- REDDIT ---
 ${redditPayload}
 --- TWITTER ---
@@ -532,26 +521,25 @@ ${twitterPayload}
 ${telegramPayload}
 
 TASK:
-You are a financial data analyst. Summarize the above cryptocurrency discussion data into a dense analysis.
-Extract FACTUAL market sentiment, price discussions, news about: ${targetCoins}.
-Ignore spam and noise.
+You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
+Filter out all spam, useless hype, unrelated chatter, and noise.
+Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
 
-OUTPUT:
-- Pure dense Markdown text, no JSON.
-- Group by coin.
-- Cite platforms (Reddit, Twitter).
-- No price predictions.
+OUTPUT RULES:
+- Output ONLY pure dense Markdown text. No JSON.
+- Group the summary logically by coin.
+- Cite specific metrics if they appear.
+- Do NOT make your own price predictions. You are just a summarizer for Claude.
 - Language: Russian.
-- Max 5000 words.`;
+- Keep the final output under 5,000 words.`;
 
   try {
     const resp = await fetch(`${BACKEND_URL}/api/proxy/openrouter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen3.6-plus',
         messages: [
-          { role: 'system', content: 'You are a professional financial data analyst specializing in cryptocurrency markets.' },
+          { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
           { role: 'user', content: prompt },
         ],
       }),
@@ -559,17 +547,17 @@ OUTPUT:
 
     if (!resp.ok) {
       const err = await resp.text();
-      throw new Error(`Qwen API error: ${resp.status} - ${err.substring(0, 200)}`);
+      throw new Error(`Gemini API error: ${resp.status} - ${err.substring(0, 200)}`);
     }
 
     const data = await resp.json();
     const text = data.choices?.[0]?.message?.content || '';
-    if (!text) throw new Error('Empty response from Qwen 3.5 Plus');
+    if (!text) throw new Error('Empty response from Gemini');
     return text.trim();
 
   } catch (error) {
-    console.error("Qwen Pre-Filter Error:", error);
-    throw new Error("Ошибка при фильтрации данных через Qwen 3.5 Plus: " + (error instanceof Error ? error.message : String(error)));
+    console.error("Gemini Pre-Filter Error:", error);
+    throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
   }
 };
 

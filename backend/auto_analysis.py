@@ -352,34 +352,10 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_qwen(all_data: list[dict], dashscope_api_key: str) -> str:
-    """Use Qwen 3.6 Plus via DashScope to filter and compress multi-source social data."""
-    import re
-
-    # Sanitize text to avoid DashScope content filter
-    def sanitize(text):
-        if not text:
-            return ""
-        text = re.sub(r'\b[fF][uU][cC][kK]\w*\b', '', text)
-        text = re.sub(r'\b[sS][hH][iI][tT]\w*\b', '', text)
-        text = re.sub(r'\b[bB][iI][tT][cC][hH]\w*\b', '', text)
-        text = re.sub(r'\b[aA][sS][sS][hH][oO][lL][eE]\w*\b', '', text)
-        text = re.sub(r'\b[dD][aA][mM][nN]\w*\b', '', text)
-        text = re.sub(r'\b(kill|murder|suicide|bomb|terror|porn|xxx|nsfw)\w*\b', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'\b(nigga|nigger|faggot|retard)\w*\b', '', text, flags=re.IGNORECASE)
-        return text.strip()
-
-    # Sanitize all items
-    clean_data = []
-    for item in all_data:
-        c = dict(item)
-        for key in ("title", "selftext", "text"):
-            if key in c and c[key]:
-                c[key] = sanitize(c[key])
-        clean_data.append(c)
-
+async def _filter_with_gemini(all_data: list[dict], gemini_api_key: str) -> str:
+    """Use Gemini 2.5 Flash to filter and compress multi-source social data."""
     sources = {"Reddit": [], "Twitter": [], "Telegram": []}
-    for item in clean_data:
+    for item in all_data:
         sources[item["source"]].append(item)
 
     payload_summary = []
@@ -388,47 +364,45 @@ async def _filter_with_qwen(all_data: list[dict], dashscope_api_key: str) -> str
             payload_summary.append(f"--- {src.upper()} ({len(items)} items) ---")
             payload_summary.append(json.dumps(items, ensure_ascii=False))
 
-    prompt = f"""CONTEXT: Professional cryptocurrency market sentiment analysis. All data is from public financial discussion forums.
-
-INPUT DATA (Last 16 Hours, Cryptocurrency Forums):
+    prompt = f"""INPUT RAW DATA (Last 16 Hours):
 {chr(10).join(payload_summary)}
 
 TASK:
-You are a financial data analyst. Summarize the above cryptocurrency discussion data into a dense analysis for a senior market analyst.
-Extract FACTUAL market sentiment, price discussions, news about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB.
-Ignore spam and noise.
+You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
+Filter out all spam, useless hype, unrelated chatter, and noise.
+Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins).
 
-OUTPUT:
-- Pure dense Markdown text, no JSON.
-- Group by coin.
-- Cite platforms (Reddit, Twitter).
-- No price predictions.
+OUTPUT RULES:
+- Output ONLY pure dense Markdown text. No JSON.
+- Group the summary logically by coin.
+- Cite specific trends and mentions from specific platforms.
+- Do NOT make your own price predictions. You are just a summarizer for Claude.
 - Language: Russian.
-- Max 3000 words."""
+- Keep the final output under 3,000 words."""
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
-            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {dashscope_api_key}",
-                "Content-Type": "application/json",
-            },
+            url,
             json={
-                "model": "qwen3.6-plus",
-                "messages": [
-                    {"role": "system", "content": "You are a professional financial data analyst specializing in cryptocurrency markets."},
-                    {"role": "user", "content": prompt},
-                ],
+                "contents": [{"parts": [{"text": prompt}]}],
+                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
+                "generationConfig": {"temperature": 0.1},
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Qwen/DashScope API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Qwen/DashScope API error: {resp.status_code}")
+            logger.error(f"Gemini API error: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"Gemini API error: {resp.status_code}")
 
         data = resp.json()
-        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise RuntimeError("Empty Gemini response")
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = parts[0].get("text", "") if parts else ""
         if not text:
-            raise RuntimeError("Empty response from Qwen 3.6 Plus")
+            raise RuntimeError("Empty text in Gemini response")
         return text.strip()
 
 
@@ -551,15 +525,15 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     settings = get_settings()
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
-    # Validate keys — read directly from os.environ (pydantic may not pick up Railway env vars)
-    dashscope_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    # Validate keys
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
     claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
     cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
     
-    if not claude_key or not dashscope_key:
-        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or DASHSCOPE_API_KEY ({bool(dashscope_key)}) missing. Skipping analysis.")
+    if not claude_key or not gemini_key:
+        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or GEMINI_API_KEY ({bool(gemini_key)}) missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
@@ -602,8 +576,8 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
             # 4. Filters & AI
-            logger.info(f"Step 3/4: Qwen 3.6 Plus Filtration (via DashScope, {len(combined_data)} items)...")
-            filtered_context = await _filter_with_qwen(combined_data, dashscope_key)
+            logger.info(f"Step 3/4: Gemini 2.5 Flash Filtration ({len(combined_data)} items)...")
+            filtered_context = await _filter_with_gemini(combined_data, gemini_key)
             logger.info(f"Qwen filter done, output length: {len(filtered_context)} chars")
             
             logger.info("Step 4/4: Claude Analysis...")
