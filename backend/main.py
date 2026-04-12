@@ -531,7 +531,7 @@ async def proxy_gemini_filter_request(request: Request):
             gemini_body["systemInstruction"] = {"parts": [{"text": system_text}]}
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.post(url, json=gemini_body)
 
         if resp.status_code != 200:
@@ -549,8 +549,10 @@ async def proxy_gemini_filter_request(request: Request):
             "choices": [{"message": {"content": text, "role": "assistant"}}]
         })
     except Exception as e:
-        logger.error(f"Gemini Filter Proxy error: {e}")
-        raise HTTPException(500, f"Gemini Filter Proxy error: {str(e)}")
+        import traceback
+        logger.error(f"Gemini Filter Proxy error: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, f"Gemini Filter Proxy error: {type(e).__name__}: {str(e)}")
 
 
 # ==================== ANALYSIS HISTORY ENDPOINTS ====================
