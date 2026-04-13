@@ -382,7 +382,7 @@ OUTPUT RULES:
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
 
-    async with httpx.AsyncClient(timeout=180) as client:
+    async with httpx.AsyncClient(timeout=3600) as client:
         resp = await client.post(
             url,
             json={
@@ -613,7 +613,9 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
                 logger.error(f"[ForecastTracker] Failed to create trackings: {track_err}")
 
         except Exception as e:
-            logger.error(f"Auto-analysis failed: {e}")
+            import traceback
+            logger.error(f"Auto-analysis failed: {type(e).__name__}: {e}")
+            logger.error(traceback.format_exc())
             log.finished_at = datetime.utcnow()
             log.status = "failed"
             log.error_message = str(e)
