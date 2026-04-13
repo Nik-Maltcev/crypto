@@ -531,7 +531,7 @@ async def proxy_gemini_filter_request(request: Request):
             gemini_body["systemInstruction"] = {"parts": [{"text": system_text}]}
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        async with httpx.AsyncClient(timeout=300) as client:
+        async with httpx.AsyncClient(timeout=3600) as client:
             resp = await client.post(url, json=gemini_body)
 
         if resp.status_code != 200:
