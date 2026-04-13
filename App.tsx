@@ -13,6 +13,7 @@ import SentimentChart from './components/SentimentChart';
 import TelegramFilter from './components/TelegramFilter';
 import AnalysisHistory from './components/AnalysisHistory';
 import ForecastTracker from './components/ForecastTracker';
+import BinanceTracker from './components/BinanceTracker';
 
 // Icons
 const RefreshIcon = () => (
@@ -44,7 +45,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'forecast'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'forecast' | 'binance'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -514,6 +515,12 @@ const App: React.FC = () => {
               >
                 📈 Прогноз vs Реальность
               </button>
+              <button
+                onClick={() => setActiveTab('binance')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'binance' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                💹 Прогноз vs Binance
+              </button>
             </div>
           </div>
 
@@ -565,6 +572,8 @@ const App: React.FC = () => {
           <TelegramFilter />
         ) : activeTab === 'forecast' ? (
           <ForecastTracker />
+        ) : activeTab === 'binance' ? (
+          <BinanceTracker />
         ) : (
           <>
             {/* Progress Display */}

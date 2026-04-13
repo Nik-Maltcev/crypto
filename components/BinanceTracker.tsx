@@ -1,0 +1,178 @@
+import React, { useState, useEffect } from 'react';
+import { ForecastTracking } from '../types';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+
+const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+
+const BinanceTracker: React.FC = () => {
+    const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+
+    const fetchTrackings = async () => {
+        setIsLoading(true);
+        try {
+            const resp = await fetch(`${BACKEND_URL}/api/forecast/active`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (data.success) setTrackings(data.items.filter((t: ForecastTracking) => t.binance_prices && t.binance_prices.length > 0));
+        } catch (e) { console.error(e); }
+        finally { setIsLoading(false); }
+    };
+
+    useEffect(() => { fetchTrackings(); }, []);
+
+    const getColor = (pred: string) => {
+        if (pred === 'Bullish') return '#10B981';
+        if (pred === 'Bearish') return '#EF4444';
+        return '#F59E0B';
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Прогноз vs Binance</h2>
+                    <p className="text-gray-400 text-sm">Почасовое сравнение AI-прогноза с ценами закрытия Binance</p>
+                </div>
+                <button onClick={fetchTrackings} disabled={isLoading}
+                    className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50">
+                    🔄
+                </button>
+            </div>
+
+            {isLoading && !trackings.length ? (
+                <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>
+            ) : !trackings.length ? (
+                <div className="text-center p-10 bg-gray-900/50 rounded-xl border border-dashed border-gray-700 text-gray-500">
+                    Нет данных Binance. Данные появятся после следующего часового обновления.
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {trackings.map(t => {
+                        const isExpanded = expandedId === t.id;
+                        const bp = t.binance_prices || [];
+                        const hits = bp.filter(p => p.matched === true).length;
+                        const misses = bp.filter(p => p.matched === false).length;
+                        const acc = bp.length > 0 ? Math.round((hits / bp.length) * 100) : 0;
+
+                        const chartData = t.hourly_forecast.map((fp, i) => {
+                            const binance = bp.find(b => b.hour === fp.hourOffset || b.hour === i);
+                            return {
+                                hour: `${fp.hourOffset}ч`,
+                                predicted: fp.price,
+                                binance: binance?.close_price ?? null,
+                            };
+                        });
+
+                        return (
+                            <div key={t.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden hover:border-yellow-500/30 transition-colors">
+                                <div className="p-4 flex items-center justify-between cursor-pointer"
+                                    onClick={() => setExpandedId(isExpanded ? null : t.id)}>
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-xl font-bold text-white">{t.symbol}</div>
+                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                            t.status === 'active' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'
+                                        }`}>
+                                            {t.status === 'active' ? `⏳ ${bp.length}/24ч` : `✅ Завершён`}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                        <div className="text-right">
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold">Binance точность</div>
+                                            <div className={`text-lg font-bold ${acc >= 60 ? 'text-emerald-400' : acc >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                                {acc}%
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-0.5">
+                                            {bp.slice(-12).map((p, i) => (
+                                                <div key={i}
+                                                    className={`w-2.5 h-2.5 rounded-sm ${
+                                                        p.matched === true ? 'bg-emerald-500' :
+                                                        p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                    }`} />
+                                            ))}
+                                        </div>
+                                        <svg className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {isExpanded && (
+                                    <div className="px-4 pb-4 border-t border-gray-800/50">
+                                        <div className="flex justify-between items-center mt-3 mb-2">
+                                            <div className="flex gap-4 text-xs text-gray-500">
+                                                <span>Старт: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</span></span>
+                                            </div>
+                                            <div className="flex gap-4 text-[10px] text-gray-500 uppercase font-bold">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block"></span> Прогноз
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-2 h-2 rounded-sm bg-yellow-400 inline-block"></span> Binance
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="h-[250px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id={`bpred-${t.id}`} x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+                                                        </linearGradient>
+                                                        <linearGradient id={`breal-${t.id}`} x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#FBBF24" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#FBBF24" stopOpacity={0} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <XAxis dataKey="hour" stroke="#4B5563" fontSize={11} tickMargin={8} />
+                                                    <YAxis stroke="#4B5563" fontSize={11} width={70} domain={['auto', 'auto']}
+                                                        tickFormatter={(v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`} />
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px' }}
+                                                        formatter={(value: any, name: string) => {
+                                                            if (value === null) return ['—', name === 'predicted' ? 'Прогноз' : 'Binance'];
+                                                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`, name === 'predicted' ? 'Прогноз' : 'Binance'];
+                                                        }}
+                                                    />
+                                                    <ReferenceLine y={t.start_price} stroke="#4B5563" strokeDasharray="3 3" />
+                                                    <Area type="monotone" dataKey="predicted" stroke="#6366F1" strokeWidth={2}
+                                                        fill={`url(#bpred-${t.id})`} connectNulls />
+                                                    <Area type="monotone" dataKey="binance" stroke="#FBBF24" strokeWidth={2}
+                                                        fill={`url(#breal-${t.id})`} connectNulls />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                        <div className="mt-2">
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 text-center tracking-wider">
+                                                Совпадение направления ({hits}✅ / {misses}❌)
+                                            </div>
+                                            <div className="flex gap-[2px] justify-center">
+                                                {bp.map((p, i) => (
+                                                    <div key={i}
+                                                        title={`${p.hour}ч: Binance=$${p.close_price} ${p.matched ? '✅' : '❌'}`}
+                                                        className={`w-3 h-3 rounded-sm ${
+                                                            p.matched === true ? 'bg-emerald-500' :
+                                                            p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                        }`} />
+                                                ))}
+                                                {Array.from({ length: Math.max(0, 24 - bp.length) }).map((_, i) => (
+                                                    <div key={`e-${i}`} className="w-3 h-3 rounded-sm bg-gray-800 border border-gray-700/50" />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default BinanceTracker;

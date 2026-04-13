@@ -243,6 +243,13 @@ export interface ForecastTracking {
     actual_change: number;
     matched: boolean | null;
   }[];
+  binance_prices: {
+    timestamp: string;
+    hour: number;
+    close_price: number;
+    predicted_price: number | null;
+    matched: boolean | null;
+  }[];
   status: 'active' | 'completed' | 'expired';
   hours_tracked: number;
   hits: number;

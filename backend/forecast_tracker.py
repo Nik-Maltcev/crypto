@@ -24,6 +24,37 @@ logger = logging.getLogger(__name__)
 TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "DOGE", "BNB"]
 CMC_QUOTES_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
 
+# Binance symbol mapping (our symbol -> Binance pair)
+BINANCE_PAIRS = {
+    "BTC": "BTCUSDT",
+    "ETH": "ETHUSDT",
+    "SOL": "SOLUSDT",
+    "XRP": "XRPUSDT",
+    "DOGE": "DOGEUSDT",
+    "BNB": "BNBUSDT",
+    "HYPE": "HYPEUSDT",
+}
+
+
+async def fetch_binance_prices(symbols: list[str]) -> dict[str, float]:
+    """Fetch current close prices from Binance for specific symbols."""
+    prices = {}
+    async with httpx.AsyncClient(timeout=15) as client:
+        for sym in symbols:
+            pair = BINANCE_PAIRS.get(sym)
+            if not pair:
+                continue
+            try:
+                resp = await client.get(
+                    f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    prices[sym] = float(data.get("price", 0))
+            except Exception as e:
+                logger.warning(f"[Binance] Failed to fetch {sym}: {e}")
+    return prices
+
 
 async def fetch_cmc_prices(symbols: list[str]) -> dict[str, float]:
     """Fetch current prices for specific symbols from CoinMarketCap."""
@@ -117,6 +148,7 @@ async def save_forecast_from_analysis(analysis_id: int) -> int:
                 target_change_24h=coin.get("targetChange24h"),
                 hourly_forecast_json=json.dumps(hourly, ensure_ascii=False),
                 actual_prices_json="[]",
+                binance_prices_json="[]",
                 status="active",
             )
             session.add(tracking)
@@ -253,3 +285,88 @@ async def update_forecast_tracking_job():
 
         await session.commit()
     logger.info("=== Finished Forecast Tracking update ===")
+
+
+async def update_binance_tracking():
+    """Fetch Binance close prices and save alongside CMC data for active trackings."""
+    logger.info("[Binance] Fetching prices for active trackings...")
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(ForecastTracking).where(ForecastTracking.status == "active")
+        )
+        active = result.scalars().all()
+
+        if not active:
+            return
+
+        symbols = list({t.symbol for t in active})
+        binance_prices = await fetch_binance_prices(symbols)
+
+        if not binance_prices:
+            logger.warning("[Binance] Could not fetch prices")
+            return
+
+        now = datetime.utcnow()
+
+        for tracking in active:
+            b_price = binance_prices.get(tracking.symbol)
+            if not b_price:
+                continue
+
+            hour_index = tracking.hours_tracked  # same hour as CMC
+
+            forecast = []
+            if tracking.hourly_forecast_json:
+                try:
+                    forecast = json.loads(tracking.hourly_forecast_json)
+                except:
+                    forecast = []
+
+            binance_data = []
+            if tracking.binance_prices_json:
+                try:
+                    binance_data = json.loads(tracking.binance_prices_json)
+                except:
+                    binance_data = []
+
+            predicted_price = None
+            if hour_index > 0 and (hour_index - 1) < len(forecast):
+                predicted_price = forecast[hour_index - 1].get("price")
+
+            # Direction matching (same logic as CMC)
+            prev_b_price = tracking.start_price
+            if binance_data:
+                prev_b_price = binance_data[-1].get("close_price", tracking.start_price)
+
+            prev_predicted = tracking.start_price
+            if hour_index > 1 and (hour_index - 2) < len(forecast):
+                prev_predicted = forecast[hour_index - 2].get("price", tracking.start_price)
+
+            matched = None
+            if predicted_price is not None:
+                pred_dir = predicted_price - prev_predicted
+                real_dir = b_price - prev_b_price
+                if pred_dir > 0 and real_dir > 0:
+                    matched = True
+                elif pred_dir < 0 and real_dir < 0:
+                    matched = True
+                elif pred_dir == 0 and real_dir == 0:
+                    matched = True
+                else:
+                    matched = False
+
+            binance_data.append({
+                "timestamp": now.isoformat(),
+                "hour": hour_index,
+                "close_price": round(b_price, 3),
+                "predicted_price": round(predicted_price, 3) if predicted_price else None,
+                "matched": matched,
+            })
+
+            tracking.binance_prices_json = json.dumps(binance_data)
+            logger.info(f"[Binance] {tracking.symbol} h{hour_index}: close=${b_price:.3f}")
+
+        await session.commit()
+    logger.info("[Binance] Done.")

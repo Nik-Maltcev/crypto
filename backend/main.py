@@ -22,7 +22,7 @@ from core.models import ParseLog, AnalysisLog, ForecastTracking
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis
-from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis
+from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -116,6 +116,13 @@ async def lifespan(app: FastAPI):
                 trigger=CronTrigger(minute=5),  # Every hour at XX:05 (after CMC data settles)
                 id="hourly_forecast_tracking",
                 name="Hourly Forecast vs Reality Tracker",
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                update_binance_tracking,
+                trigger=CronTrigger(minute=6),  # Every hour at XX:06 (right after CMC job)
+                id="hourly_binance_tracking",
+                name="Hourly Binance Price Tracker",
                 replace_existing=True,
             )
             scheduler.start()
@@ -722,6 +729,7 @@ async def get_active_forecasts():
                     "target_change_24h": t.target_change_24h,
                     "hourly_forecast": json.loads(t.hourly_forecast_json) if t.hourly_forecast_json else [],
                     "actual_prices": json.loads(t.actual_prices_json) if t.actual_prices_json else [],
+                    "binance_prices": json.loads(t.binance_prices_json) if t.binance_prices_json else [],
                     "status": t.status,
                     "hours_tracked": t.hours_tracked,
                     "hits": t.hits,

@@ -80,6 +80,9 @@ class ForecastTracking(Base):
     # Actual hourly prices from CMC (JSON: [{timestamp, price, predicted_price, matched}])
     actual_prices_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Actual hourly prices from Binance (JSON: [{timestamp, hour, close_price, predicted_price, matched}])
+    binance_prices_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Status
     status: Mapped[str] = mapped_column(String(20), default="active")  # active, completed, expired
     hours_tracked: Mapped[int] = mapped_column(Integer, default=0)
