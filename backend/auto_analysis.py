@@ -225,8 +225,14 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
                 }
                 
                 resp = await client.get(url, headers=headers)
+                if resp.status_code == 429:
+                    logger.warning(f"Twitter @{username}: 429 rate limited, waiting 5s...")
+                    await asyncio.sleep(5)
+                    # Retry once
+                    resp = await client.get(url, headers=headers)
                 if resp.status_code != 200:
                     logger.warning(f"Twitter @{username}: {resp.status_code}")
+                    await asyncio.sleep(0.2)
                     continue
 
                 data = resp.json()
