@@ -10,7 +10,6 @@ import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessa
 import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
-import TelegramFilter from './components/TelegramFilter';
 import AnalysisHistory from './components/AnalysisHistory';
 import ForecastTracker from './components/ForecastTracker';
 import BinanceTracker from './components/BinanceTracker';
@@ -45,7 +44,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'chatFilter' | 'history' | 'forecast' | 'binance'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'forecast' | 'binance'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -498,12 +497,6 @@ const App: React.FC = () => {
                 Анализ рынка
               </button>
               <button
-                onClick={() => setActiveTab('chatFilter')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'chatFilter' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                Анализ чатов
-              </button>
-              <button
                 onClick={() => setActiveTab('history')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'history' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -568,8 +561,6 @@ const App: React.FC = () => {
 
         {activeTab === 'history' ? (
           <AnalysisHistory />
-        ) : activeTab === 'chatFilter' ? (
-          <TelegramFilter />
         ) : activeTab === 'forecast' ? (
           <ForecastTracker />
         ) : activeTab === 'binance' ? (
