@@ -249,6 +249,82 @@ const BinanceTracker: React.FC = () => {
                             </div>
                         ));
                     })()}
+
+                    {/* Daily Summary for completed trackings */}
+                    {(() => {
+                        const completed = trackings.filter(t => t.status === 'completed' && t.binance_prices && t.binance_prices.length >= 20);
+                        if (completed.length < 2) return null;
+
+                        // Analyze which hours had the most wins across all coins
+                        const hourStats: Record<number, { wins: number; total: number }> = {};
+                        completed.forEach(t => {
+                            (t.binance_prices || []).forEach(bp => {
+                                if (!hourStats[bp.hour]) hourStats[bp.hour] = { wins: 0, total: 0 };
+                                hourStats[bp.hour].total++;
+                                if (bp.matched) hourStats[bp.hour].wins++;
+                            });
+                        });
+
+                        const hourEntries = Object.entries(hourStats)
+                            .map(([h, s]) => ({ hour: Number(h), wins: s.wins, total: s.total, pct: Math.round((s.wins / s.total) * 100) }))
+                            .sort((a, b) => b.pct - a.pct);
+
+                        const bestHours = hourEntries.filter(h => h.pct >= 60).slice(0, 5);
+                        const worstHours = hourEntries.filter(h => h.pct < 40).slice(-5).reverse();
+
+                        // Best coin
+                        const coinStats = completed.map(t => {
+                            const bp = t.binance_prices || [];
+                            const hits = bp.filter(p => p.matched === true).length;
+                            return { symbol: t.symbol, acc: bp.length > 0 ? Math.round((hits / bp.length) * 100) : 0 };
+                        }).sort((a, b) => b.acc - a.acc);
+
+                        const totalHits = completed.reduce((sum, t) => sum + (t.binance_prices || []).filter(p => p.matched === true).length, 0);
+                        const totalPoints = completed.reduce((sum, t) => sum + (t.binance_prices || []).length, 0);
+                        const overallAcc = totalPoints > 0 ? Math.round((totalHits / totalPoints) * 100) : 0;
+
+                        return (
+                            <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5 mt-4">
+                                <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-3">📊 Итоги дня (Binance)</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold">Общая точность</div>
+                                        <div className={`text-2xl font-bold ${overallAcc >= 60 ? 'text-emerald-400' : overallAcc >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                            {overallAcc}%
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold">Лучшая монета</div>
+                                        <div className="text-lg font-bold text-white">{coinStats[0]?.symbol} <span className="text-emerald-400 text-sm">{coinStats[0]?.acc}%</span></div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold">Худшая монета</div>
+                                        <div className="text-lg font-bold text-white">{coinStats[coinStats.length - 1]?.symbol} <span className="text-red-400 text-sm">{coinStats[coinStats.length - 1]?.acc}%</span></div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold">Всего точек</div>
+                                        <div className="text-lg font-bold text-white">{totalHits}✅ / {totalPoints - totalHits}❌</div>
+                                    </div>
+                                </div>
+                                {bestHours.length > 0 && (
+                                    <div className="mb-2">
+                                        <span className="text-xs text-gray-400">🎯 Лучшие часы (большинство монет угадано): </span>
+                                        <span className="text-xs text-emerald-400 font-mono">
+                                            {bestHours.map(h => `${h.hour}ч (${h.pct}%)`).join(', ')}
+                                        </span>
+                                    </div>
+                                )}
+                                {worstHours.length > 0 && (
+                                    <div>
+                                        <span className="text-xs text-gray-400">💀 Худшие часы: </span>
+                                        <span className="text-xs text-red-400 font-mono">
+                                            {worstHours.map(h => `${h.hour}ч (${h.pct}%)`).join(', ')}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
         </div>
