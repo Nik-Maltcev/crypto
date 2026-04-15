@@ -201,7 +201,7 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
 
 
 async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) -> list[dict]:
-    """Fetch recent tweets using RapidAPI."""
+    """Fetch recent tweets using RapidAPI with rate-limit-safe backoff."""
     settings = get_settings()
     api_key = settings.TWITTER_RAPID_API_KEY or "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058"
     twitter_host = settings.TWITTER_HOST or "twitter241.p.rapidapi.com"
@@ -210,33 +210,43 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
         return []
 
     all_tweets = []
-    # Current limit: parse up to 10 tweets per user to avoid hitting RapidAPI limits too hard
     count_per_user = 50
     cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    consecutive_errors = 0
 
     async with httpx.AsyncClient(timeout=60) as client:
-        for username in accounts:
+        for i, username in enumerate(accounts):
             try:
-                # Using twitter241.p.rapidapi.com/user-tweets
                 url = f"https://{twitter_host}/user-tweets?user={username}&count={count_per_user}"
                 headers = {
                     "X-RapidAPI-Key": api_key,
                     "X-RapidAPI-Host": twitter_host
                 }
                 
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == 429:
-                    logger.warning(f"Twitter @{username}: 429 rate limited, waiting 5s...")
-                    await asyncio.sleep(5)
-                    # Retry once
+                # Exponential backoff retry loop
+                resp = None
+                for attempt in range(4):  # up to 3 retries
                     resp = await client.get(url, headers=headers)
+                    if resp.status_code == 429:
+                        backoff = min(5 * (2 ** attempt), 30)  # 5s, 10s, 20s, 30s
+                        logger.warning(f"Twitter @{username}: 429 rate limited, retry {attempt+1}/3 in {backoff}s...")
+                        await asyncio.sleep(backoff)
+                        continue
+                    break  # success or non-retryable error
+
+                if resp is None or resp.status_code == 403:
+                    logger.warning(f"Twitter @{username}: 403 Forbidden, skipping")
+                    consecutive_errors += 1
+                    await asyncio.sleep(2)
+                    continue
                 if resp.status_code != 200:
                     logger.warning(f"Twitter @{username}: {resp.status_code}")
-                    await asyncio.sleep(0.2)
+                    consecutive_errors += 1
+                    await asyncio.sleep(2)
                     continue
 
+                consecutive_errors = 0
                 data = resp.json()
-                # Simplified parsing based on twitter241 structure
                 instructions = data.get("result", {}).get("timeline", {}).get("instructions", [])
                 if not instructions:
                     instructions = data.get("data", {}).get("user", {}).get("result", {}).get("timeline_v2", {}).get("timeline", {}).get("instructions", [])
@@ -249,7 +259,6 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
                             
                             created_at_str = tweet_data.get("created_at")
                             if created_at_str:
-                                # Twitter date format: "Wed Oct 10 20:19:24 +0000 2018"
                                 created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
                                 if created_at < cutoff_date:
                                     continue
@@ -261,10 +270,18 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
                                     "source": "Twitter"
                                 })
                 
-                # Sleep briefly between users to be polite
-                await asyncio.sleep(0.5)
+                # 2s delay between users to respect rate limits
+                await asyncio.sleep(2)
+
+                # If many consecutive errors, pause longer
+                if consecutive_errors >= 5:
+                    logger.warning("Too many consecutive Twitter errors, pausing 30s...")
+                    await asyncio.sleep(30)
+                    consecutive_errors = 0
+
             except Exception as e:
                 logger.warning(f"Twitter @{username} error: {e}")
+                consecutive_errors += 1
 
     return all_tweets
 

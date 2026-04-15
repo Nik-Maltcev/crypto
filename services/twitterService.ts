@@ -81,11 +81,9 @@ export const downloadCsv = (data: TwitterUserMap[]) => {
 // --- NEW FUNCTIONALITY FOR APP FLOW ---
 
 /**
- * Fetch Tweets for a specific User ID
+ * Fetch Tweets for a specific User ID with exponential backoff
  */
 export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet[]> => {
-  // Endpoint: UserTweets or similar
-  // RapidAPI Twitter241 often uses `user-tweets` or `user/tweets`
   const targetUrl = `https://${TWITTER_HOST}/user-tweets?user=${userId}&count=${count}`;
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
   const headersParam = encodeURIComponent(JSON.stringify({
@@ -94,18 +92,32 @@ export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet
   }));
   const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
 
-  try {
-    let response = await fetch(proxyUrl);
+  const MAX_RETRIES = 3;
 
-    // Retry on 429 rate limit
-    if (response.status === 429) {
-      console.warn(`Twitter 429 for ${userId}, retrying in 5s...`);
-      await sleep(5000);
+  try {
+    let response: Response | null = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       response = await fetch(proxyUrl);
+
+      if (response.status === 429) {
+        const backoff = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s, 30s
+        console.warn(`Twitter 429 for ${userId}, retry ${attempt + 1}/${MAX_RETRIES} in ${backoff / 1000}s...`);
+        await sleep(backoff);
+        continue;
+      }
+
+      // 403 means the API key is blocked or account issue — no point retrying
+      if (response.status === 403) {
+        console.warn(`Twitter 403 (Forbidden) for ${userId}, skipping`);
+        return [];
+      }
+
+      break; // success or non-retryable error
     }
 
-    if (!response.ok) {
-      console.warn(`Failed to fetch tweets for ${userId}: ${response.status}`);
+    if (!response || !response.ok) {
+      console.warn(`Failed to fetch tweets for ${userId}: ${response?.status}`);
       return [];
     }
 
@@ -150,7 +162,7 @@ export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet
 };
 
 /**
- * Fetch tweets for specific IDs (no random sampling)
+ * Fetch tweets for specific IDs with rate-limit-safe delays
  */
 export const fetchBatchTweets = async (
   ids: string[],
@@ -159,13 +171,28 @@ export const fetchBatchTweets = async (
 ): Promise<Tweet[]> => {
 
   const allTweets: Tweet[] = [];
+  let consecutiveErrors = 0;
 
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
-    // Add delay to respect API limits
-    await sleep(800);
+
+    // Base delay 2s, increase to 5s if we're getting rate limited
+    const delay = consecutiveErrors >= 2 ? 5000 : 2000;
+    await sleep(delay);
 
     const tweets = await fetchUserTweets(id, limitPerUser);
+
+    if (tweets.length === 0) {
+      consecutiveErrors++;
+      // If 5+ consecutive failures, pause longer to let rate limit reset
+      if (consecutiveErrors >= 5) {
+        console.warn('Too many consecutive Twitter failures, pausing 30s...');
+        await sleep(30000);
+        consecutiveErrors = 0;
+      }
+    } else {
+      consecutiveErrors = 0;
+    }
 
     // Filter for recent tweets (last 16h, consistent with backend pipeline)
     const cutoffTime = Date.now() - (16 * 60 * 60 * 1000);
