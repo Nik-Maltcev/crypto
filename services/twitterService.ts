@@ -95,7 +95,14 @@ export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet
   const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
 
   try {
-    const response = await fetch(proxyUrl);
+    let response = await fetch(proxyUrl);
+
+    // Retry on 429 rate limit
+    if (response.status === 429) {
+      console.warn(`Twitter 429 for ${userId}, retrying in 5s...`);
+      await sleep(5000);
+      response = await fetch(proxyUrl);
+    }
 
     if (!response.ok) {
       console.warn(`Failed to fetch tweets for ${userId}: ${response.status}`);
