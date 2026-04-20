@@ -375,58 +375,98 @@ async def _fetch_market_data(cmc_api_key: str) -> str:
         return "\n".join(lines)
 
 
-async def _filter_with_gemini(all_data: list[dict], gemini_api_key: str) -> str:
-    """Use Gemini 2.5 Flash to filter and compress multi-source social data."""
-    sources = {"Reddit": [], "Twitter": [], "Telegram": []}
-    for item in all_data:
-        sources[item["source"]].append(item)
-
-    payload_summary = []
-    for src, items in sources.items():
-        if items:
-            payload_summary.append(f"--- {src.upper()} ({len(items)} items) ---")
-            payload_summary.append(json.dumps(items, ensure_ascii=False))
-
-    prompt = f"""INPUT RAW DATA (Last 16 Hours):
-{chr(10).join(payload_summary)}
-
-TASK:
-You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
-Filter out all spam, useless hype, unrelated chatter, and noise.
-Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins).
-
-OUTPUT RULES:
-- Output ONLY pure dense Markdown text. No JSON.
-- Group the summary logically by coin.
-- Cite specific trends and mentions from specific platforms.
-- Do NOT make your own price predictions. You are just a summarizer for Claude.
-- Language: Russian.
-- Keep the final output under 3,000 words."""
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
-
-    async with httpx.AsyncClient(timeout=3600) as client:
+async def _call_claude_text(prompt: str, system: str, claude_api_key: str, max_tokens: int = 4096) -> str:
+    """Call Claude API and return text response."""
+    async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
-            url,
+            CLAUDE_API_URL,
+            headers={
+                "x-api-key": claude_api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
             json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
-                "generationConfig": {"temperature": 0.1},
+                "model": "claude-opus-4-6",
+                "max_tokens": max_tokens,
+                "system": system,
+                "messages": [{"role": "user", "content": prompt}],
             },
         )
         if resp.status_code != 200:
-            logger.error(f"Gemini API error: {resp.status_code} - {resp.text[:500]}")
-            raise RuntimeError(f"Gemini API error: {resp.status_code}")
-
+            raise RuntimeError(f"Claude API error: {resp.status_code} - {resp.text[:300]}")
         data = resp.json()
-        candidates = data.get("candidates", [])
-        if not candidates:
-            raise RuntimeError("Empty Gemini response")
-        parts = candidates[0].get("content", {}).get("parts", [])
-        text = parts[0].get("text", "") if parts else ""
-        if not text:
-            raise RuntimeError("Empty text in Gemini response")
-        return text.strip()
+        for block in data.get("content", []):
+            if block.get("type") == "text":
+                return block.get("text", "").strip()
+        return ""
+
+
+async def _filter_with_claude_chunks(all_data: list[dict], claude_api_key: str) -> str:
+    """Filter and compress social data using Claude in chunks (no Gemini dependency)."""
+    CHUNK_SIZE = 500  # items per chunk
+
+    # Prepare all items as compact JSON strings
+    items = []
+    for item in all_data:
+        compact = {"src": item.get("source", "?")[0]}  # R/T/Te
+        if "title" in item:
+            compact["t"] = item["title"][:200]
+        if "selftext" in item and item["selftext"]:
+            compact["b"] = item["selftext"][:300]
+        if "text" in item:
+            compact["b"] = item["text"][:300]
+        if "subreddit" in item:
+            compact["sub"] = item["subreddit"]
+        if "score" in item:
+            compact["s"] = item["score"]
+        if "user" in item:
+            compact["u"] = item["user"]
+        items.append(compact)
+
+    # Split into chunks
+    chunks = [items[i:i + CHUNK_SIZE] for i in range(0, len(items), CHUNK_SIZE)]
+    logger.info(f"[ChunkedFilter] {len(items)} items -> {len(chunks)} chunks of ~{CHUNK_SIZE}")
+
+    system_prompt = "You are a crypto market data analyst. Extract key sentiment and news from social media posts. Output dense Russian markdown. No predictions."
+
+    # Step 1: Summarize each chunk
+    chunk_summaries = []
+    for i, chunk in enumerate(chunks):
+        chunk_json = json.dumps(chunk, ensure_ascii=False)
+        prompt = f"""Chunk {i+1}/{len(chunks)} of social media data (last 16h).
+Items: {len(chunk)}
+
+DATA:
+{chunk_json}
+
+TASK: Extract key crypto sentiment about BTC, ETH, XRP, SOL, HYPE, DOGE, BNB from this chunk.
+Output: dense Markdown summary in Russian, max 500 words. Group by coin. Cite sources (Reddit/Twitter)."""
+
+        logger.info(f"[ChunkedFilter] Processing chunk {i+1}/{len(chunks)}...")
+        summary = await _call_claude_text(prompt, system_prompt, claude_api_key, max_tokens=2048)
+        if summary:
+            chunk_summaries.append(summary)
+            logger.info(f"[ChunkedFilter] Chunk {i+1} done: {len(summary)} chars")
+
+    if not chunk_summaries:
+        raise RuntimeError("All chunk summaries empty")
+
+    # Step 2: Merge all summaries into one
+    if len(chunk_summaries) == 1:
+        return chunk_summaries[0]
+
+    merge_prompt = f"""You have {len(chunk_summaries)} partial summaries of crypto social media data from the last 16 hours.
+Merge them into ONE dense, comprehensive summary.
+
+PARTIAL SUMMARIES:
+{chr(10).join(f'--- Part {i+1} ---{chr(10)}{s}' for i, s in enumerate(chunk_summaries))}
+
+OUTPUT: One merged Markdown summary in Russian, max 3000 words. Group by coin (BTC, ETH, XRP, SOL, HYPE, DOGE, BNB). Remove duplicates. Keep only the most important signals."""
+
+    logger.info(f"[ChunkedFilter] Merging {len(chunk_summaries)} summaries...")
+    merged = await _call_claude_text(merge_prompt, system_prompt, claude_api_key, max_tokens=4096)
+    logger.info(f"[ChunkedFilter] Merged summary: {len(merged)} chars")
+    return merged
 
 
 async def _analyze_with_claude(
@@ -560,14 +600,13 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
     # Validate keys
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
     claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
     cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
     
-    if not claude_key or not gemini_key:
-        logger.error(f"CLAUDE_API_KEY ({bool(claude_key)}) or GEMINI_API_KEY ({bool(gemini_key)}) missing. Skipping analysis.")
+    if not claude_key:
+        logger.error("CLAUDE_API_KEY missing. Skipping analysis.")
         return
 
     async_session = get_async_session()
@@ -610,9 +649,9 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
             # 4. Filters & AI
-            logger.info(f"Step 3/4: Gemini 2.5 Flash Filtration ({len(combined_data)} items)...")
-            filtered_context = await _filter_with_gemini(combined_data, gemini_key)
-            logger.info(f"Gemini filter done, output length: {len(filtered_context)} chars")
+            logger.info(f"Step 3/4: Claude Chunked Filtration ({len(combined_data)} items)...")
+            filtered_context = await _filter_with_claude_chunks(combined_data, claude_key)
+            logger.info(f"Filter done, output length: {len(filtered_context)} chars")
             
             logger.info("Step 4/4: Claude Analysis...")
             result = await _analyze_with_claude(filtered_context, market_context, claude_key)

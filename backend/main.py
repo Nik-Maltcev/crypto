@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     # --- APScheduler: daily analysis at 08:00 MSK (05:00 UTC) ---
     scheduler = None
     settings = get_settings()
-    if os.environ.get("CLAUDE_API_KEY", "") and os.environ.get("GEMINI_API_KEY", ""):
+    if os.environ.get("CLAUDE_API_KEY", ""):
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
-        logger.warning("CLAUDE_API_KEY or GEMINI_API_KEY not set. Scheduled analysis DISABLED.")
+        logger.warning("CLAUDE_API_KEY not set. Scheduled analysis DISABLED.")
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
