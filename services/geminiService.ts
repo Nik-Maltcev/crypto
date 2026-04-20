@@ -486,7 +486,7 @@ export const filterTelegramChats = async (
 };
 
 // --- PIPELINE STEP 1: COMPRESSION/FILTERING ---
-// Uses Claude Opus 4.6 chunked filtering via backend proxy (no Gemini dependency)
+// Uses Gemini 2.5 Flash via backend proxy
 export const filterDataWithGemini = async (
   posts: RedditPost[],
   tweets: Tweet[],
@@ -494,64 +494,70 @@ export const filterDataWithGemini = async (
   targetCoinSymbol?: string
 ): Promise<string> => {
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
-  const CHUNK_SIZE = 500;
-  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB";
 
-  // Prepare compact items
-  const items: any[] = [];
-  posts.forEach(p => items.push({ src: 'R', t: p.title?.substring(0, 200), b: p.selftext?.substring(0, 300), sub: p.subreddit, s: p.score }));
-  tweets.forEach(t => items.push({ src: 'T', b: t.text?.substring(0, 300), u: t.user }));
-  telegramMsgs.forEach(m => items.push({ src: 'TG', b: m.text?.substring(0, 300), ch: m.chat_title }));
+  const redditPayload = JSON.stringify(posts.map(p => ({
+    title: p.title,
+    text: p.selftext ? p.selftext.substring(0, 1000) : "",
+    subreddit: p.subreddit,
+    score: p.score
+  })));
 
-  const chunks: any[][] = [];
-  for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-    chunks.push(items.slice(i, i + CHUNK_SIZE));
-  }
+  const twitterPayload = tweets.length > 0
+    ? JSON.stringify(tweets.map(t => ({ text: t.text, user: t.user })))
+    : "No Twitter Data.";
 
-  const callClaude = async (system: string, prompt: string, maxTokens = 2048): Promise<string> => {
-    const resp = await fetch(`${BACKEND_URL}/api/proxy/post?url=${encodeURIComponent('https://api.anthropic.com/v1/messages')}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-4-6',
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!resp.ok) throw new Error(`Claude error: ${resp.status}`);
-    const data = await resp.json();
-    for (const block of data.content || []) {
-      if (block.type === 'text') return block.text?.trim() || '';
-    }
-    return '';
-  };
+  const telegramPayload = telegramMsgs.length > 0
+    ? JSON.stringify(telegramMsgs.map(msg => ({ chat: msg.chat_title, text: msg.text })))
+    : "No Telegram Data.";
 
-  const systemPrompt = 'You are a crypto market data analyst. Extract key sentiment and news from social media posts. Output dense Russian markdown. No predictions.';
+  const targetCoins = targetCoinSymbol ? targetCoinSymbol : "BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins)";
+
+  const prompt = `INPUT RAW DATA:
+--- REDDIT ---
+${redditPayload}
+--- TWITTER ---
+${twitterPayload}
+--- TELEGRAM ---
+${telegramPayload}
+
+TASK:
+You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
+Filter out all spam, useless hype, unrelated chatter, and noise.
+Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: ${targetCoins}.
+
+OUTPUT RULES:
+- Output ONLY pure dense Markdown text. No JSON.
+- Group the summary logically by coin.
+- Cite specific metrics if they appear.
+- Do NOT make your own price predictions. You are just a summarizer for Claude.
+- Language: Russian.
+- Keep the final output under 5,000 words.`;
 
   try {
-    // Step 1: Summarize each chunk
-    const summaries: string[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkJson = JSON.stringify(chunks[i]);
-      const prompt = `Chunk ${i + 1}/${chunks.length} of social media data (last 16h). Items: ${chunks[i].length}\n\nDATA:\n${chunkJson}\n\nTASK: Extract key crypto sentiment about ${targetCoins}. Output: dense Markdown in Russian, max 500 words. Group by coin.`;
-      const summary = await callClaude(systemPrompt, prompt);
-      if (summary) summaries.push(summary);
+    const resp = await fetch(`${BACKEND_URL}/api/proxy/openrouter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'You are an elite data extraction engine. You filter noise and keep pure signal.' },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Gemini API error: ${resp.status} - ${err.substring(0, 200)}`);
     }
 
-    if (!summaries.length) throw new Error('All chunk summaries empty');
-    if (summaries.length === 1) return summaries[0];
-
-    // Step 2: Merge
-    const mergePrompt = `You have ${summaries.length} partial summaries of crypto social media data.\nMerge into ONE dense summary.\n\n${summaries.map((s, i) => `--- Part ${i + 1} ---\n${s}`).join('\n\n')}\n\nOUTPUT: One merged Markdown summary in Russian, max 3000 words. Group by coin (${targetCoins}). Remove duplicates.`;
-    return await callClaude(systemPrompt, mergePrompt, 4096);
+    const data = await resp.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    if (!text) throw new Error('Empty response from Gemini');
+    return text.trim();
 
   } catch (error) {
-    console.error("Claude Filter Error:", error);
-    throw new Error("Ошибка при фильтрации данных через Claude: " + (error instanceof Error ? error.message : String(error)));
+    console.error("Gemini Pre-Filter Error:", error);
+    throw new Error("Ошибка при фильтрации данных через Gemini: " + (error instanceof Error ? error.message : String(error)));
   }
 };
 
