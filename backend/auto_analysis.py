@@ -405,16 +405,26 @@ OUTPUT RULES:
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
 
+    gemini_body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
+        "generationConfig": {"temperature": 0.1},
+    }
+
+    MAX_RETRIES = 3
     async with httpx.AsyncClient(timeout=3600) as client:
-        resp = await client.post(
-            url,
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "systemInstruction": {"parts": [{"text": "You are an elite data extraction engine. You filter noise from social media and keep pure signal."}]},
-                "generationConfig": {"temperature": 0.1},
-            },
-        )
-        if resp.status_code != 200:
+        for attempt in range(MAX_RETRIES + 1):
+            resp = await client.post(url, json=gemini_body)
+            
+            if resp.status_code == 200:
+                break
+            
+            if resp.status_code in (503, 429, 500) and attempt < MAX_RETRIES:
+                wait = 180 * (attempt + 1)  # 3min, 6min, 9min
+                logger.warning(f"Gemini API error {resp.status_code}, retry {attempt+1}/{MAX_RETRIES} in {wait}s...")
+                await asyncio.sleep(wait)
+                continue
+            
             logger.error(f"Gemini API error: {resp.status_code} - {resp.text[:500]}")
             raise RuntimeError(f"Gemini API error: {resp.status_code}")
 
