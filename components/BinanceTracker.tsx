@@ -8,7 +8,7 @@ const BinanceTracker: React.FC = () => {
     const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [expandedId, setExpandedId] = useState<number | 'all'>('all');
+    const [expandedId, setExpandedId] = useState<number | null>(null);
 
     const fetchTrackings = async () => {
         setIsLoading(true);
@@ -106,7 +106,7 @@ const BinanceTracker: React.FC = () => {
                         const hits = bp.filter(p => p.matched === true).length;
                         const misses = bp.filter(p => p.matched === false).length;
                         const acc = accuracy(bp);
-                        const isExpanded = true; // always expanded
+                        const isExpanded = expandedId === t.id;
                         const lastBinance = bp.length > 0 ? bp[bp.length - 1] : null;
                         const changeFromStart = lastBinance ? ((lastBinance.close_price - t.start_price) / t.start_price * 100) : 0;
 
@@ -122,7 +122,8 @@ const BinanceTracker: React.FC = () => {
 
                         return (
                             <div key={t.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden hover:border-yellow-500/30 transition-colors">
-                                <div className="p-4 flex items-center justify-between">
+                                <div className="p-4 flex items-center justify-between cursor-pointer"
+                                    onClick={() => setExpandedId(isExpanded ? null : t.id)}>
                                     <div className="flex items-center gap-4">
                                         <div className="text-xl font-bold text-white">{t.symbol}</div>
                                         <span className={`text-sm font-bold px-2 py-0.5 rounded ${color.text} ${color.bg}/20`}>
@@ -160,9 +161,14 @@ const BinanceTracker: React.FC = () => {
                                                     }`} />
                                             ))}
                                         </div>
+                                        <svg className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                        </svg>
                                     </div>
                                 </div>
 
+                                {isExpanded && (
                                     <div className="px-4 pb-4 border-t border-gray-800/50">
                                         <div className="flex justify-between items-center mt-3 mb-2">
                                             <div className="flex gap-4 text-xs text-gray-500">
@@ -235,6 +241,7 @@ const BinanceTracker: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
+                                )}
                             </div>
                         );
                     })}
