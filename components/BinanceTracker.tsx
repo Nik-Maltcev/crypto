@@ -53,6 +53,34 @@ const BinanceTracker: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex space-x-2 mt-4 sm:mt-0">
+                    <button onClick={() => {
+                        // CSV export
+                        const rows = ['Дата,Монета,Прогноз,Уверенность%,Старт$,Цель24ч$,Час,Binance$,Прогноз$,Совпало,CMC$,CMC_Совпало'];
+                        trackings.forEach(t => {
+                            const date = new Date(t.created_at).toLocaleDateString('ru-RU');
+                            (t.binance_prices || []).forEach(bp => {
+                                const cmc = (t.actual_prices || []).find(a => a.hour === bp.hour);
+                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${t.target_price_24h || ''},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${bp.matched === true ? 'ДА' : bp.matched === false ? 'НЕТ' : ''},${cmc?.real_price || ''},${cmc?.matched === true ? 'ДА' : cmc?.matched === false ? 'НЕТ' : ''}`);
+                            });
+                            // If no binance data, still export CMC
+                            if (!(t.binance_prices || []).length) {
+                                (t.actual_prices || []).forEach(a => {
+                                    rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${t.target_price_24h || ''},${a.hour},,,,${a.real_price},${a.matched === true ? 'ДА' : a.matched === false ? 'НЕТ' : ''}`);
+                                });
+                            }
+                        });
+                        const csv = '\uFEFF' + rows.join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `binance_forecast_${new Date().toISOString().split('T')[0]}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }}
+                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium transition">
+                        📥 CSV
+                    </button>
                     <button onClick={forceUpdate}
                         className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-sm font-medium transition">
                         Обновить цены
