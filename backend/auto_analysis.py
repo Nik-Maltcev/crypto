@@ -349,7 +349,7 @@ async def _get_reddit_token(client_id: str, client_secret: str) -> str:
 
 async def _fetch_market_data(cmc_api_key: str) -> str:
     """Fetch CoinMarketCap market context string."""
-    target_symbols = {"BTC", "ETH", "XRP", "SOL", "BNB", "DOGE", "HYPE", "ADA", "AVAX"}
+    target_symbols = {"BTC", "ETH", "XRP", "SOL", "BNB", "DOGE", "ADA", "AVAX"}
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
@@ -393,7 +393,7 @@ async def _filter_with_gemini(all_data: list[dict], gemini_api_key: str) -> str:
 TASK:
 You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw social media data from the last 16 hours, and compress it into a dense, highly informative analysis context that will be passed to Claude for final processing.
 Filter out all spam, useless hype, unrelated chatter, and noise.
-Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, HYPE, DOGE, BNB (и любые крупные Altcoins).
+Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, DOGE, BNB (и любые крупные Altcoins).
 
 OUTPUT RULES:
 - Output ONLY pure dense Markdown text. No JSON.
@@ -492,7 +492,7 @@ SOCIAL SENTIMENT & NEWS DATA (LAST 16 HOURS):
 --- FILTERED CONTEXT FROM GEMINI ---
 {filtered_context}
 
-TASK: Analyze sentiment for BTC, ETH, XRP, SOL, HYPE, DOGE, BNB. CURRENT UTC TIME: {now_utc}.
+TASK: Analyze sentiment for BTC, ETH, XRP, SOL, DOGE, BNB. CURRENT UTC TIME: {now_utc}.
 OUTPUT: JSON matching schema.
 
 FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.

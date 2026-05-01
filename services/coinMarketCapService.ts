@@ -5,7 +5,7 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 const PROXY_URL = `${BACKEND_URL}/api/proxy?url=`;
 const CMC_BASE_URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
 
-const TARGET_SYMBOLS = ['BTC', 'ETH', 'XRP', 'SOL', 'BNB', 'DOGE', 'HYPE', 'ADA', 'AVAX'];
+const TARGET_SYMBOLS = ['BTC', 'ETH', 'XRP', 'SOL', 'BNB', 'DOGE', 'ADA', 'AVAX'];
 
 export const fetchCryptoMarketData = async (): Promise<{ summary: string; coinMap: Map<string, CMCCoinData> }> => {
   try {

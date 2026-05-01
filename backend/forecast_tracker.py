@@ -21,7 +21,7 @@ from core.models import ForecastTracking, AnalysisLog
 
 logger = logging.getLogger(__name__)
 
-TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "DOGE", "BNB"]
+TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB"]
 CMC_QUOTES_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
 
 # Binance symbol mapping (our symbol -> Binance pair)
@@ -32,7 +32,6 @@ BINANCE_PAIRS = {
     "XRP": "XRPUSDT",
     "DOGE": "DOGEUSDT",
     "BNB": "BNBUSDT",
-    "HYPE": "HYPEUSDT",
 }
 
 

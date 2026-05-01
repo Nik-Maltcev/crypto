@@ -63,7 +63,7 @@ Telegram: ${telegramPayload}
 
   if (mode === 'simple') {
     const nowInput = new Date();
-    task = `Analyze sentiment for BTC, ETH, XRP, SOL, HYPE, DOGE, BNB. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL, DOGE, BNB. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
     modeInstructions = `
       FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
       MSK CONTEXT: Current time is UTC+3 (Moscow). 
@@ -74,7 +74,7 @@ Telegram: ${telegramPayload}
     `;
   } else if (mode === 'hourly') {
     const nowInput = new Date();
-    task = `Analyze sentiment for BTC, ETH, XRP, SOL, HYPE, DOGE, BNB. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL, DOGE, BNB. CURRENT UTC TIME: ${nowInput.toISOString()}.`;
     modeInstructions = `
       FORECAST TASK: Generate a detailed hourly forecast for the next 24 hours.
       MSK CONTEXT: Current time is UTC+3 (Moscow). 
@@ -86,7 +86,7 @@ Telegram: ${telegramPayload}
     `;
   } else if (mode === 'today_20msk') {
     const now = new Date();
-    task = `Analyze sentiment for BTC, ETH, XRP, SOL, HYPE, DOGE, BNB. CURRENT UTC TIME: ${now.toISOString()}.`;
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL, DOGE, BNB. CURRENT UTC TIME: ${now.toISOString()}.`;
     modeInstructions = `
       FORECAST TASK: Predict price for the UPCOMING 20:00 Moscow Time (UTC+3).
       If current time is before 17:00 UTC, target is TODAY 20:00 MSK (17:00 UTC).
@@ -96,7 +96,7 @@ Telegram: ${telegramPayload}
     `;
   } else if (mode === 'today_24msk') {
     const now = new Date();
-    task = `Analyze sentiment for BTC, ETH, XRP, SOL, HYPE, DOGE, BNB. CURRENT UTC TIME: ${now.toISOString()}.`;
+    task = `Analyze sentiment for BTC, ETH, XRP, SOL, DOGE, BNB. CURRENT UTC TIME: ${now.toISOString()}.`;
     modeInstructions = `
       FORECAST TASK: Predict price for the UPCOMING 24:00 Moscow Time (UTC+3) / End of current day MSK.
       If current time is before 21:00 UTC, target is TODAY 24:00 MSK (21:00 UTC).
