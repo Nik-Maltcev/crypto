@@ -599,7 +599,11 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             else:
                 logger.warning("REDDIT_CLIENT_ID/SECRET not set, skipping Reddit")
             
-            twitter_task = _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
+            # Twitter — TEMPORARILY DISABLED to save API quota
+            # twitter_task = _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
+            twitter_task = asyncio.Future()
+            twitter_task.set_result([])
+            logger.info("Step 1/4: Twitter SKIPPED (temporarily disabled)")
             
             # Wait for parallel tasks
             reddit_posts, twitter_posts = await asyncio.gather(reddit_task, twitter_task)
