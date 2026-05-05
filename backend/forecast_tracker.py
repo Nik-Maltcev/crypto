@@ -355,6 +355,8 @@ async def update_binance_tracking():
                     matched = True
                 else:
                     matched = False
+                
+                logger.info(f"[Binance] {tracking.symbol} h{hour_index}: pred={predicted_price:.3f} prev_pred={prev_predicted:.3f} pred_dir={'UP' if pred_dir > 0 else 'DOWN'} | binance={b_price:.3f} prev_b={prev_b_price:.3f} real_dir={'UP' if real_dir > 0 else 'DOWN'} | {'HIT' if matched else 'MISS'}")
 
             binance_data.append({
                 "timestamp": now.isoformat(),
