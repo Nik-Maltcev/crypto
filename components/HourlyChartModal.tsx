@@ -17,22 +17,32 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
 
     const hasHourlyData = coin.hourlyForecast && coin.hourlyForecast.length >= 6;
 
-    const chartData = hasHourlyData ? coin.hourlyForecast!.map((point) => {
+    const chartData = hasHourlyData ? coin.hourlyForecast!.map((point, index, arr) => {
         // Use analysisDate if provided, otherwise fallback to now
         const baseDate = coin.analysisDate ? new Date(coin.analysisDate) : new Date();
         
         // Ensure we are working with MSK for label generation
-        // If analysisDate is from backend, it's UTC.
         const mskOffset = 3 * 60; // 3 hours in minutes
         const baseMsk = new Date(baseDate.getTime() + (mskOffset + baseDate.getTimezoneOffset()) * 60000);
         
         const startHourMsk = (baseMsk.getHours() + 1) % 24;
         const targetHour = (startHourMsk + point.hourOffset - 1) % 24;
 
+        const currentPrice = point.price !== undefined && point.price !== null ? point.price : (coin.currentPrice || 0);
+        // Calculate hour-to-hour change (not from start)
+        let hourChange = 0;
+        if (index === 0) {
+            // First hour: change from start price
+            hourChange = coin.currentPrice ? ((currentPrice - coin.currentPrice) / coin.currentPrice) * 100 : 0;
+        } else {
+            const prevPrice = arr[index - 1]?.price || currentPrice;
+            hourChange = prevPrice ? ((currentPrice - prevPrice) / prevPrice) * 100 : 0;
+        }
+
         return {
             time: `${targetHour.toString().padStart(2, '0')}:00`,
-            price: point.price !== undefined && point.price !== null ? point.price : (coin.currentPrice || 0),
-            change: point.change !== undefined && point.change !== null ? point.change : 0,
+            price: currentPrice,
+            change: hourChange,
             confidence: point.confidence !== undefined && point.confidence !== null ? point.confidence : (coin.confidence || 50),
             hourOffset: point.hourOffset
         };
