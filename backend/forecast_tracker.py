@@ -190,6 +190,24 @@ async def update_forecast_tracking_job():
                 logger.warning(f"[ForecastTracker] No price for {tracking.symbol}")
                 continue
 
+            # Guard: skip if last update was less than 30 minutes ago
+            actual = []
+            if tracking.actual_prices_json:
+                try:
+                    actual = json.loads(tracking.actual_prices_json)
+                except:
+                    actual = []
+            if actual:
+                last_ts = actual[-1].get("timestamp", "")
+                if last_ts:
+                    from datetime import timezone as tz
+                    try:
+                        last_time = datetime.fromisoformat(last_ts.replace('Z', '+00:00')).replace(tzinfo=None)
+                        if (now - last_time).total_seconds() < 1800:  # 30 min
+                            continue
+                    except:
+                        pass
+
             hour_index = tracking.hours_tracked  # 0-based
             
             # Load forecast and actual history
@@ -329,6 +347,17 @@ async def update_binance_tracking():
                     binance_data = json.loads(tracking.binance_prices_json)
                 except:
                     binance_data = []
+
+            # Guard: skip if last Binance update was less than 30 minutes ago
+            if binance_data:
+                last_ts = binance_data[-1].get("timestamp", "")
+                if last_ts:
+                    try:
+                        last_time = datetime.fromisoformat(last_ts.replace('Z', '+00:00')).replace(tzinfo=None)
+                        if (now - last_time).total_seconds() < 1800:
+                            continue
+                    except:
+                        pass
 
             predicted_price = None
             if hour_index > 0 and (hour_index - 1) < len(forecast):
