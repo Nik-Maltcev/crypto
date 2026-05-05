@@ -11,7 +11,8 @@ function getPredDir(t: ForecastTracking, hourIdx: number): string {
     const curPrice = forecast[hourIdx]?.price;
     const prevPrice = hourIdx > 0 ? forecast[hourIdx - 1]?.price : t.start_price;
     if (curPrice == null || prevPrice == null) return '';
-    return curPrice >= prevPrice ? '\u2191' : '\u2193';
+    if (curPrice === prevPrice) return '=';
+    return curPrice > prevPrice ? '\u2191' : '\u2193';
 }
 
 // Helper: get binance direction for a given hour index
@@ -21,7 +22,8 @@ function getBinDir(t: ForecastTracking, hourIdx: number): string {
     const curPrice = bp[hourIdx]?.close_price;
     const prevPrice = hourIdx > 0 ? bp[hourIdx - 1]?.close_price : t.start_price;
     if (curPrice == null || prevPrice == null) return '';
-    return curPrice >= prevPrice ? '\u2191' : '\u2193';
+    if (curPrice === prevPrice) return '=';
+    return curPrice > prevPrice ? '\u2191' : '\u2193';
 }
 
 const BinanceTracker: React.FC = () => {
@@ -82,7 +84,7 @@ const BinanceTracker: React.FC = () => {
                             (t.binance_prices || []).forEach((bp, idx) => {
                                 const pDir = getPredDir(t, idx);
                                 const bDir = getBinDir(t, idx);
-                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bp.matched === true ? '\u0414\u0410' : bp.matched === false ? '\u041D\u0415\u0422' : ''}`);
+                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : pDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : bDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bp.matched === true ? '\u0414\u0410' : bp.matched === false ? '\u041D\u0415\u0422' : ''}`);
                             });
                         });
                         const csv = '\uFEFF' + rows.join('\n');
@@ -277,19 +279,23 @@ const BinanceTracker: React.FC = () => {
                                                     {bp.map((p, idx) => {
                                                         const pDir = getPredDir(t, idx);
                                                         const bDir = getBinDir(t, idx);
+                                                        const pDirClass = pDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : pDir === '=' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400';
+                                                        const pDirLabel = pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : pDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435';
+                                                        const bDirClass = bDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : bDir === '=' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400';
+                                                        const bDirLabel = bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : bDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435';
                                                         return (
                                                             <tr key={idx} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                                 <td className="py-1 px-1 text-gray-400 font-mono">{p.hour}{'\u0447'}</td>
-                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.predicted_price || '\u2014'}</td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.predicted_price ? (p.predicted_price < 1 ? p.predicted_price.toFixed(7) : p.predicted_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 5})) : '\u2014'}</td>
                                                                 <td className="py-1 px-1 text-center">
-                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${pDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                                                                        {pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'}
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${pDirClass}`}>
+                                                                        {pDirLabel}
                                                                     </span>
                                                                 </td>
-                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.close_price}</td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.close_price < 1 ? p.close_price.toFixed(7) : p.close_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 5})}</td>
                                                                 <td className="py-1 px-1 text-center">
-                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${bDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                                                                        {bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'}
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${bDirClass}`}>
+                                                                        {bDirLabel}
                                                                     </span>
                                                                 </td>
                                                                 <td className="py-1 px-1 text-center text-lg">

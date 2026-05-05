@@ -392,8 +392,8 @@ async def update_binance_tracking():
             binance_data.append({
                 "timestamp": now.isoformat(),
                 "hour": b_hour_index + 1,
-                "close_price": round(b_price, 3),
-                "predicted_price": round(predicted_price, 3) if predicted_price else None,
+                "close_price": round(b_price, 6),
+                "predicted_price": round(predicted_price, 6) if predicted_price else None,
                 "matched": matched,
             })
 
