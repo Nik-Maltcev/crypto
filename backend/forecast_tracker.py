@@ -360,8 +360,10 @@ async def update_binance_tracking():
                         pass
 
             predicted_price = None
-            if hour_index > 0 and (hour_index - 1) < len(forecast):
-                predicted_price = forecast[hour_index - 1].get("price")
+            # Use binance_data length as hour index (independent from CMC hours_tracked)
+            b_hour_index = len(binance_data)
+            if b_hour_index < len(forecast):
+                predicted_price = forecast[b_hour_index].get("price")
 
             # Direction matching (same logic as CMC)
             prev_b_price = tracking.start_price
@@ -369,8 +371,8 @@ async def update_binance_tracking():
                 prev_b_price = binance_data[-1].get("close_price", tracking.start_price)
 
             prev_predicted = tracking.start_price
-            if hour_index > 1 and (hour_index - 2) < len(forecast):
-                prev_predicted = forecast[hour_index - 2].get("price", tracking.start_price)
+            if b_hour_index > 0 and (b_hour_index - 1) < len(forecast):
+                prev_predicted = forecast[b_hour_index - 1].get("price", tracking.start_price)
 
             matched = None
             if predicted_price is not None:
@@ -389,7 +391,7 @@ async def update_binance_tracking():
 
             binance_data.append({
                 "timestamp": now.isoformat(),
-                "hour": hour_index,
+                "hour": b_hour_index + 1,
                 "close_price": round(b_price, 3),
                 "predicted_price": round(predicted_price, 3) if predicted_price else None,
                 "matched": matched,
