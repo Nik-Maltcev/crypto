@@ -11,7 +11,6 @@ import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import AnalysisHistory from './components/AnalysisHistory';
-import ForecastTracker from './components/ForecastTracker';
 import BinanceTracker from './components/BinanceTracker';
 
 // Icons
@@ -44,7 +43,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'forecast' | 'binance'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'binance'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -503,12 +502,6 @@ const App: React.FC = () => {
                 📊 История
               </button>
               <button
-                onClick={() => setActiveTab('forecast')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'forecast' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📈 Прогноз vs Реальность
-              </button>
-              <button
                 onClick={() => setActiveTab('binance')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'binance' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -561,8 +554,6 @@ const App: React.FC = () => {
 
         {activeTab === 'history' ? (
           <AnalysisHistory />
-        ) : activeTab === 'forecast' ? (
-          <ForecastTracker />
         ) : activeTab === 'binance' ? (
           <BinanceTracker />
         ) : (
