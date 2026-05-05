@@ -18,21 +18,15 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
     const hasHourlyData = coin.hourlyForecast && coin.hourlyForecast.length >= 6;
 
     const chartData = hasHourlyData ? coin.hourlyForecast!.map((point, index, arr) => {
-        // Use analysisDate if provided, otherwise fallback to now
         const baseDate = coin.analysisDate ? new Date(coin.analysisDate) : new Date();
-        
-        // Ensure we are working with MSK for label generation
-        const mskOffset = 3 * 60; // 3 hours in minutes
+        const mskOffset = 3 * 60;
         const baseMsk = new Date(baseDate.getTime() + (mskOffset + baseDate.getTimezoneOffset()) * 60000);
-        
         const startHourMsk = (baseMsk.getHours() + 1) % 24;
         const targetHour = (startHourMsk + point.hourOffset - 1) % 24;
 
         const currentPrice = point.price !== undefined && point.price !== null ? point.price : (coin.currentPrice || 0);
-        // Calculate hour-to-hour change (not from start)
         let hourChange = 0;
         if (index === 0) {
-            // First hour: change from start price
             hourChange = coin.currentPrice ? ((currentPrice - coin.currentPrice) / coin.currentPrice) * 100 : 0;
         } else {
             const prevPrice = arr[index - 1]?.price || currentPrice;
@@ -43,6 +37,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
             time: `${targetHour.toString().padStart(2, '0')}:00`,
             price: currentPrice,
             change: hourChange,
+            direction: hourChange >= 0 ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435',
             confidence: point.confidence !== undefined && point.confidence !== null ? point.confidence : (coin.confidence || 50),
             hourOffset: point.hourOffset
         };
@@ -55,7 +50,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
         if (prices.length > 0) {
             const minP = Math.min(...prices);
             const maxP = Math.max(...prices);
-            const diff = maxP - minP || maxP * 0.01; // avoid zero diff
+            const diff = maxP - minP || maxP * 0.01;
             minPrice = minP - diff * 0.1;
             maxPrice = maxP + diff * 0.1;
         }
@@ -93,7 +88,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                 {coin.name}
                             </span>
                         </h2>
-                        <p className="text-sm text-gray-400 mt-1">Почасовой прогноз (Время МСК)</p>
+                        <p className="text-sm text-gray-400 mt-1">{'\u041F\u043E\u0447\u0430\u0441\u043E\u0432\u043E\u0439 \u043F\u0440\u043E\u0433\u043D\u043E\u0437 (\u0412\u0440\u0435\u043C\u044F \u041C\u0421\u041A)'}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -110,16 +105,16 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                 <div className="p-6 flex-grow flex flex-col min-h-[400px]">
                     {!hasHourlyData ? (
                         <div className="flex-1 flex items-center justify-center text-gray-500">
-                            График недоступен для данного актива.
+                            {'\u0413\u0440\u0430\u0444\u0438\u043A \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0434\u043B\u044F \u0434\u0430\u043D\u043D\u043E\u0433\u043E \u0430\u043A\u0442\u0438\u0432\u0430.'}
                         </div>
                     ) : (
                         <>
                             {/* Price Chart */}
-                            <div className="w-full" style={{ height: '300px' }}>
+                            <div className="w-full" style={{ height: '250px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 5 }}>
                                         <defs>
-                                            <linearGradient id={`colorPriceModal`} x1="0" y1="0" x2="0" y2="1">
+                                            <linearGradient id="colorPriceModal" x1="0" y1="0" x2="0" y2="1">
                                                 <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />
                                                 <stop offset="95%" stopColor={chartColor} stopOpacity={0} />
                                             </linearGradient>
@@ -130,7 +125,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             stroke="#4B5563"
                                             fontSize={12}
                                             tickMargin={12}
-                                            tickFormatter={(value, index) => index % 3 === 0 ? value : ''}
+                                            tickFormatter={(value: string, index: number) => index % 3 === 0 ? value : ''}
                                         />
 
                                         <YAxis
@@ -138,7 +133,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             stroke="#4B5563"
                                             fontSize={12}
                                             width={80}
-                                            tickFormatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 5, maximumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 5 })}`}
+                                            tickFormatter={(value: number) => `${Number(value).toLocaleString('en-US', { minimumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 5, maximumFractionDigits: coin.currentPrice && coin.currentPrice < 1 ? 4 : 5 })}`}
                                         />
 
                                         <Tooltip
@@ -150,11 +145,12 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             }}
                                             labelStyle={{ color: '#9CA3AF', marginBottom: '8px', fontWeight: 'bold' }}
                                             formatter={(value: any, name: any) => {
-                                                if (name === 'price') return [`$${value < 1 ? Number(value).toFixed(6) : Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, 'Цена'];
-                                                if (name === 'change') return [`${value > 0 ? '+' : ''}${Number(value).toFixed(2)}%`, 'Изменение'];
+                                                if (name === 'price') return [`${value < 1 ? Number(value).toFixed(6) : Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, '\u0426\u0435\u043D\u0430'];
+                                                if (name === 'change') return [`${value > 0 ? '+' : ''}${Number(value).toFixed(2)}% ${value >= 0 ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'}`, '\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435'];
+                                                if (name === 'direction') return [value, '\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435'];
                                                 return [value, name];
                                             }}
-                                            labelFormatter={(label) => `Время (МСК): ${label}`}
+                                            labelFormatter={(label: string) => `\u0412\u0440\u0435\u043C\u044F (\u041C\u0421\u041A): ${label}`}
                                         />
 
                                         <Area
@@ -163,41 +159,44 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             stroke={chartColor}
                                             strokeWidth={3}
                                             fillOpacity={1}
-                                            fill={`url(#colorPriceModal)`}
+                                            fill="url(#colorPriceModal)"
                                         />
                                         <Area type="monotone" dataKey="change" stroke="none" fill="none" />
+                                        <Area type="monotone" dataKey="direction" stroke="none" fill="none" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
 
-                            {/* Confidence Row */}
-                            <div className="mt-2 px-2">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold mb-1.5 tracking-wider">Уверенность AI по часам</p>
-                                <div className="flex gap-[2px]">
-                                    {chartData.map((d, i) => (
-                                        <div key={i} className="flex-1 flex flex-col items-center group relative">
-                                            <div
-                                                className={`w-full rounded-sm ${getConfidenceColor(d.confidence)} transition-all`}
-                                                style={{ height: `${Math.max(4, d.confidence * 0.3)}px`, opacity: 0.7 }}
-                                            />
-                                            <span className="text-[8px] text-gray-500 mt-0.5">
-                                                {i % 3 === 0 ? d.confidence + '%' : ''}
-                                            </span>
-                                            <span className="text-[7px] text-gray-600 font-mono leading-tight">
-                                                {i % 3 === 0 ? (d.price < 1 ? d.price.toFixed(4) : '$' + d.price.toLocaleString('en-US', { maximumFractionDigits: 0 })) : ''}
-                                            </span>
-                                            {/* Tooltip on hover */}
-                                            <div className="absolute bottom-full mb-1 bg-gray-800 text-[10px] text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
-                                                <span className="font-bold">{d.time}</span>
-                                                <span className="text-gray-300">${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString()}</span>
-                                                <span className={`${d.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {/* Hourly direction table */}
+                            <div className="mt-3 overflow-x-auto max-h-[200px]">
+                                <table className="w-full text-xs">
+                                    <thead className="sticky top-0 bg-gray-900">
+                                        <tr className="text-gray-500 border-b border-gray-800">
+                                            <th className="py-1 px-2 text-left">{'\u0427\u0430\u0441'}</th>
+                                            <th className="py-1 px-2 text-right">{'\u0426\u0435\u043D\u0430'}</th>
+                                            <th className="py-1 px-2 text-center">{'\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435'}</th>
+                                            <th className="py-1 px-2 text-center">{'\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435'}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {chartData.map((d, i) => (
+                                            <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                                                <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
+                                                <td className="py-1 px-2 text-right text-gray-300 font-mono">
+                                                    ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+                                                </td>
+                                                <td className={`py-1 px-2 text-center font-mono ${d.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                     {d.change > 0 ? '+' : ''}{d.change.toFixed(2)}%
-                                                </span>
-                                                <span className="text-gray-400">Уверенность: {d.confidence}%</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                                </td>
+                                                <td className="py-1 px-2 text-center">
+                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${d.change >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                        {d.direction}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </>
                     )}
@@ -207,33 +206,28 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                 <div className="p-4 bg-gray-900/60 border-t border-gray-800 flex justify-between text-sm">
                     <div className="flex gap-6">
                         <div>
-                            <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">Прогноз</span>
+                            <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437'}</span>
                             <span className={`font-bold ${isBullish ? 'text-emerald-400' : isBearish ? 'text-red-400' : 'text-yellow-400'}`}>
                                 {coin.prediction} ({coin.confidence}%)
                             </span>
                         </div>
                         {coin.change24h !== undefined && (
                             <div>
-                                <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">За 24 часа</span>
+                                <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">{'\u0417\u0430 24 \u0447\u0430\u0441\u0430'}</span>
                                 <span className={`font-bold ${coin.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                     {coin.change24h > 0 ? '+' : ''}{coin.change24h.toFixed(2)}%
                                 </span>
                             </div>
                         )}
                         <div>
-                            <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">Ср. уверенность</span>
+                            <span className="text-gray-500 block text-xs uppercase font-bold tracking-wider">{'\u0421\u0440. \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C'}</span>
                             <span className={`font-bold ${avgConfidence >= 75 ? 'text-emerald-400' : avgConfidence >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                                 {avgConfidence}%
                             </span>
                         </div>
-                        <div className="flex items-end gap-2 text-[10px] text-gray-500">
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"></span>≥75%</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500 inline-block"></span>50-74%</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block"></span>&lt;50%</span>
-                        </div>
                     </div>
-                    <div className="text-right">
-                        <p className="text-gray-400 max-w-lg text-xs leading-relaxed">{coin.reasoning}</p>
+                    <div className="text-right max-w-lg">
+                        <p className="text-gray-400 text-xs leading-relaxed">{coin.reasoning}</p>
                     </div>
                 </div>
 

@@ -4,6 +4,26 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 
 const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
+// Helper: get predicted direction for a given hour index
+function getPredDir(t: ForecastTracking, hourIdx: number): string {
+    const forecast = t.hourly_forecast || [];
+    if (hourIdx >= forecast.length) return '';
+    const curPrice = forecast[hourIdx]?.price;
+    const prevPrice = hourIdx > 0 ? forecast[hourIdx - 1]?.price : t.start_price;
+    if (curPrice == null || prevPrice == null) return '';
+    return curPrice >= prevPrice ? '\u2191' : '\u2193';
+}
+
+// Helper: get binance direction for a given hour index
+function getBinDir(t: ForecastTracking, hourIdx: number): string {
+    const bp = t.binance_prices || [];
+    if (hourIdx >= bp.length) return '';
+    const curPrice = bp[hourIdx]?.close_price;
+    const prevPrice = hourIdx > 0 ? bp[hourIdx - 1]?.close_price : t.start_price;
+    if (curPrice == null || prevPrice == null) return '';
+    return curPrice >= prevPrice ? '\u2191' : '\u2193';
+}
+
 const BinanceTracker: React.FC = () => {
     const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +46,7 @@ const BinanceTracker: React.FC = () => {
         try {
             await fetch(`${BACKEND_URL}/api/forecast/force_update`, { method: 'POST' });
             setTimeout(fetchTrackings, 3000);
-        } catch (e: any) { alert('Ошибка: ' + e.message); }
+        } catch (e: any) { alert('Error: ' + e.message); }
     };
 
     useEffect(() => { fetchTrackings(); }, []);
@@ -47,27 +67,23 @@ const BinanceTracker: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Прогноз vs Binance</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437 vs Binance'}</h2>
                     <p className="text-gray-400 text-sm">
-                        Почасовое сравнение AI-прогноза с ценами закрытия Binance
+                        {'\u041F\u043E\u0447\u0430\u0441\u043E\u0432\u043E\u0435 \u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435 AI-\u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430 \u0441 \u0446\u0435\u043D\u0430\u043C\u0438 \u0437\u0430\u043A\u0440\u044B\u0442\u0438\u044F Binance'}
                     </p>
                 </div>
                 <div className="flex space-x-2 mt-4 sm:mt-0">
                     <button onClick={() => {
-                        // CSV export
-                        const rows = ['Дата,Монета,Прогноз,Уверенность%,Старт$,Цель24ч$,Час,Binance$,Прогноз$,Совпало,CMC$,CMC_Совпало'];
+                        // CSV export with direction columns
+                        const header = '\u0414\u0430\u0442\u0430,\u041C\u043E\u043D\u0435\u0442\u0430,\u041F\u0440\u043E\u0433\u043D\u043E\u0437,\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C%,\u0421\u0442\u0430\u0440\u0442$,\u0427\u0430\u0441,Binance$,\u041F\u0440\u043E\u0433\u043D\u043E\u0437$,\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430,\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 Binance,\u0421\u043E\u0432\u043F\u0430\u043B\u043E';
+                        const rows = [header];
                         trackings.forEach(t => {
                             const date = new Date(t.created_at).toLocaleDateString('ru-RU');
-                            (t.binance_prices || []).forEach(bp => {
-                                const cmc = (t.actual_prices || []).find(a => a.hour === bp.hour);
-                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${t.target_price_24h || ''},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${bp.matched === true ? 'ДА' : bp.matched === false ? 'НЕТ' : ''},${cmc?.real_price || ''},${cmc?.matched === true ? 'ДА' : cmc?.matched === false ? 'НЕТ' : ''}`);
+                            (t.binance_prices || []).forEach((bp, idx) => {
+                                const pDir = getPredDir(t, idx);
+                                const bDir = getBinDir(t, idx);
+                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bp.matched === true ? '\u0414\u0410' : bp.matched === false ? '\u041D\u0415\u0422' : ''}`);
                             });
-                            // If no binance data, still export CMC
-                            if (!(t.binance_prices || []).length) {
-                                (t.actual_prices || []).forEach(a => {
-                                    rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${t.target_price_24h || ''},${a.hour},,,,${a.real_price},${a.matched === true ? 'ДА' : a.matched === false ? 'НЕТ' : ''}`);
-                                });
-                            }
                         });
                         const csv = '\uFEFF' + rows.join('\n');
                         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -79,36 +95,34 @@ const BinanceTracker: React.FC = () => {
                         URL.revokeObjectURL(url);
                     }}
                         className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium transition">
-                        📥 CSV
+                        {'\uD83D\uDCE5 CSV'}
                     </button>
                     <button onClick={forceUpdate}
                         className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-sm font-medium transition">
-                        Обновить цены
+                        {'\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0446\u0435\u043D\u044B'}
                     </button>
                     <button onClick={fetchTrackings} disabled={isLoading}
                         className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50">
-                        🔄
+                        {'\uD83D\uDD04'}
                     </button>
                 </div>
             </div>
 
             {isLoading && !trackings.length ? (
-                <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>
+                <div className="flex justify-center py-20 text-gray-500">{'\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430...'}</div>
             ) : error ? (
                 <div className="bg-red-500/10 border border-red-500 text-red-400 p-4 rounded-xl">{error}</div>
             ) : !trackings.length ? (
                 <div className="text-center p-10 bg-gray-900/50 rounded-xl border border-dashed border-gray-700 text-gray-500">
-                    Нет данных. Запустите анализ — трекинг Binance начнётся автоматически.
+                    {'\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u0430\u043D\u0430\u043B\u0438\u0437 \u2014 \u0442\u0440\u0435\u043A\u0438\u043D\u0433 Binance \u043D\u0430\u0447\u043D\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.'}
                 </div>
             ) : (
                 <div className="space-y-6">
                     {(() => {
                         const groups: Record<string, ForecastTracking[]> = {};
                         trackings.forEach(t => {
-                            const bp = t.binance_prices || [];
-                            // Show all trackings: active ones always, completed ones even without binance data
                             const dateKey = t.status === 'active'
-                                ? '⏳ Активные'
+                                ? '\u23F3 \u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0435'
                                 : new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
                             if (!groups[dateKey]) groups[dateKey] = [];
                             groups[dateKey].push(t);
@@ -125,9 +139,6 @@ const BinanceTracker: React.FC = () => {
                                 <div className="flex items-center gap-3 mb-3">
                                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{dateKey}</h3>
                                     <div className="flex-1 h-px bg-gray-800"></div>
-                                    {dateKey !== '⏳ Активные' && (
-                                        <span className="text-xs text-gray-600">{groups[dateKey].length} монет</span>
-                                    )}
                                 </div>
                                 <div className="space-y-3">
                     {groups[dateKey].map(t => {
@@ -140,10 +151,10 @@ const BinanceTracker: React.FC = () => {
                         const lastBinance = bp.length > 0 ? bp[bp.length - 1] : null;
                         const changeFromStart = lastBinance ? ((lastBinance.close_price - t.start_price) / t.start_price * 100) : 0;
 
-                        const chartData = t.hourly_forecast.map((fp, i) => {
+                        const chartData = t.hourly_forecast.map((fp) => {
                             const binance = bp.find(b => b.hour === fp.hourOffset);
                             return {
-                                hour: `${fp.hourOffset}ч`,
+                                hour: `${fp.hourOffset}\u0447`,
                                 predicted: fp.price,
                                 binance: binance?.close_price ?? null,
                                 matched: binance?.matched ?? null,
@@ -162,12 +173,12 @@ const BinanceTracker: React.FC = () => {
                                         <span className={`text-xs px-2 py-0.5 rounded ${
                                             t.status === 'active' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'
                                         }`}>
-                                            {t.status === 'active' ? `⏳ ${bp.length}/24ч` : `✅ Завершён`}
+                                            {t.status === 'active' ? `\u23F3 ${bp.length}/24\u0447` : '\u2705 \u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043D'}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-6">
                                         <div className="text-right">
-                                            <div className="text-[10px] text-gray-500 uppercase font-bold">Точность</div>
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold">{'\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C'}</div>
                                             <div className={`text-lg font-bold ${acc >= 60 ? 'text-emerald-400' : acc >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
                                                 {acc}%
                                             </div>
@@ -182,14 +193,18 @@ const BinanceTracker: React.FC = () => {
                                             </div>
                                         )}
                                         <div className="flex gap-0.5">
-                                            {bp.slice(-12).map((p, i) => (
-                                                <div key={i}
-                                                    title={`${p.hour}ч: $${p.close_price} ${p.matched ? '✅' : '❌'}`}
-                                                    className={`w-2.5 h-2.5 rounded-sm ${
-                                                        p.matched === true ? 'bg-emerald-500' :
-                                                        p.matched === false ? 'bg-red-500' : 'bg-gray-700'
-                                                    }`} />
-                                            ))}
+                                            {bp.slice(-12).map((p, i) => {
+                                                const idx = bp.length > 12 ? bp.length - 12 + i : i;
+                                                const pD = getPredDir(t, idx);
+                                                return (
+                                                    <div key={i}
+                                                        title={`${p.hour}\u0447: ${pD} pred=$${p.predicted_price || '?'} | Binance=$${p.close_price} ${p.matched ? '\u2705' : '\u274C'}`}
+                                                        className={`w-2.5 h-2.5 rounded-sm ${
+                                                            p.matched === true ? 'bg-emerald-500' :
+                                                            p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                        }`} />
+                                                );
+                                            })}
                                         </div>
                                         <svg className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -202,18 +217,11 @@ const BinanceTracker: React.FC = () => {
                                     <div className="px-4 pb-4 border-t border-gray-800/50">
                                         <div className="flex justify-between items-center mt-3 mb-2">
                                             <div className="flex gap-4 text-xs text-gray-500">
-                                                <span>Старт: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span></span>
-                                                {t.target_price_24h && (
-                                                    <span>Цель 24ч: <span className="text-white font-mono">${t.target_price_24h.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span>
-                                                        <span className={`ml-1 ${(t.target_change_24h || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                            ({(t.target_change_24h || 0) > 0 ? '+' : ''}{t.target_change_24h}%)
-                                                        </span>
-                                                    </span>
-                                                )}
+                                                <span>{'\u0421\u0442\u0430\u0440\u0442'}: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span></span>
                                             </div>
                                             <div className="flex gap-4 text-[10px] text-gray-500 uppercase font-bold">
                                                 <span className="flex items-center gap-1">
-                                                    <span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block"></span> Прогноз
+                                                    <span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block"></span> {'\u041F\u0440\u043E\u0433\u043D\u043E\u0437'}
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <span className="w-2 h-2 rounded-sm bg-yellow-400 inline-block"></span> Binance
@@ -235,13 +243,13 @@ const BinanceTracker: React.FC = () => {
                                                     </defs>
                                                     <XAxis dataKey="hour" stroke="#4B5563" fontSize={11} tickMargin={8} />
                                                     <YAxis stroke="#4B5563" fontSize={11} width={70} domain={['auto', 'auto']}
-                                                        tickFormatter={(v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`} />
+                                                        tickFormatter={(v) => `${Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`} />
                                                     <Tooltip
                                                         contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px' }}
                                                         labelStyle={{ color: '#9CA3AF' }}
                                                         formatter={(value: any, name: string) => {
-                                                            if (value === null) return ['—', name === 'predicted' ? 'Прогноз' : 'Binance'];
-                                                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, name === 'predicted' ? 'Прогноз' : 'Binance'];
+                                                            if (value === null) return ['\u2014', name === 'predicted' ? '\u041F\u0440\u043E\u0433\u043D\u043E\u0437' : 'Binance'];
+                                                            return [`${Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, name === 'predicted' ? '\u041F\u0440\u043E\u0433\u043D\u043E\u0437' : 'Binance'];
                                                         }}
                                                     />
                                                     <ReferenceLine y={t.start_price} stroke="#4B5563" strokeDasharray="3 3" />
@@ -252,19 +260,64 @@ const BinanceTracker: React.FC = () => {
                                                 </AreaChart>
                                             </ResponsiveContainer>
                                         </div>
+                                        {/* Direction table */}
+                                        <div className="mt-3 overflow-x-auto">
+                                            <table className="w-full text-xs">
+                                                <thead>
+                                                    <tr className="text-gray-500 border-b border-gray-800">
+                                                        <th className="py-1 px-1 text-left">{'\u0427\u0430\u0441'}</th>
+                                                        <th className="py-1 px-1 text-right">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437$'}</th>
+                                                        <th className="py-1 px-1 text-center">{'\u041D\u0430\u043F\u0440. \u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430'}</th>
+                                                        <th className="py-1 px-1 text-right">Binance$</th>
+                                                        <th className="py-1 px-1 text-center">{'\u041D\u0430\u043F\u0440. Binance'}</th>
+                                                        <th className="py-1 px-1 text-center">{'\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442'}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {bp.map((p, idx) => {
+                                                        const pDir = getPredDir(t, idx);
+                                                        const bDir = getBinDir(t, idx);
+                                                        return (
+                                                            <tr key={idx} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                                                                <td className="py-1 px-1 text-gray-400 font-mono">{p.hour}{'\u0447'}</td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.predicted_price || '\u2014'}</td>
+                                                                <td className="py-1 px-1 text-center">
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${pDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                        {pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.close_price}</td>
+                                                                <td className="py-1 px-1 text-center">
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${bDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                        {bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-1 px-1 text-center text-lg">
+                                                                    {p.matched === true ? '\u2705' : p.matched === false ? '\u274C' : '\u2796'}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                         <div className="mt-2">
                                             <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 text-center tracking-wider">
-                                                Совпадение направления по часам ({hits}✅ / {misses}❌)
+                                                {'\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u043F\u043E \u0447\u0430\u0441\u0430\u043C'} ({hits}{'\u2705'} / {misses}{'\u274C'})
                                             </div>
                                             <div className="flex gap-[2px] justify-center">
-                                                {bp.map((p, i) => (
-                                                    <div key={i}
-                                                        title={`${p.hour}ч: Binance=$${p.close_price} pred=$${p.predicted_price || '?'} ${p.matched ? '✅' : '❌'}`}
-                                                        className={`w-3 h-3 rounded-sm transition-all ${
-                                                            p.matched === true ? 'bg-emerald-500' :
-                                                            p.matched === false ? 'bg-red-500' : 'bg-gray-700'
-                                                        }`} />
-                                                ))}
+                                                {bp.map((p, i) => {
+                                                    const pD = getPredDir(t, i);
+                                                    const bD = getBinDir(t, i);
+                                                    return (
+                                                        <div key={i}
+                                                            title={`${p.hour}\u0447: \u041F\u0440\u043E\u0433\u043D\u043E\u0437${pD} Binance${bD} ${p.matched ? '\u2705' : '\u274C'}`}
+                                                            className={`w-3 h-3 rounded-sm transition-all ${
+                                                                p.matched === true ? 'bg-emerald-500' :
+                                                                p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                            }`} />
+                                                    );
+                                                })}
                                                 {Array.from({ length: Math.max(0, 24 - bp.length) }).map((_, i) => (
                                                     <div key={`e-${i}`} className="w-3 h-3 rounded-sm bg-gray-800 border border-gray-700/50" />
                                                 ))}
@@ -276,71 +329,9 @@ const BinanceTracker: React.FC = () => {
                         );
                     })}
                                 </div>
-                                {/* Per-day summary for completed trackings */}
-                                {dateKey !== '⏳ Активные' && (() => {
-                                    const dayCompleted = groups[dateKey].filter(t => t.binance_prices && t.binance_prices.length >= 20);
-                                    if (dayCompleted.length < 2) return null;
-
-                                    const hourStats: Record<number, { wins: number; total: number }> = {};
-                                    dayCompleted.forEach(t => {
-                                        (t.binance_prices || []).forEach(bp => {
-                                            if (!hourStats[bp.hour]) hourStats[bp.hour] = { wins: 0, total: 0 };
-                                            hourStats[bp.hour].total++;
-                                            if (bp.matched) hourStats[bp.hour].wins++;
-                                        });
-                                    });
-
-                                    const hourEntries = Object.entries(hourStats)
-                                        .map(([h, s]) => ({ hour: Number(h), pct: Math.round((s.wins / s.total) * 100) }))
-                                        .sort((a, b) => b.pct - a.pct);
-
-                                    const bestHours = hourEntries.filter(h => h.pct >= 60).slice(0, 5);
-                                    const worstHours = [...hourEntries].sort((a, b) => a.pct - b.pct).filter(h => h.pct < 40).slice(0, 5);
-
-                                    const coinStats = dayCompleted.map(t => {
-                                        const bp = t.binance_prices || [];
-                                        const hits = bp.filter(p => p.matched === true).length;
-                                        return { symbol: t.symbol, acc: bp.length > 0 ? Math.round((hits / bp.length) * 100) : 0 };
-                                    }).sort((a, b) => b.acc - a.acc);
-
-                                    const totalHits = dayCompleted.reduce((sum, t) => sum + (t.binance_prices || []).filter(p => p.matched === true).length, 0);
-                                    const totalPoints = dayCompleted.reduce((sum, t) => sum + (t.binance_prices || []).length, 0);
-                                    const overallAcc = totalPoints > 0 ? Math.round((totalHits / totalPoints) * 100) : 0;
-
-                                    return (
-                                        <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-4 mt-3">
-                                            <h4 className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-3">📊 Итоги: {dateKey}</h4>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                                                <div>
-                                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Точность</div>
-                                                    <div className={`text-xl font-bold ${overallAcc >= 60 ? 'text-emerald-400' : overallAcc >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>{overallAcc}%</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Лучшая</div>
-                                                    <div className="text-sm font-bold text-white">{coinStats[0]?.symbol} <span className="text-emerald-400">{coinStats[0]?.acc}%</span></div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Худшая</div>
-                                                    <div className="text-sm font-bold text-white">{coinStats[coinStats.length - 1]?.symbol} <span className="text-red-400">{coinStats[coinStats.length - 1]?.acc}%</span></div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Итого</div>
-                                                    <div className="text-sm font-bold text-white">{totalHits}✅ / {totalPoints - totalHits}❌</div>
-                                                </div>
-                                            </div>
-                                            {bestHours.length > 0 && (
-                                                <div className="text-xs mb-1"><span className="text-gray-400">🎯 Лучшие часы: </span><span className="text-emerald-400 font-mono">{bestHours.map(h => `${h.hour}ч (${h.pct}%)`).join(', ')}</span></div>
-                                            )}
-                                            {worstHours.length > 0 && (
-                                                <div className="text-xs"><span className="text-gray-400">💀 Худшие часы: </span><span className="text-red-400 font-mono">{worstHours.map(h => `${h.hour}ч (${h.pct}%)`).join(', ')}</span></div>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
                             </div>
                         ));
                     })()}
-
                 </div>
             )}
         </div>
