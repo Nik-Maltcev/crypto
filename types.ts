@@ -250,6 +250,15 @@ export interface ForecastTracking {
     predicted_price: number | null;
     matched: boolean | null;
   }[];
+  polymarket_prices: {
+    timestamp: string;
+    hour: number;
+    open: number;
+    close: number;
+    candle_direction: 'up' | 'down';
+    predicted_direction: 'up' | 'down' | null;
+    matched: boolean | null;
+  }[];
   status: 'active' | 'completed' | 'expired';
   hours_tracked: number;
   hits: number;

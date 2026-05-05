@@ -106,7 +106,7 @@ const BinanceTracker: React.FC = () => {
                         const groups: Record<string, ForecastTracking[]> = {};
                         trackings.forEach(t => {
                             const bp = t.binance_prices || [];
-                            if (bp.length === 0 && t.status !== 'active') return;
+                            // Show all trackings: active ones always, completed ones even without binance data
                             const dateKey = t.status === 'active'
                                 ? '⏳ Активные'
                                 : new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });

@@ -402,3 +402,143 @@ async def update_binance_tracking():
 
         await session.commit()
     logger.info("[Binance] Done.")
+
+
+async def fetch_binance_kline(symbol: str, interval: str = "1h", limit: int = 1) -> dict | None:
+    """Fetch the latest closed 1h kline (candle) from Binance for a symbol.
+    
+    Returns dict with 'open' and 'close' prices of the last CLOSED candle.
+    """
+    pair = BINANCE_PAIRS.get(symbol)
+    if not pair:
+        return None
+    
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            resp = await client.get(
+                "https://api.binance.com/api/v3/klines",
+                params={"symbol": pair, "interval": interval, "limit": 2}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                # data is array of arrays: [open_time, open, high, low, close, volume, close_time, ...]
+                # We want the LAST CLOSED candle (index 0 if limit=2, since last one is still open)
+                if len(data) >= 2:
+                    candle = data[-2]  # Previous (closed) candle
+                    return {
+                        "open": float(candle[1]),
+                        "close": float(candle[4]),
+                        "open_time": int(candle[0]),
+                        "close_time": int(candle[6]),
+                    }
+                elif len(data) == 1:
+                    candle = data[0]
+                    return {
+                        "open": float(candle[1]),
+                        "close": float(candle[4]),
+                        "open_time": int(candle[0]),
+                        "close_time": int(candle[6]),
+                    }
+        except Exception as e:
+            logger.warning(f"[Polymarket] Failed to fetch kline for {symbol}: {e}")
+    return None
+
+
+async def update_polymarket_tracking():
+    """Polymarket-style tracking: compare AI forecast direction with 1h candle direction (close >= open = Up)."""
+    logger.info("[Polymarket] Starting hourly Polymarket-style tracking update...")
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(ForecastTracking).where(ForecastTracking.status == "active")
+        )
+        active = result.scalars().all()
+
+        if not active:
+            logger.info("[Polymarket] No active trackings.")
+            return
+
+        now = datetime.utcnow()
+
+        for tracking in active:
+            # Load existing polymarket data
+            poly_data = []
+            if tracking.polymarket_prices_json:
+                try:
+                    poly_data = json.loads(tracking.polymarket_prices_json)
+                except:
+                    poly_data = []
+
+            # Guard: skip if last update was less than 30 minutes ago
+            if poly_data:
+                last_ts = poly_data[-1].get("timestamp", "")
+                if last_ts:
+                    try:
+                        last_time = datetime.fromisoformat(last_ts.replace('Z', '+00:00')).replace(tzinfo=None)
+                        if (now - last_time).total_seconds() < 1800:
+                            continue
+                    except:
+                        pass
+
+            # Fetch the last closed 1h candle from Binance
+            kline = await fetch_binance_kline(tracking.symbol)
+            if not kline:
+                logger.warning(f"[Polymarket] Could not fetch kline for {tracking.symbol}")
+                continue
+
+            candle_open = kline["open"]
+            candle_close = kline["close"]
+            
+            # Candle direction: Polymarket logic
+            candle_direction = "up" if candle_close >= candle_open else "down"
+
+            # Load forecast
+            forecast = []
+            if tracking.hourly_forecast_json:
+                try:
+                    forecast = json.loads(tracking.hourly_forecast_json)
+                except:
+                    forecast = []
+
+            # Determine which hour we're on (based on polymarket data length)
+            p_hour_index = len(poly_data)
+
+            # Get predicted direction for this hour
+            predicted_direction = None
+            if p_hour_index < len(forecast):
+                pred_price = forecast[p_hour_index].get("price")
+                # Compare with previous hour's predicted price (or start_price for hour 0)
+                prev_pred = tracking.start_price
+                if p_hour_index > 0 and (p_hour_index - 1) < len(forecast):
+                    prev_pred = forecast[p_hour_index - 1].get("price", tracking.start_price)
+                
+                if pred_price is not None:
+                    predicted_direction = "up" if pred_price >= prev_pred else "down"
+
+            # Match: did AI predict the same direction as the candle?
+            matched = None
+            if predicted_direction is not None:
+                matched = (predicted_direction == candle_direction)
+
+            poly_data.append({
+                "timestamp": now.isoformat(),
+                "hour": p_hour_index + 1,
+                "open": round(candle_open, 6),
+                "close": round(candle_close, 6),
+                "candle_direction": candle_direction,
+                "predicted_direction": predicted_direction,
+                "matched": matched,
+            })
+
+            tracking.polymarket_prices_json = json.dumps(poly_data)
+
+            status_icon = "✅" if matched else "❌" if matched is False else "➖"
+            logger.info(
+                f"[Polymarket] {tracking.symbol} h{p_hour_index + 1}: "
+                f"open={candle_open:.4f} close={candle_close:.4f} candle={candle_direction} "
+                f"pred={predicted_direction} {status_icon}"
+            )
+
+        await session.commit()
+    logger.info("[Polymarket] Done.")

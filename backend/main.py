@@ -22,7 +22,7 @@ from core.models import ParseLog, AnalysisLog, ForecastTracking
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis
-from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking
+from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -123,6 +123,13 @@ async def lifespan(app: FastAPI):
                 trigger=CronTrigger(minute=6),  # Every hour at XX:06 (right after CMC job)
                 id="hourly_binance_tracking",
                 name="Hourly Binance Price Tracker",
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                update_polymarket_tracking,
+                trigger=CronTrigger(minute=7),  # Every hour at XX:07 (after Binance job)
+                id="hourly_polymarket_tracking",
+                name="Hourly Polymarket-style Tracker",
                 replace_existing=True,
             )
             scheduler.start()
@@ -730,6 +737,7 @@ async def get_active_forecasts():
                     "hourly_forecast": json.loads(t.hourly_forecast_json) if t.hourly_forecast_json else [],
                     "actual_prices": json.loads(t.actual_prices_json) if t.actual_prices_json else [],
                     "binance_prices": json.loads(t.binance_prices_json) if t.binance_prices_json else [],
+                    "polymarket_prices": json.loads(t.polymarket_prices_json) if t.polymarket_prices_json else [],
                     "status": t.status,
                     "hours_tracked": t.hours_tracked,
                     "hits": t.hits,
@@ -756,6 +764,13 @@ async def force_forecast_update():
     """Manually trigger a forecast tracking update."""
     asyncio.create_task(update_forecast_tracking_job())
     return {"status": "started", "message": "Forecast tracking update triggered."}
+
+
+@app.post("/api/forecast/force_polymarket")
+async def force_polymarket_update():
+    """Manually trigger a Polymarket-style tracking update."""
+    asyncio.create_task(update_polymarket_tracking())
+    return {"status": "started", "message": "Polymarket tracking update triggered."}
 
 
 @app.post("/api/forecast/recalculate_binance")

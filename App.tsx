@@ -12,6 +12,7 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import AnalysisHistory from './components/AnalysisHistory';
 import BinanceTracker from './components/BinanceTracker';
+import PolymarketTracker from './components/PolymarketTracker';
 
 // Icons
 const RefreshIcon = () => (
@@ -43,7 +44,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'binance'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'binance' | 'polymarket'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -507,6 +508,12 @@ const App: React.FC = () => {
               >
                 💹 Прогноз vs Binance
               </button>
+              <button
+                onClick={() => setActiveTab('polymarket')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'polymarket' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🎯 Прогноз vs Polymarket
+              </button>
             </div>
           </div>
 
@@ -556,6 +563,8 @@ const App: React.FC = () => {
           <AnalysisHistory />
         ) : activeTab === 'binance' ? (
           <BinanceTracker />
+        ) : activeTab === 'polymarket' ? (
+          <PolymarketTracker />
         ) : (
           <>
             {/* Progress Display */}

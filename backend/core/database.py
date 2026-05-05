@@ -73,6 +73,9 @@ async def init_db(drop_existing: bool = False) -> None:
             await conn.execute(text(
                 "ALTER TABLE forecast_trackings ADD COLUMN IF NOT EXISTS binance_prices_json TEXT"
             ))
+            await conn.execute(text(
+                "ALTER TABLE forecast_trackings ADD COLUMN IF NOT EXISTS polymarket_prices_json TEXT"
+            ))
         except Exception:
             pass  # Column already exists or SQLite (no IF NOT EXISTS support)
 
