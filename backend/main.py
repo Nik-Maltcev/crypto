@@ -712,7 +712,7 @@ async def get_active_forecasts():
         result = await session.execute(
             select(ForecastTracking)
             .order_by(ForecastTracking.created_at.desc())
-            .limit(200)
+            .limit(500)
         )
         trackings = result.scalars().all()
         return {

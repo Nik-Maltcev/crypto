@@ -92,11 +92,12 @@ const ForecastTracker: React.FC = () => {
                             if (!groups[dateKey]) groups[dateKey] = [];
                             groups[dateKey].push(t);
                         });
-                        // Active group first, then dates descending
                         const sortedKeys = Object.keys(groups).sort((a, b) => {
-                            if (a === '⏳ Активные') return -1;
-                            if (b === '⏳ Активные') return 1;
-                            return b.localeCompare(a);
+                            if (a.startsWith('\u23F3')) return -1;
+                            if (b.startsWith('\u23F3')) return 1;
+                            const dateA = new Date(groups[a][0]?.created_at || 0).getTime();
+                            const dateB = new Date(groups[b][0]?.created_at || 0).getTime();
+                            return dateB - dateA;
                         });
                         return sortedKeys.map(dateKey => (
                             <div key={dateKey}>

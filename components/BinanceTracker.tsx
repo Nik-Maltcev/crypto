@@ -114,9 +114,11 @@ const BinanceTracker: React.FC = () => {
                             groups[dateKey].push(t);
                         });
                         const sortedKeys = Object.keys(groups).sort((a, b) => {
-                            if (a === '⏳ Активные') return -1;
-                            if (b === '⏳ Активные') return 1;
-                            return b.localeCompare(a);
+                            if (a === '\u23F3 \u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0435') return -1;
+                            if (b === '\u23F3 \u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0435') return 1;
+                            const dateA = new Date(groups[a][0]?.created_at || 0).getTime();
+                            const dateB = new Date(groups[b][0]?.created_at || 0).getTime();
+                            return dateB - dateA;
                         });
                         return sortedKeys.map(dateKey => (
                             <div key={dateKey}>
