@@ -758,6 +758,67 @@ async def force_forecast_update():
     return {"status": "started", "message": "Forecast tracking update triggered."}
 
 
+@app.post("/api/forecast/recalculate_binance")
+async def recalculate_binance_matched():
+    """Recalculate all binance_prices matched values using correct hour-to-hour logic."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(select(ForecastTracking))
+        all_trackings = result.scalars().all()
+        
+        fixed = 0
+        for tracking in all_trackings:
+            if not tracking.binance_prices_json or not tracking.hourly_forecast_json:
+                continue
+            
+            try:
+                binance_data = json.loads(tracking.binance_prices_json)
+                forecast = json.loads(tracking.hourly_forecast_json)
+            except:
+                continue
+            
+            if not binance_data or not forecast:
+                continue
+            
+            changed = False
+            for i, bp in enumerate(binance_data):
+                # Get predicted price for this index
+                pred_price = forecast[i].get("price") if i < len(forecast) else None
+                # Get previous predicted price
+                prev_pred = tracking.start_price
+                if i > 0 and (i - 1) < len(forecast):
+                    prev_pred = forecast[i - 1].get("price", tracking.start_price)
+                # Get previous binance price
+                prev_b = tracking.start_price
+                if i > 0:
+                    prev_b = binance_data[i - 1].get("close_price", tracking.start_price)
+                
+                if pred_price is not None:
+                    pred_dir = pred_price - prev_pred
+                    real_dir = bp["close_price"] - prev_b
+                    
+                    if pred_dir > 0 and real_dir > 0:
+                        new_matched = True
+                    elif pred_dir < 0 and real_dir < 0:
+                        new_matched = True
+                    elif pred_dir == 0 and real_dir == 0:
+                        new_matched = True
+                    else:
+                        new_matched = False
+                    
+                    if bp.get("matched") != new_matched:
+                        bp["matched"] = new_matched
+                        bp["predicted_price"] = round(pred_price, 3)
+                        changed = True
+            
+            if changed:
+                tracking.binance_prices_json = json.dumps(binance_data)
+                fixed += 1
+        
+        await session.commit()
+    return {"success": True, "trackings_fixed": fixed}
+
+
 if __name__ == "__main__":
     import os
     import uvicorn
