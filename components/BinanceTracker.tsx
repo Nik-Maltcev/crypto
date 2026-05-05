@@ -141,7 +141,7 @@ const BinanceTracker: React.FC = () => {
                         const changeFromStart = lastBinance ? ((lastBinance.close_price - t.start_price) / t.start_price * 100) : 0;
 
                         const chartData = t.hourly_forecast.map((fp, i) => {
-                            const binance = bp.find(b => b.hour === fp.hourOffset || b.hour === i);
+                            const binance = bp.find(b => b.hour === fp.hourOffset);
                             return {
                                 hour: `${fp.hourOffset}ч`,
                                 predicted: fp.price,
