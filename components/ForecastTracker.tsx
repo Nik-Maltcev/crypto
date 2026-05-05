@@ -158,7 +158,7 @@ const ForecastTracker: React.FC = () => {
                                         {lastActual && (
                                             <div className="text-right">
                                                 <div className="text-[10px] text-gray-500 uppercase font-bold">Сейчас</div>
-                                                <div className="text-sm font-mono text-white">${lastActual.real_price.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</div>
+                                                <div className="text-sm font-mono text-white">${lastActual.real_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</div>
                                                 <div className={`text-xs ${lastActual.actual_change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                     {lastActual.actual_change > 0 ? '+' : ''}{lastActual.actual_change}%
                                                 </div>
@@ -188,9 +188,9 @@ const ForecastTracker: React.FC = () => {
                                     <div className="px-4 pb-4 border-t border-gray-800/50">
                                         <div className="flex justify-between items-center mt-3 mb-2">
                                             <div className="flex gap-4 text-xs text-gray-500">
-                                                <span>Старт: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</span></span>
+                                                <span>Старт: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span></span>
                                                 {t.target_price_24h && (
-                                                    <span>Цель 24ч: <span className="text-white font-mono">${t.target_price_24h.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</span>
+                                                    <span>Цель 24ч: <span className="text-white font-mono">${t.target_price_24h.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span>
                                                         <span className={`ml-1 ${(t.target_change_24h || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                             ({(t.target_change_24h || 0) > 0 ? '+' : ''}{t.target_change_24h}%)
                                                         </span>
@@ -221,13 +221,13 @@ const ForecastTracker: React.FC = () => {
                                                     </defs>
                                                     <XAxis dataKey="hour" stroke="#4B5563" fontSize={11} tickMargin={8} />
                                                     <YAxis stroke="#4B5563" fontSize={11} width={70} domain={['auto', 'auto']}
-                                                        tickFormatter={(v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`} />
+                                                        tickFormatter={(v) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`} />
                                                     <Tooltip
                                                         contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px' }}
                                                         labelStyle={{ color: '#9CA3AF' }}
                                                         formatter={(value: any, name: string) => {
                                                             if (value === null) return ['—', name === 'predicted' ? 'Прогноз' : 'Реальность'];
-                                                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`, name === 'predicted' ? 'Прогноз' : 'Реальность'];
+                                                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, name === 'predicted' ? 'Прогноз' : 'Реальность'];
                                                         }}
                                                     />
                                                     <ReferenceLine y={t.start_price} stroke="#4B5563" strokeDasharray="3 3" />
