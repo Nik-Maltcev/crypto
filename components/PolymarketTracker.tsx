@@ -179,8 +179,7 @@ const PolymarketTracker: React.FC = () => {
                                                                 <thead>
                                                                     <tr className="text-gray-500 border-b border-gray-800">
                                                                         <th className="py-2 px-2 text-left">Час</th>
-                                                                        <th className="py-2 px-2 text-left">МСК</th>
-                                                                        <th className="py-2 px-2 text-left">ET</th>
+                                                                        <th className="py-2 px-2 text-left">Polymarket (ET)</th>
                                                                         <th className="py-2 px-2 text-right">Open</th>
                                                                         <th className="py-2 px-2 text-right">Close</th>
                                                                         <th className="py-2 px-2 text-center">Свеча</th>
@@ -195,16 +194,12 @@ const PolymarketTracker: React.FC = () => {
                                                                         const startUtcHour = 5; // analysis at 05:00 UTC
                                                                         const candleStartUtc = startUtcHour + p.hour - 1;
                                                                         const candleEndUtc = candleStartUtc + 1;
-                                                                        const mskStart = (candleStartUtc + 3) % 24;
-                                                                        const mskEnd = (candleEndUtc + 3) % 24;
                                                                         const etStart = (candleStartUtc - 4 + 24) % 24;
                                                                         const etEnd = (candleEndUtc - 4 + 24) % 24;
-                                                                        const mskLabel = `${mskStart.toString().padStart(2,'0')}-${mskEnd.toString().padStart(2,'0')}`;
-                                                                        const etLabel = `${etStart.toString().padStart(2,'0')}-${etEnd.toString().padStart(2,'0')}`;
+                                                                        const etLabel = `${etStart}-${etEnd} AM ET`;
                                                                         return (
                                                                         <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                                             <td className="py-1.5 px-2 text-gray-400 font-mono">{p.hour}ч</td>
-                                                                            <td className="py-1.5 px-2 text-gray-400 font-mono text-xs">{mskLabel}</td>
                                                                             <td className="py-1.5 px-2 text-blue-400 font-mono text-xs">{etLabel}</td>
                                                                             <td className="py-1.5 px-2 text-right text-gray-300 font-mono">
                                                                                 {p.open.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
