@@ -138,7 +138,11 @@ const BinanceTracker: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                     {(() => {
-                        const filtered = trackings.filter(t => (t.mode || 'reddit_only') === modeFilter);
+                        const filtered = trackings.filter(t => {
+                            const m = t.mode || 'reddit_only';
+                            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+                            return m === 'reddit_twitter';
+                        });
                         const groups: Record<string, ForecastTracking[]> = {};
                         filtered.forEach(t => {
                             const dateKey = t.status === 'active'
