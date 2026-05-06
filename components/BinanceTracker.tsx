@@ -64,7 +64,8 @@ const BinanceTracker: React.FC = () => {
                                 const candleStartUtc = startUtcHour + pp.hour - 1;
                                 const etStart = (candleStartUtc - 4 + 24) % 24;
                                 const etEnd = (etStart + 1) % 24;
-                                const etLabel = `${etStart}-${etEnd} AM ET`;
+                                const fmtH = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
+                                const etLabel = `${fmtH(etStart)}-${fmtH(etEnd)} ET`;
                                 rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${pp.hour},${etLabel},${pp.open},${pp.close},${pp.candle_direction === 'up' ? 'UP' : 'DOWN'},${pp.predicted_direction || ''},${pp.matched === true ? '\u0414\u0410' : pp.matched === false ? '\u041D\u0415\u0422' : ''}`);
                             });
                         });
@@ -281,7 +282,8 @@ const BinanceTracker: React.FC = () => {
                                                         const candleStartUtc = startUtcHour + p.hour - 1;
                                                         const etStart = (candleStartUtc - 4 + 24) % 24;
                                                         const etEnd = (etStart + 1) % 24;
-                                                        const etLabel = `${etStart}-${etEnd}`;
+                                                        const fmtH2 = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
+                                                        const etLabel = `${fmtH2(etStart)}-${fmtH2(etEnd)}`;
                                                         return (
                                                             <tr key={idx} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                                 <td className="py-1 px-1 text-gray-400 font-mono">{p.hour}{'\u0447'}</td>

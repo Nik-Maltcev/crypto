@@ -196,7 +196,8 @@ const PolymarketTracker: React.FC = () => {
                                                                         const candleEndUtc = candleStartUtc + 1;
                                                                         const etStart = (candleStartUtc - 4 + 24) % 24;
                                                                         const etEnd = (candleEndUtc - 4 + 24) % 24;
-                                                                        const etLabel = `${etStart}-${etEnd} AM ET`;
+                                                                        const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
+                                                                        const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
                                                                         return (
                                                                         <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                                             <td className="py-1.5 px-2 text-gray-400 font-mono">{p.hour}ч</td>

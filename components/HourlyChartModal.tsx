@@ -185,7 +185,8 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const mskHour = parseInt(d.time.split(':')[0]);
                                             const etStart = (mskHour - 7 + 24) % 24;
                                             const etEnd = (etStart + 1) % 24;
-                                            const etLabel = `${etStart}-${etEnd} AM ET`;
+                                            const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
+                                            const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
                                             return (
                                             <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
