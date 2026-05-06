@@ -405,9 +405,15 @@ async def update_binance_tracking():
 
 
 async def fetch_binance_kline(symbol: str, interval: str = "1h", limit: int = 1) -> dict | None:
-    """Fetch the latest closed 1h kline (candle) from Binance for a symbol.
+    """Fetch the 1h kline that CLOSED at the start of the current hour from Binance.
     
-    Returns dict with 'open' and 'close' prices of the last CLOSED candle.
+    Polymarket uses the candle that closed at the top of the hour.
+    Our cron runs at XX:07, so we need the candle that closed at XX:00 
+    (which is data[-2] with limit=2). But Polymarket's hour N corresponds to 
+    the candle that closed at (analysis_start + N hours).
+    
+    Since cron runs at XX:07, data[-2] is the candle that just closed at XX:00.
+    This is the correct candle for Polymarket comparison.
     """
     pair = BINANCE_PAIRS.get(symbol)
     if not pair:
@@ -417,14 +423,16 @@ async def fetch_binance_kline(symbol: str, interval: str = "1h", limit: int = 1)
         try:
             resp = await client.get(
                 "https://api.binance.com/api/v3/klines",
-                params={"symbol": pair, "interval": interval, "limit": 2}
+                params={"symbol": pair, "interval": interval, "limit": 3}
             )
             if resp.status_code == 200:
                 data = resp.json()
-                # data is array of arrays: [open_time, open, high, low, close, volume, close_time, ...]
-                # We want the LAST CLOSED candle (index 0 if limit=2, since last one is still open)
+                # data[-1] = currently open candle
+                # data[-2] = last closed candle (closed at XX:00, our cron runs at XX:07)
+                # data[-3] = candle before that
+                # We want data[-2]: the candle that just closed
                 if len(data) >= 2:
-                    candle = data[-2]  # Previous (closed) candle
+                    candle = data[-2]  # Last closed candle
                     return {
                         "open": float(candle[1]),
                         "close": float(candle[4]),
