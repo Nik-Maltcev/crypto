@@ -662,10 +662,134 @@ async def run_scheduled_analysis(trigger: str = "scheduled", mode: str = "reddit
 
 
 async def run_dual_analysis(trigger: str = "scheduled") -> None:
-    """Run both reddit_only and reddit_twitter analyses sequentially."""
-    logger.info("=== Starting DUAL auto-analysis ===")
-    await run_scheduled_analysis(trigger=trigger, mode="reddit_only")
-    # Small delay between analyses to avoid rate limits
-    await asyncio.sleep(10)
-    await run_scheduled_analysis(trigger=trigger, mode="reddit_twitter")
+    """Run both reddit_only and reddit_twitter analyses.
+    
+    Variant 3: One data fetch, two Gemini filters, two Claude analyses.
+    Reddit is fetched once and reused. Twitter fetched once.
+    Each mode gets its own Gemini filtration for clean context.
+    """
+    logger.info("=== Starting DUAL auto-analysis (Variant 3: shared fetch, separate Gemini+Claude) ===")
+    settings = get_settings()
+    lookback = settings.ANALYSIS_LOOKBACK_HOURS
+
+    # Validate keys
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    claude_key = os.environ.get("CLAUDE_API_KEY", "") or settings.CLAUDE_API_KEY
+    reddit_id = os.environ.get("REDDIT_CLIENT_ID", "") or settings.REDDIT_CLIENT_ID
+    reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "") or settings.REDDIT_CLIENT_SECRET
+    cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
+
+    if not claude_key or not gemini_key:
+        logger.error("CLAUDE_API_KEY or GEMINI_API_KEY missing. Skipping dual analysis.")
+        return
+
+    # === PHASE 1: Shared data collection ===
+    logger.info(f"[DUAL] Phase 1: Fetching data (Reddit + Twitter, window: {lookback}h)...")
+
+    reddit_posts = []
+    if reddit_id and reddit_secret:
+        reddit_token = await _get_reddit_token(reddit_id, reddit_secret)
+        reddit_posts = await _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
+    else:
+        logger.warning("[DUAL] REDDIT_CLIENT_ID/SECRET not set")
+
+    twitter_posts = await _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
+
+    logger.info(f"[DUAL] Data collected: Reddit={len(reddit_posts)}, Twitter={len(twitter_posts)}")
+
+    # Market context (shared)
+    market_context = "MARKET CONTEXT: Data unavailable."
+    if cmc_key:
+        market_context = await _fetch_market_data(cmc_key)
+
+    # === PHASE 2: Reddit Only analysis ===
+    if reddit_posts:
+        logger.info("[DUAL] Phase 2a: Reddit Only — Gemini filter...")
+        await _run_single_analysis(
+            mode="reddit_only",
+            trigger=trigger,
+            data=reddit_posts,
+            market_context=market_context,
+            gemini_key=gemini_key,
+            claude_key=claude_key,
+            reddit_count=len(reddit_posts),
+            twitter_count=0,
+        )
+    else:
+        logger.warning("[DUAL] No Reddit data, skipping reddit_only analysis")
+
+    # Small delay between analyses
+    await asyncio.sleep(5)
+
+    # === PHASE 3: Reddit + Twitter analysis ===
+    combined = reddit_posts + twitter_posts
+    if combined:
+        logger.info("[DUAL] Phase 2b: Reddit+Twitter — Gemini filter...")
+        await _run_single_analysis(
+            mode="reddit_twitter",
+            trigger=trigger,
+            data=combined,
+            market_context=market_context,
+            gemini_key=gemini_key,
+            claude_key=claude_key,
+            reddit_count=len(reddit_posts),
+            twitter_count=len(twitter_posts),
+        )
+    else:
+        logger.warning("[DUAL] No combined data, skipping reddit_twitter analysis")
+
     logger.info("=== DUAL auto-analysis complete ===")
+
+
+async def _run_single_analysis(
+    mode: str,
+    trigger: str,
+    data: list[dict],
+    market_context: str,
+    gemini_key: str,
+    claude_key: str,
+    reddit_count: int,
+    twitter_count: int,
+) -> None:
+    """Run a single analysis pipeline (Gemini filter + Claude) and save to DB."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        log = AnalysisLog(mode=mode, status="running", trigger=trigger)
+        session.add(log)
+        await session.commit()
+        await session.refresh(log)
+
+        try:
+            # Gemini filter
+            filtered_context = await _filter_with_gemini(data, gemini_key)
+            logger.info(f"[{mode}] Gemini done, {len(filtered_context)} chars")
+
+            # Claude analysis
+            result = await _analyze_with_claude(filtered_context, market_context, claude_key)
+
+            # Save
+            log.finished_at = datetime.utcnow()
+            log.status = "success"
+            log.result_json = json.dumps(result, ensure_ascii=False)
+            log.reddit_posts_count = reddit_count
+            log.twitter_tweets_count = twitter_count
+            log.telegram_msgs_count = 0
+            await session.commit()
+
+            logger.info(f"[{mode}] Analysis complete (ID: {log.id})")
+
+            # Auto-start forecast tracking
+            try:
+                count = await save_forecast_from_analysis(log.id)
+                logger.info(f"[{mode}] Created {count} forecast trackings")
+            except Exception as track_err:
+                logger.error(f"[{mode}] Failed to create trackings: {track_err}")
+
+        except Exception as e:
+            import traceback
+            logger.error(f"[{mode}] Analysis failed: {type(e).__name__}: {e}")
+            logger.error(traceback.format_exc())
+            log.finished_at = datetime.utcnow()
+            log.status = "failed"
+            log.error_message = str(e)
+            await session.commit()
