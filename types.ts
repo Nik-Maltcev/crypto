@@ -227,6 +227,7 @@ export interface SingleCoinAnalysisResult {
 export interface ForecastTracking {
   id: number;
   analysis_id: number;
+  mode: string;
   symbol: string;
   prediction: 'Bullish' | 'Bearish' | 'Neutral';
   confidence: number;

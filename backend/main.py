@@ -21,7 +21,7 @@ from core.models import ParseLog, AnalysisLog, ForecastTracking
 # from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
-from auto_analysis import run_scheduled_analysis
+from auto_analysis import run_scheduled_analysis, run_dual_analysis
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -104,10 +104,10 @@ async def lifespan(app: FastAPI):
             
             scheduler = AsyncIOScheduler()
             scheduler.add_job(
-                run_scheduled_analysis,
+                run_dual_analysis,
                 trigger=CronTrigger(hour=5, minute=0),  # 05:00 UTC = 08:00 MSK
                 id="daily_analysis",
-                name="Daily 08:00 MSK Analysis",
+                name="Daily 08:00 MSK Analysis (Reddit + Reddit+Twitter)",
                 kwargs={"trigger": "scheduled"},
                 replace_existing=True,
             )
@@ -639,16 +639,19 @@ async def get_analysis_detail(analysis_id: int):
 
 
 @app.post("/api/analysis/run")
-async def trigger_analysis():
-    """Manually trigger an analysis (for testing)."""
+async def trigger_analysis(mode: str = "reddit_only"):
+    """Manually trigger an analysis (for testing). mode: reddit_only or reddit_twitter"""
     settings = get_settings()
     if not settings.CLAUDE_API_KEY:
         raise HTTPException(400, "CLAUDE_API_KEY not configured on server")
     if not settings.GEMINI_API_KEY:
         raise HTTPException(400, "GEMINI_API_KEY not configured on server")
     
-    asyncio.create_task(run_scheduled_analysis(trigger="manual"))
-    return {"status": "started", "message": "Analysis triggered. Check /api/analysis/history for results."}
+    if mode not in ("reddit_only", "reddit_twitter"):
+        mode = "reddit_only"
+    
+    asyncio.create_task(run_scheduled_analysis(trigger="manual", mode=mode))
+    return {"status": "started", "mode": mode, "message": "Analysis triggered. Check /api/analysis/history for results."}
 
 @app.post("/api/analysis/log/start")
 async def start_frontend_analysis_log():
@@ -722,12 +725,24 @@ async def get_active_forecasts():
             .limit(500)
         )
         trackings = result.scalars().all()
+        
+        # Get analysis modes for all trackings
+        analysis_ids = list({t.analysis_id for t in trackings})
+        mode_map = {}
+        if analysis_ids:
+            mode_result = await session.execute(
+                select(AnalysisLog.id, AnalysisLog.mode).where(AnalysisLog.id.in_(analysis_ids))
+            )
+            for row in mode_result:
+                mode_map[row[0]] = row[1]
+        
         return {
             "success": True,
             "items": [
                 {
                     "id": t.id,
                     "analysis_id": t.analysis_id,
+                    "mode": mode_map.get(t.analysis_id, "reddit_only"),
                     "symbol": t.symbol,
                     "prediction": t.prediction,
                     "confidence": t.confidence,

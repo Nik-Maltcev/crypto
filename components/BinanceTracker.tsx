@@ -31,6 +31,7 @@ const BinanceTracker: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [modeFilter, setModeFilter] = useState<'reddit_only' | 'reddit_twitter'>('reddit_only');
 
     const fetchTrackings = async () => {
         setIsLoading(true);
@@ -110,6 +111,22 @@ const BinanceTracker: React.FC = () => {
                 </div>
             </div>
 
+            {/* Mode toggle */}
+            <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1 w-fit">
+                <button
+                    onClick={() => setModeFilter('reddit_only')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_only' ? 'bg-orange-600/30 text-orange-400 shadow border border-orange-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    Reddit Only
+                </button>
+                <button
+                    onClick={() => setModeFilter('reddit_twitter')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_twitter' ? 'bg-blue-600/30 text-blue-400 shadow border border-blue-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    Reddit + Twitter
+                </button>
+            </div>
+
             {isLoading && !trackings.length ? (
                 <div className="flex justify-center py-20 text-gray-500">{'\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430...'}</div>
             ) : error ? (
@@ -121,8 +138,9 @@ const BinanceTracker: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                     {(() => {
+                        const filtered = trackings.filter(t => (t.mode || 'reddit_only') === modeFilter);
                         const groups: Record<string, ForecastTracking[]> = {};
-                        trackings.forEach(t => {
+                        filtered.forEach(t => {
                             const dateKey = t.status === 'active'
                                 ? '\u23F3 \u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0435'
                                 : new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });

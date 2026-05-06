@@ -563,9 +563,12 @@ RULES: Russian language for text. Extremely concise. "forecastLabel": "Авто-
             raise RuntimeError(f"Failed to parse Claude response as JSON: {str(e)}")
 
 
-async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
-    """Execute the full auto-analysis pipeline and save results to DB."""
-    logger.info(f"=== Starting auto-analysis (trigger: {trigger}) ===")
+async def run_scheduled_analysis(trigger: str = "scheduled", mode: str = "reddit_only") -> None:
+    """Execute the full auto-analysis pipeline and save results to DB.
+    
+    mode: 'reddit_only' or 'reddit_twitter'
+    """
+    logger.info(f"=== Starting auto-analysis (trigger: {trigger}, mode: {mode}) ===")
     settings = get_settings()
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
@@ -582,38 +585,37 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
 
     async_session = get_async_session()
     async with async_session() as session:
-        log = AnalysisLog(mode="multi-source", status="running", trigger=trigger)
+        log = AnalysisLog(mode=mode, status="running", trigger=trigger)
         session.add(log)
         await session.commit()
         await session.refresh(log)
 
         try:
-            # 1. Reddit & Twitter (Parallel)
-            logger.info(f"Step 1/4: Fetching Reddit & Twitter (Window: {lookback}h)...")
+            # 1. Reddit
+            logger.info(f"Step 1/4: Fetching Reddit (Window: {lookback}h)...")
             
-            reddit_task = asyncio.Future()
-            reddit_task.set_result([])
+            reddit_posts = []
             if reddit_id and reddit_secret:
                 reddit_token = await _get_reddit_token(reddit_id, reddit_secret)
-                reddit_task = _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
+                reddit_posts = await _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
             else:
                 logger.warning("REDDIT_CLIENT_ID/SECRET not set, skipping Reddit")
             
-            # Twitter — TEMPORARILY DISABLED to save API quota
-            # twitter_task = _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
-            twitter_task = asyncio.Future()
-            twitter_task.set_result([])
-            logger.info("Step 1/4: Twitter SKIPPED (temporarily disabled)")
+            # 2. Twitter (only if mode includes it)
+            twitter_posts = []
+            if mode == "reddit_twitter":
+                logger.info(f"Step 2/4: Fetching Twitter (Window: {lookback}h)...")
+                twitter_posts = await _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
+            else:
+                logger.info("Step 2/4: Twitter SKIPPED (reddit_only mode)")
             
-            # Wait for parallel tasks
-            reddit_posts, twitter_posts = await asyncio.gather(reddit_task, twitter_task)
             logger.info(f"Fetched: Reddit={len(reddit_posts)}, Twitter={len(twitter_posts)}")
             
-            # 2. Telegram — TEMPORARILY DISABLED
-            logger.info("Step 2/4: Telegram SKIPPED (temporarily disabled)")
+            # 3. Telegram — DISABLED
+            logger.info("Telegram SKIPPED (disabled)")
             telegram_posts = []
             
-            # 3. Market context
+            # 4. Market context
             logger.info("Market Context...")
             market_context = "MARKET CONTEXT: Data unavailable."
             if cmc_key:
@@ -623,7 +625,7 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             if not combined_data:
                 raise RuntimeError("No social data collected. Cannot analyze.")
 
-            # 4. Filters & AI
+            # 5. Filters & AI
             logger.info(f"Step 3/4: Gemini 2.5 Flash Filtration ({len(combined_data)} items)...")
             filtered_context = await _filter_with_gemini(combined_data, gemini_key)
             logger.info(f"Gemini filter done, output length: {len(filtered_context)} chars")
@@ -640,7 +642,7 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             log.telegram_msgs_count = len(telegram_posts)
             await session.commit()
 
-            logger.info(f"=== Auto-analysis complete (ID: {log.id}) ===")
+            logger.info(f"=== Auto-analysis complete (ID: {log.id}, mode: {mode}) ===")
 
             # Auto-start forecast tracking from this analysis
             try:
@@ -657,3 +659,13 @@ async def run_scheduled_analysis(trigger: str = "scheduled") -> None:
             log.status = "failed"
             log.error_message = str(e)
             await session.commit()
+
+
+async def run_dual_analysis(trigger: str = "scheduled") -> None:
+    """Run both reddit_only and reddit_twitter analyses sequentially."""
+    logger.info("=== Starting DUAL auto-analysis ===")
+    await run_scheduled_analysis(trigger=trigger, mode="reddit_only")
+    # Small delay between analyses to avoid rate limits
+    await asyncio.sleep(10)
+    await run_scheduled_analysis(trigger=trigger, mode="reddit_twitter")
+    logger.info("=== DUAL auto-analysis complete ===")
