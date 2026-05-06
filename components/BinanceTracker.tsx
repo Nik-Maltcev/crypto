@@ -4,28 +4,6 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 
 const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
-// Helper: get predicted direction for a given hour index
-function getPredDir(t: ForecastTracking, hourIdx: number): string {
-    const forecast = t.hourly_forecast || [];
-    if (hourIdx >= forecast.length) return '';
-    const curPrice = forecast[hourIdx]?.price;
-    const prevPrice = hourIdx > 0 ? forecast[hourIdx - 1]?.price : t.start_price;
-    if (curPrice == null || prevPrice == null) return '';
-    if (curPrice === prevPrice) return '=';
-    return curPrice > prevPrice ? '\u2191' : '\u2193';
-}
-
-// Helper: get binance direction for a given hour index
-function getBinDir(t: ForecastTracking, hourIdx: number): string {
-    const bp = t.binance_prices || [];
-    if (hourIdx >= bp.length) return '';
-    const curPrice = bp[hourIdx]?.close_price;
-    const prevPrice = hourIdx > 0 ? bp[hourIdx - 1]?.close_price : t.start_price;
-    if (curPrice == null || prevPrice == null) return '';
-    if (curPrice === prevPrice) return '=';
-    return curPrice > prevPrice ? '\u2191' : '\u2193';
-}
-
 const BinanceTracker: React.FC = () => {
     const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -60,10 +38,10 @@ const BinanceTracker: React.FC = () => {
         return { text: 'text-yellow-400', bg: 'bg-yellow-500' };
     };
 
-    const accuracy = (bp: ForecastTracking['binance_prices']) => {
-        if (!bp || bp.length === 0) return 0;
-        const hits = bp.filter(p => p.matched === true).length;
-        return Math.round((hits / bp.length) * 100);
+    const accuracy = (pp: ForecastTracking['polymarket_prices']) => {
+        if (!pp || pp.length === 0) return 0;
+        const hits = pp.filter(p => p.matched === true).length;
+        return Math.round((hits / pp.length) * 100);
     };
 
     return (
@@ -72,20 +50,22 @@ const BinanceTracker: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-2">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437 vs Binance'}</h2>
                     <p className="text-gray-400 text-sm">
-                        {'\u041F\u043E\u0447\u0430\u0441\u043E\u0432\u043E\u0435 \u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435 AI-\u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430 \u0441 \u0446\u0435\u043D\u0430\u043C\u0438 \u0437\u0430\u043A\u0440\u044B\u0442\u0438\u044F Binance'}
+                        {'\u0421\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0435 AI-\u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430 \u0441 \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435\u043C 1\u0447 \u0441\u0432\u0435\u0447\u0438 Binance (open/close)'}
                     </p>
                 </div>
                 <div className="flex space-x-2 mt-4 sm:mt-0">
                     <button onClick={() => {
-                        // CSV export with direction columns
-                        const header = '\u0414\u0430\u0442\u0430,\u041C\u043E\u043D\u0435\u0442\u0430,\u041F\u0440\u043E\u0433\u043D\u043E\u0437,\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C%,\u0421\u0442\u0430\u0440\u0442$,\u0427\u0430\u0441,Binance$,\u041F\u0440\u043E\u0433\u043D\u043E\u0437$,\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430,\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 Binance,\u0421\u043E\u0432\u043F\u0430\u043B\u043E';
+                        const header = '\u0414\u0430\u0442\u0430,\u041C\u043E\u043D\u0435\u0442\u0430,\u041F\u0440\u043E\u0433\u043D\u043E\u0437,\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C%,\u0421\u0442\u0430\u0440\u0442$,\u0427\u0430\u0441,Polymarket ET,Open,Close,\u0421\u0432\u0435\u0447\u0430,\u041F\u0440\u043E\u0433\u043D\u043E\u0437 \u043D\u0430\u043F\u0440.,\u0421\u043E\u0432\u043F\u0430\u043B\u043E';
                         const rows = [header];
                         trackings.forEach(t => {
                             const date = new Date(t.created_at).toLocaleDateString('ru-RU');
-                            (t.binance_prices || []).forEach((bp, idx) => {
-                                const pDir = getPredDir(t, idx);
-                                const bDir = getBinDir(t, idx);
-                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${bp.hour},${bp.close_price},${bp.predicted_price || ''},${pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : pDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : bDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435'},${bp.matched === true ? '\u0414\u0410' : bp.matched === false ? '\u041D\u0415\u0422' : ''}`);
+                            (t.polymarket_prices || []).forEach((pp) => {
+                                const startUtcHour = 5;
+                                const candleStartUtc = startUtcHour + pp.hour - 1;
+                                const etStart = (candleStartUtc - 4 + 24) % 24;
+                                const etEnd = (etStart + 1) % 24;
+                                const etLabel = `${etStart}-${etEnd} AM ET`;
+                                rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${t.start_price},${pp.hour},${etLabel},${pp.open},${pp.close},${pp.candle_direction === 'up' ? 'UP' : 'DOWN'},${pp.predicted_direction || ''},${pp.matched === true ? '\u0414\u0410' : pp.matched === false ? '\u041D\u0415\u0422' : ''}`);
                             });
                         });
                         const csv = '\uFEFF' + rows.join('\n');
@@ -133,7 +113,7 @@ const BinanceTracker: React.FC = () => {
                 <div className="bg-red-500/10 border border-red-500 text-red-400 p-4 rounded-xl">{error}</div>
             ) : !trackings.length ? (
                 <div className="text-center p-10 bg-gray-900/50 rounded-xl border border-dashed border-gray-700 text-gray-500">
-                    {'\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u0430\u043D\u0430\u043B\u0438\u0437 \u2014 \u0442\u0440\u0435\u043A\u0438\u043D\u0433 Binance \u043D\u0430\u0447\u043D\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.'}
+                    {'\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445.'}
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -145,6 +125,8 @@ const BinanceTracker: React.FC = () => {
                         });
                         const groups: Record<string, ForecastTracking[]> = {};
                         filtered.forEach(t => {
+                            const pp = t.polymarket_prices || [];
+                            if (pp.length === 0 && t.status !== 'active') return;
                             const dateKey = t.status === 'active'
                                 ? '\u23F3 \u0410\u043A\u0442\u0438\u0432\u043D\u044B\u0435'
                                 : new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -167,21 +149,20 @@ const BinanceTracker: React.FC = () => {
                                 <div className="space-y-3">
                     {groups[dateKey].map(t => {
                         const color = getColor(t.prediction);
-                        const bp = t.binance_prices || [];
-                        const hits = bp.filter(p => p.matched === true).length;
-                        const misses = bp.filter(p => p.matched === false).length;
-                        const acc = accuracy(bp);
+                        const pp = t.polymarket_prices || [];
+                        const hits = pp.filter(p => p.matched === true).length;
+                        const misses = pp.filter(p => p.matched === false).length;
+                        const acc = accuracy(pp);
                         const isExpanded = expandedId === t.id;
-                        const lastBinance = bp.length > 0 ? bp[bp.length - 1] : null;
-                        const changeFromStart = lastBinance ? ((lastBinance.close_price - t.start_price) / t.start_price * 100) : 0;
+                        const lastEntry = pp.length > 0 ? pp[pp.length - 1] : null;
+                        const changeFromStart = lastEntry ? ((lastEntry.close - t.start_price) / t.start_price * 100) : 0;
 
                         const chartData = t.hourly_forecast.map((fp) => {
-                            const binance = bp.find(b => b.hour === fp.hourOffset);
+                            const poly = pp.find(p => p.hour === fp.hourOffset);
                             return {
                                 hour: `${fp.hourOffset}\u0447`,
                                 predicted: fp.price,
-                                binance: binance?.close_price ?? null,
-                                matched: binance?.matched ?? null,
+                                binance: poly?.close ?? null,
                             };
                         });
 
@@ -197,7 +178,7 @@ const BinanceTracker: React.FC = () => {
                                         <span className={`text-xs px-2 py-0.5 rounded ${
                                             t.status === 'active' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'
                                         }`}>
-                                            {t.status === 'active' ? `\u23F3 ${bp.length}/24\u0447` : '\u2705 \u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043D'}
+                                            {t.status === 'active' ? `\u23F3 ${pp.length}/24\u0447` : '\u2705 \u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043D'}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-6">
@@ -207,28 +188,24 @@ const BinanceTracker: React.FC = () => {
                                                 {acc}%
                                             </div>
                                         </div>
-                                        {lastBinance && (
+                                        {lastEntry && (
                                             <div className="text-right">
-                                                <div className="text-[10px] text-gray-500 uppercase font-bold">Binance</div>
-                                                <div className="text-sm font-mono text-white">${lastBinance.close_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</div>
+                                                <div className="text-[10px] text-gray-500 uppercase font-bold">Close</div>
+                                                <div className="text-sm font-mono text-white">${lastEntry.close < 1 ? lastEntry.close.toFixed(7) : lastEntry.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</div>
                                                 <div className={`text-xs ${changeFromStart >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                     {changeFromStart > 0 ? '+' : ''}{changeFromStart.toFixed(2)}%
                                                 </div>
                                             </div>
                                         )}
                                         <div className="flex gap-0.5">
-                                            {bp.slice(-12).map((p, i) => {
-                                                const idx = bp.length > 12 ? bp.length - 12 + i : i;
-                                                const pD = getPredDir(t, idx);
-                                                return (
-                                                    <div key={i}
-                                                        title={`${p.hour}\u0447: ${pD} pred=$${p.predicted_price || '?'} | Binance=$${p.close_price} ${p.matched ? '\u2705' : '\u274C'}`}
-                                                        className={`w-2.5 h-2.5 rounded-sm ${
-                                                            p.matched === true ? 'bg-emerald-500' :
-                                                            p.matched === false ? 'bg-red-500' : 'bg-gray-700'
-                                                        }`} />
-                                                );
-                                            })}
+                                            {pp.slice(-12).map((p, i) => (
+                                                <div key={i}
+                                                    title={`${p.hour}\u0447: ${p.candle_direction === 'up' ? '\u2191' : '\u2193'} open=${p.open} close=${p.close} ${p.matched ? '\u2705' : '\u274C'}`}
+                                                    className={`w-2.5 h-2.5 rounded-sm ${
+                                                        p.matched === true ? 'bg-emerald-500' :
+                                                        p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                    }`} />
+                                            ))}
                                         </div>
                                         <svg className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -240,8 +217,8 @@ const BinanceTracker: React.FC = () => {
                                 {isExpanded && (
                                     <div className="px-4 pb-4 border-t border-gray-800/50">
                                         <div className="flex justify-between items-center mt-3 mb-2">
-                                            <div className="flex gap-4 text-xs text-gray-500">
-                                                <span>{'\u0421\u0442\u0430\u0440\u0442'}: <span className="text-white font-mono">${t.start_price.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</span></span>
+                                            <div className="text-xs text-gray-500">
+                                                {'\u0421\u0442\u0430\u0440\u0442'}: <span className="text-white font-mono">${t.start_price < 1 ? t.start_price.toFixed(7) : t.start_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
                                             </div>
                                             <div className="flex gap-4 text-[10px] text-gray-500 uppercase font-bold">
                                                 <span className="flex items-center gap-1">
@@ -267,13 +244,13 @@ const BinanceTracker: React.FC = () => {
                                                     </defs>
                                                     <XAxis dataKey="hour" stroke="#4B5563" fontSize={11} tickMargin={8} />
                                                     <YAxis stroke="#4B5563" fontSize={11} width={70} domain={['auto', 'auto']}
-                                                        tickFormatter={(v) => `${Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`} />
+                                                        tickFormatter={(v) => `${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}`} />
                                                     <Tooltip
                                                         contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px' }}
                                                         labelStyle={{ color: '#9CA3AF' }}
                                                         formatter={(value: any, name: string) => {
                                                             if (value === null) return ['\u2014', name === 'predicted' ? '\u041F\u0440\u043E\u0433\u043D\u043E\u0437' : 'Binance'];
-                                                            return [`${Number(value).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`, name === 'predicted' ? '\u041F\u0440\u043E\u0433\u043D\u043E\u0437' : 'Binance'];
+                                                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`, name === 'predicted' ? '\u041F\u0440\u043E\u0433\u043D\u043E\u0437' : 'Binance'];
                                                         }}
                                                     />
                                                     <ReferenceLine y={t.start_price} stroke="#4B5563" strokeDasharray="3 3" />
@@ -290,34 +267,35 @@ const BinanceTracker: React.FC = () => {
                                                 <thead>
                                                     <tr className="text-gray-500 border-b border-gray-800">
                                                         <th className="py-1 px-1 text-left">{'\u0427\u0430\u0441'}</th>
-                                                        <th className="py-1 px-1 text-right">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437$'}</th>
-                                                        <th className="py-1 px-1 text-center">{'\u041D\u0430\u043F\u0440. \u043F\u0440\u043E\u0433\u043D\u043E\u0437\u0430'}</th>
-                                                        <th className="py-1 px-1 text-right">Binance$</th>
-                                                        <th className="py-1 px-1 text-center">{'\u041D\u0430\u043F\u0440. Binance'}</th>
+                                                        <th className="py-1 px-1 text-left">ET</th>
+                                                        <th className="py-1 px-1 text-right">Open</th>
+                                                        <th className="py-1 px-1 text-right">Close</th>
+                                                        <th className="py-1 px-1 text-center">{'\u0421\u0432\u0435\u0447\u0430'}</th>
+                                                        <th className="py-1 px-1 text-center">{'\u041F\u0440\u043E\u0433\u043D\u043E\u0437'}</th>
                                                         <th className="py-1 px-1 text-center">{'\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442'}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {bp.map((p, idx) => {
-                                                        const pDir = getPredDir(t, idx);
-                                                        const bDir = getBinDir(t, idx);
-                                                        const pDirClass = pDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : pDir === '=' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400';
-                                                        const pDirLabel = pDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : pDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435';
-                                                        const bDirClass = bDir === '\u2191' ? 'bg-emerald-500/20 text-emerald-400' : bDir === '=' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400';
-                                                        const bDirLabel = bDir === '\u2191' ? '\u2191 \u0420\u043E\u0441\u0442' : bDir === '=' ? '= \u0424\u043B\u044D\u0442' : '\u2193 \u041F\u0430\u0434\u0435\u043D\u0438\u0435';
+                                                    {pp.map((p, idx) => {
+                                                        const startUtcHour = 5;
+                                                        const candleStartUtc = startUtcHour + p.hour - 1;
+                                                        const etStart = (candleStartUtc - 4 + 24) % 24;
+                                                        const etEnd = (etStart + 1) % 24;
+                                                        const etLabel = `${etStart}-${etEnd}`;
                                                         return (
                                                             <tr key={idx} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                                 <td className="py-1 px-1 text-gray-400 font-mono">{p.hour}{'\u0447'}</td>
-                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.predicted_price ? (p.predicted_price < 1 ? p.predicted_price.toFixed(7) : p.predicted_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 5})) : '\u2014'}</td>
+                                                                <td className="py-1 px-1 text-blue-400 font-mono text-xs">{etLabel}</td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.open < 1 ? p.open.toFixed(7) : p.open.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.close < 1 ? p.close.toFixed(7) : p.close.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
                                                                 <td className="py-1 px-1 text-center">
-                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${pDirClass}`}>
-                                                                        {pDirLabel}
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${p.candle_direction === 'up' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                        {p.candle_direction === 'up' ? '\u2191 UP' : '\u2193 DOWN'}
                                                                     </span>
                                                                 </td>
-                                                                <td className="py-1 px-1 text-right text-gray-300 font-mono">{p.close_price < 1 ? p.close_price.toFixed(7) : p.close_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 5})}</td>
                                                                 <td className="py-1 px-1 text-center">
-                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${bDirClass}`}>
-                                                                        {bDirLabel}
+                                                                    <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${p.predicted_direction === 'up' ? 'bg-emerald-500/20 text-emerald-400' : p.predicted_direction === 'down' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                                                        {p.predicted_direction === 'up' ? '\u2191 UP' : p.predicted_direction === 'down' ? '\u2193 DOWN' : '\u2014'}
                                                                     </span>
                                                                 </td>
                                                                 <td className="py-1 px-1 text-center text-lg">
@@ -331,22 +309,18 @@ const BinanceTracker: React.FC = () => {
                                         </div>
                                         <div className="mt-2">
                                             <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 text-center tracking-wider">
-                                                {'\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u043F\u043E \u0447\u0430\u0441\u0430\u043C'} ({hits}{'\u2705'} / {misses}{'\u274C'})
+                                                {'\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u043F\u043E \u0447\u0430\u0441\u0430\u043C'} ({hits}{'\u2705'} / {misses}{'\u274C'})
                                             </div>
                                             <div className="flex gap-[2px] justify-center">
-                                                {bp.map((p, i) => {
-                                                    const pD = getPredDir(t, i);
-                                                    const bD = getBinDir(t, i);
-                                                    return (
-                                                        <div key={i}
-                                                            title={`${p.hour}\u0447: \u041F\u0440\u043E\u0433\u043D\u043E\u0437${pD} Binance${bD} ${p.matched ? '\u2705' : '\u274C'}`}
-                                                            className={`w-3 h-3 rounded-sm transition-all ${
-                                                                p.matched === true ? 'bg-emerald-500' :
-                                                                p.matched === false ? 'bg-red-500' : 'bg-gray-700'
-                                                            }`} />
-                                                    );
-                                                })}
-                                                {Array.from({ length: Math.max(0, 24 - bp.length) }).map((_, i) => (
+                                                {pp.map((p, i) => (
+                                                    <div key={i}
+                                                        title={`${p.hour}\u0447: ${p.candle_direction} ${p.matched ? '\u2705' : '\u274C'}`}
+                                                        className={`w-3 h-3 rounded-sm transition-all ${
+                                                            p.matched === true ? 'bg-emerald-500' :
+                                                            p.matched === false ? 'bg-red-500' : 'bg-gray-700'
+                                                        }`} />
+                                                ))}
+                                                {Array.from({ length: Math.max(0, 24 - pp.length) }).map((_, i) => (
                                                     <div key={`e-${i}`} className="w-3 h-3 rounded-sm bg-gray-800 border border-gray-700/50" />
                                                 ))}
                                             </div>
