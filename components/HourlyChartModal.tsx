@@ -172,16 +172,24 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 bg-gray-900">
                                         <tr className="text-gray-500 border-b border-gray-800">
-                                            <th className="py-1 px-2 text-left">{'\u0427\u0430\u0441'}</th>
+                                            <th className="py-1 px-2 text-left">{'\u041C\u0421\u041A'}</th>
+                                            <th className="py-1 px-2 text-left">Polymarket (ET)</th>
                                             <th className="py-1 px-2 text-right">{'\u0426\u0435\u043D\u0430'}</th>
                                             <th className="py-1 px-2 text-center">{'\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435'}</th>
                                             <th className="py-1 px-2 text-center">{'\u041D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435'}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {chartData.map((d, i) => (
+                                        {chartData.map((d, i) => {
+                                            // Convert MSK time to ET range for Polymarket
+                                            const mskHour = parseInt(d.time.split(':')[0]);
+                                            const etStart = (mskHour - 7 + 24) % 24;
+                                            const etEnd = (etStart + 1) % 24;
+                                            const etLabel = `${etStart}-${etEnd} AM ET`;
+                                            return (
                                             <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
+                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}</td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
                                                 </td>
@@ -194,7 +202,8 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                                     </span>
                                                 </td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
