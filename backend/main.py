@@ -855,6 +855,128 @@ async def recalculate_binance_matched():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/api/forecast/backfill_polymarket")
+async def backfill_polymarket():
+    """Backfill polymarket_prices_json from historical Binance klines for all trackings that don't have it."""
+    import httpx
+    
+    BINANCE_PAIRS = {
+        "BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT",
+        "XRP": "XRPUSDT", "DOGE": "DOGEUSDT", "BNB": "BNBUSDT",
+    }
+    
+    try:
+        async_session = get_async_session()
+        async with async_session() as session:
+            result = await session.execute(select(ForecastTracking))
+            all_trackings = result.scalars().all()
+            
+            filled = 0
+            async with httpx.AsyncClient(timeout=30) as client:
+                for tracking in all_trackings:
+                    # Skip if already has polymarket data
+                    if tracking.polymarket_prices_json:
+                        try:
+                            existing = json.loads(tracking.polymarket_prices_json)
+                            if len(existing) >= 5:
+                                continue
+                        except:
+                            pass
+                    
+                    if not tracking.hourly_forecast_json:
+                        continue
+                    
+                    try:
+                        forecast = json.loads(tracking.hourly_forecast_json)
+                    except:
+                        continue
+                    
+                    if not forecast:
+                        continue
+                    
+                    pair = BINANCE_PAIRS.get(tracking.symbol)
+                    if not pair:
+                        continue
+                    
+                    # Determine start time from created_at (analysis time)
+                    # Round down to the hour
+                    start_time = tracking.created_at.replace(minute=0, second=0, microsecond=0)
+                    start_ms = int(start_time.timestamp() * 1000)
+                    
+                    # Fetch 24 hourly klines starting from analysis time
+                    try:
+                        resp = await client.get(
+                            "https://api.binance.com/api/v3/klines",
+                            params={
+                                "symbol": pair,
+                                "interval": "1h",
+                                "startTime": start_ms,
+                                "limit": 24,
+                            }
+                        )
+                        if resp.status_code != 200:
+                            logger.warning(f"[Backfill] Binance API error for {tracking.symbol}: {resp.status_code}")
+                            continue
+                        
+                        klines = resp.json()
+                    except Exception as e:
+                        logger.warning(f"[Backfill] Failed to fetch klines for {tracking.symbol}: {e}")
+                        continue
+                    
+                    if not klines:
+                        continue
+                    
+                    # Build polymarket data
+                    poly_data = []
+                    for i, candle in enumerate(klines):
+                        if i >= len(forecast):
+                            break
+                        
+                        candle_open = float(candle[1])
+                        candle_close = float(candle[4])
+                        candle_direction = "up" if candle_close >= candle_open else "down"
+                        
+                        # Predicted direction
+                        pred_price = forecast[i].get("price")
+                        prev_pred = tracking.start_price if i == 0 else forecast[i - 1].get("price", tracking.start_price)
+                        
+                        predicted_direction = None
+                        if pred_price is not None and prev_pred is not None:
+                            predicted_direction = "up" if pred_price >= prev_pred else "down"
+                        
+                        matched = None
+                        if predicted_direction is not None:
+                            matched = (predicted_direction == candle_direction)
+                        
+                        candle_time = datetime.utcfromtimestamp(candle[0] / 1000)
+                        
+                        poly_data.append({
+                            "timestamp": candle_time.isoformat(),
+                            "hour": i + 1,
+                            "open": round(candle_open, 6),
+                            "close": round(candle_close, 6),
+                            "candle_direction": candle_direction,
+                            "predicted_direction": predicted_direction,
+                            "matched": matched,
+                        })
+                    
+                    if poly_data:
+                        tracking.polymarket_prices_json = json.dumps(poly_data)
+                        filled += 1
+                        logger.info(f"[Backfill] {tracking.symbol} (ID={tracking.id}): filled {len(poly_data)} hours")
+                    
+                    # Small delay to avoid rate limits
+                    await asyncio.sleep(0.2)
+            
+            await session.commit()
+        return {"success": True, "trackings_filled": filled}
+    except Exception as e:
+        import traceback
+        logger.error(f"backfill_polymarket error: {e}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 if __name__ == "__main__":
     import os
     import uvicorn
