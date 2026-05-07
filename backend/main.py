@@ -874,11 +874,11 @@ async def backfill_polymarket():
             filled = 0
             async with httpx.AsyncClient(timeout=30) as client:
                 for tracking in all_trackings:
-                    # Skip if already has polymarket data
+                    # Skip if already has full 24h polymarket data
                     if tracking.polymarket_prices_json:
                         try:
                             existing = json.loads(tracking.polymarket_prices_json)
-                            if len(existing) >= 5:
+                            if len(existing) >= 24:
                                 continue
                         except:
                             pass
@@ -929,24 +929,22 @@ async def backfill_polymarket():
                     # Build polymarket data
                     poly_data = []
                     for i, candle in enumerate(klines):
-                        if i >= len(forecast):
-                            break
-                        
                         candle_open = float(candle[1])
                         candle_close = float(candle[4])
                         candle_direction = "up" if candle_close >= candle_open else "down"
                         
-                        # Predicted direction
-                        pred_price = forecast[i].get("price")
-                        prev_pred = tracking.start_price if i == 0 else forecast[i - 1].get("price", tracking.start_price)
-                        
+                        # Predicted direction (null if forecast doesn't have this hour)
                         predicted_direction = None
-                        if pred_price is not None and prev_pred is not None:
-                            predicted_direction = "up" if pred_price >= prev_pred else "down"
-                        
                         matched = None
-                        if predicted_direction is not None:
-                            matched = (predicted_direction == candle_direction)
+                        if i < len(forecast):
+                            pred_price = forecast[i].get("price")
+                            prev_pred = tracking.start_price if i == 0 else forecast[i - 1].get("price", tracking.start_price)
+                            
+                            if pred_price is not None and prev_pred is not None:
+                                predicted_direction = "up" if pred_price >= prev_pred else "down"
+                            
+                            if predicted_direction is not None:
+                                matched = (predicted_direction == candle_direction)
                         
                         candle_time = datetime.utcfromtimestamp(candle[0] / 1000)
                         
