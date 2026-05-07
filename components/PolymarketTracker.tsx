@@ -8,6 +8,7 @@ const PolymarketTracker: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [modeFilter, setModeFilter] = useState<'reddit_only' | 'reddit_twitter'>('reddit_only');
 
     const fetchTrackings = async () => {
         setIsLoading(true);
@@ -74,6 +75,22 @@ const PolymarketTracker: React.FC = () => {
                 </div>
             </div>
 
+            {/* Mode toggle */}
+            <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1 w-fit">
+                <button
+                    onClick={() => setModeFilter('reddit_only')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_only' ? 'bg-orange-600/30 text-orange-400 shadow border border-orange-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    Reddit Only
+                </button>
+                <button
+                    onClick={() => setModeFilter('reddit_twitter')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_twitter' ? 'bg-blue-600/30 text-blue-400 shadow border border-blue-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    Reddit + Twitter
+                </button>
+            </div>
+
             {isLoading && !trackings.length ? (
                 <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>
             ) : error ? (
@@ -85,8 +102,13 @@ const PolymarketTracker: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                     {(() => {
+                        const filtered = trackings.filter(t => {
+                            const m = t.mode || 'reddit_only';
+                            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+                            return m === 'reddit_twitter';
+                        });
                         const groups: Record<string, ForecastTracking[]> = {};
-                        trackings.forEach(t => {
+                        filtered.forEach(t => {
                             const pp = t.polymarket_prices || [];
                             if (pp.length === 0 && t.status !== 'active') return;
                             const dateKey = t.status === 'active'
