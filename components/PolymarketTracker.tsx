@@ -38,7 +38,12 @@ const PolymarketTracker: React.FC = () => {
 
     const exportCSV = () => {
         const rows = ['Дата,Монета,Прогноз,Уверенность%,Час,Open,Close,Направление свечи,Прогноз направления,Совпало'];
-        trackings.forEach(t => {
+        const filtered = trackings.filter(t => {
+            const m = t.mode || 'reddit_only';
+            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+            return m === 'reddit_twitter';
+        });
+        filtered.forEach(t => {
             const date = new Date(t.created_at).toLocaleDateString('ru-RU');
             (t.polymarket_prices || []).forEach(pp => {
                 rows.push(`${date},${t.symbol},${t.prediction},${t.confidence},${pp.hour},${pp.open},${pp.close},${pp.candle_direction},${pp.predicted_direction || ''},${pp.matched === true ? 'ДА' : pp.matched === false ? 'НЕТ' : ''}`);
