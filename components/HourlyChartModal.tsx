@@ -183,7 +183,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                         {chartData.map((d, i) => {
                                             // Convert MSK time to ET range for Polymarket
                                             const mskHour = parseInt(d.time.split(':')[0]);
-                                            const etStart = (mskHour - 7 + 24) % 24;
+                                            const etStart = (mskHour - 7 + 24 - 1) % 24;
                                             const etEnd = (etStart + 1) % 24;
                                             const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
                                             const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
