@@ -295,9 +295,11 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5">
                     <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">{'\uD83C\uDFC6 \u0420\u0435\u0439\u0442\u0438\u043D\u0433 \u043C\u043E\u043D\u0435\u0442'}</h3>
                     <div className="space-y-2">
-                        {coinRanking.map((c, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                                <span className="text-white font-bold text-sm">{c.symbol}</span>
+                        {coinRanking.map((c, i) => {
+                            const isPatternCoin = modeFilter === 'reddit_only' && ['BTC', 'ETH', 'SOL'].includes(c.symbol);
+                            return (
+                            <div key={i} className={`flex items-center justify-between ${isPatternCoin ? 'bg-orange-500/5 border border-orange-500/20 rounded-lg px-2 py-1 -mx-2' : ''}`}>
+                                <span className="text-white font-bold text-sm">{c.symbol} {isPatternCoin && <span className="text-orange-400 text-[10px] ml-1">★</span>}</span>
                                 <div className="flex items-center gap-3">
                                     <div className="w-24 bg-gray-800 rounded-full h-2">
                                         <div className={`h-2 rounded-full ${c.pct >= 52 ? 'bg-emerald-500' : c.pct >= 48 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${c.pct}%` }}></div>
@@ -306,7 +308,8 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                     <span className="text-gray-500 text-xs">({c.total})</span>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -329,7 +332,11 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
 
             {/* Full hour table */}
             <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
-                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">{'\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0430\u043C'}</h3>
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{'\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0430\u043C'}</h3>
+                <div className="flex items-center gap-4 mb-4 text-[10px] text-gray-500">
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/30 border border-emerald-500/50 inline-block"></span> Паттерн 60%+ (надёжный)</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-orange-500/20 border border-orange-500/40 inline-block"></span> Стратегия 55%+</span>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                         <thead>
@@ -344,6 +351,16 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 const hs = hourStats[hour];
                                 if (!hs) return null;
                                 const allPct = hs['ALL'] ? Math.round((hs['ALL'].wins / hs['ALL'].total) * 100) : 0;
+
+                                // Pattern highlighting (only for reddit_only mode)
+                                // Top patterns (green): BTC+h8, BTC+h19, ETH+h1
+                                const topPatterns: Record<string, number[]> = { 'BTC': [8, 19], 'ETH': [1] };
+                                // Strategy hours (orange): h1,h6,h8,h12,h16,h19,h24 for BTC/ETH/SOL
+                                const strategyHours = [1, 6, 8, 12, 16, 19, 24];
+                                const strategyCoins = ['BTC', 'ETH', 'SOL'];
+
+                                const isRedditOnly = modeFilter === 'reddit_only';
+
                                 return (
                                     <tr key={hour} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                         <td className="py-1.5 px-2 text-blue-400 font-mono">{fmtET(hour)}</td>
@@ -351,7 +368,20 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                             const cs = hs[c.symbol];
                                             const pct = cs ? Math.round((cs.wins / cs.total) * 100) : 0;
                                             const color = pct >= 55 ? 'text-emerald-400' : pct >= 48 ? 'text-gray-300' : 'text-red-400';
-                                            return <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono ${color}`}>{cs ? `${pct}%` : '—'}</td>;
+
+                                            // Determine highlight
+                                            let bgHighlight = '';
+                                            if (isRedditOnly && cs) {
+                                                const isTopPattern = topPatterns[c.symbol]?.includes(hour);
+                                                const isStrategy = strategyCoins.includes(c.symbol) && strategyHours.includes(hour);
+                                                if (isTopPattern) {
+                                                    bgHighlight = 'bg-emerald-500/20 border border-emerald-500/40 rounded';
+                                                } else if (isStrategy) {
+                                                    bgHighlight = 'bg-orange-500/10 border border-orange-500/30 rounded';
+                                                }
+                                            }
+
+                                            return <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono ${color} ${bgHighlight}`}>{cs ? `${pct}%` : '—'}</td>;
                                         })}
                                         <td className={`py-1.5 px-2 text-center font-bold ${allPct >= 55 ? 'text-emerald-400' : allPct >= 48 ? 'text-white' : 'text-red-400'}`}>{allPct}%</td>
                                     </tr>
