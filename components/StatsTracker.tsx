@@ -7,6 +7,9 @@ const StatsTracker: React.FC = () => {
     const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [modeFilter, setModeFilter] = useState<'reddit_only' | 'reddit_twitter'>('reddit_only');
+    const [patternLoading, setPatternLoading] = useState(false);
+    const [patternResult, setPatternResult] = useState<string | null>(null);
+    const [patternError, setPatternError] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -102,6 +105,93 @@ const StatsTracker: React.FC = () => {
         bestPerCoin[c.symbol] = best;
     });
 
+    const findPattern = async () => {
+        setPatternLoading(true);
+        setPatternResult(null);
+        setPatternError(null);
+
+        try {
+            // Collect all polymarket_prices from Reddit Only, April 15+
+            const redditOnly = trackings.filter(t => {
+                const m = t.mode || 'reddit_only';
+                return m !== 'reddit_twitter';
+            });
+            const cutoffDate = new Date('2026-04-15T00:00:00Z').getTime();
+            const validData = redditOnly.filter(t => new Date(t.created_at).getTime() >= cutoffDate);
+
+            // Build structured data for Claude
+            const dataForAnalysis = validData.map(t => ({
+                symbol: t.symbol,
+                prediction: t.prediction,
+                confidence: t.confidence,
+                created_at: t.created_at,
+                day_of_week: new Date(t.created_at).toLocaleDateString('en-US', { weekday: 'long' }),
+                polymarket_prices: (t.polymarket_prices || []).map(pp => ({
+                    hour: pp.hour,
+                    candle_direction: pp.candle_direction,
+                    predicted_direction: pp.predicted_direction,
+                    matched: pp.matched,
+                })),
+            }));
+
+            const systemPrompt = `Ты аналитик данных и стратег ставок. Тебе дают статистику прогнозов направления свечей (polymarket_prices) по криптовалютам. Каждая запись — это один анализ (один день), содержащий 24 часовых свечи с полями: hour (1-24), candle_direction (реальное направление), predicted_direction (прогноз AI), matched (совпало ли).
+
+Твоя задача: найти СТАБИЛЬНЫЕ ПОЛОЖИТЕЛЬНЫЕ паттерны и составить КОНКРЕТНУЮ ДНЕВНУЮ СТРАТЕГИЮ с винрейтом 55%+. Ответь на русском языке, структурированно.`;
+
+            const userPrompt = `Вот данные polymarket_prices (Reddit Only, с 15 апреля 2026):
+
+${JSON.stringify(dataForAnalysis, null, 0)}
+
+Найди стабильные положительные паттерны по:
+1. Часам (какие часы стабильно дают >55% точности)
+2. Монетам (какие монеты прогнозируются лучше всего)
+3. Дням недели (есть ли дни когда точность выше)
+4. Направлению прогноза (Bullish vs Bearish — что точнее)
+
+Для каждого паттерна укажи: точность в %, количество наблюдений, и насколько стабилен паттерн.
+Выдели ТОП-3 самых надёжных паттерна для ставок.
+
+ГЛАВНОЕ — составь КОНКРЕТНУЮ ДНЕВНУЮ СТРАТЕГИЮ для стабильного 55%+ винрейта:
+- На какие монеты ставить
+- В какие часы (ET) ставить
+- В какие дни недели ставить (или не ставить)
+- Какое направление прогноза (Bullish/Bearish) фильтровать
+- Сколько ставок в день делать (оптимальное количество)
+- Какие комбинации (монета + час + день + направление) дают максимальный edge
+- Правила входа: при каком confidence ставить, при каком пропускать
+- Стоп-правила: когда остановиться в течение дня (серия проигрышей и т.д.)
+
+Формат: сначала анализ паттернов, потом чёткая стратегия в виде пошагового плана на день.`;
+
+            const response = await fetch(`${BACKEND_URL}/api/proxy/post?url=https://api.anthropic.com/v1/messages`, {
+                method: "POST",
+                headers: {
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514",
+                    max_tokens: 4096,
+                    system: systemPrompt,
+                    messages: [{ role: "user", content: userPrompt }]
+                })
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(`Claude API Error: ${response.status} — ${errBody.slice(0, 200)}`);
+            }
+
+            const data = await response.json();
+            const text = data.content?.[0]?.text || "Пустой ответ от Claude";
+            setPatternResult(text);
+        } catch (e: any) {
+            setPatternError(e.message || 'Неизвестная ошибка');
+        } finally {
+            setPatternLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -109,6 +199,23 @@ const StatsTracker: React.FC = () => {
                     <h2 className="text-2xl font-bold text-white mb-2">{'\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u043F\u0440\u043E\u0433\u043D\u043E\u0437\u043E\u0432'}</h2>
                     <p className="text-gray-400 text-sm">{'\u0410\u043D\u0430\u043B\u0438\u0437 \u0442\u043E\u0447\u043D\u043E\u0441\u0442\u0438 AI \u043F\u043E \u0447\u0430\u0441\u0430\u043C \u0438 \u043C\u043E\u043D\u0435\u0442\u0430\u043C (c 15 \u0430\u043F\u0440\u0435\u043B\u044F)'}</p>
                 </div>
+                <button
+                    onClick={findPattern}
+                    disabled={patternLoading}
+                    className="mt-4 sm:mt-0 px-5 py-2.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {patternLoading ? (
+                        <>
+                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            Анализ...
+                        </>
+                    ) : (
+                        <>🔍 Найти паттерн</>
+                    )}
+                </button>
             </div>
 
             {/* Mode toggle */}
@@ -122,6 +229,24 @@ const StatsTracker: React.FC = () => {
                     Reddit + Twitter
                 </button>
             </div>
+
+            {/* Pattern Analysis Result */}
+            {patternError && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl text-sm">
+                    ❌ {patternError}
+                </div>
+            )}
+            {patternResult && (
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider">🧠 AI-анализ паттернов</h3>
+                        <button onClick={() => setPatternResult(null)} className="text-gray-500 hover:text-gray-300 text-xs">✕ Закрыть</button>
+                    </div>
+                    <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-y-auto">
+                        {patternResult}
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Best hours */}
