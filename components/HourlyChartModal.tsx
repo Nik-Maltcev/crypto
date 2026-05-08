@@ -187,10 +187,19 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const etEnd = (etStart + 1) % 24;
                                             const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
                                             const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
+
+                                            // Pattern highlighting for strategy hours
+                                            const topPatternHours: Record<string, number[]> = { 'BTC': [8, 19], 'ETH': [1] };
+                                            const strategyHours = [1, 6, 8, 12, 16, 19, 24];
+                                            const strategyCoins = ['BTC', 'ETH', 'SOL'];
+                                            const isTopHour = topPatternHours[coin.symbol]?.includes(etStart);
+                                            const isStrategyHour = strategyCoins.includes(coin.symbol) && strategyHours.includes(etStart);
+                                            const rowHighlight = isTopHour ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500' : isStrategyHour ? 'bg-orange-500/5 border-l-2 border-l-orange-500/50' : '';
+
                                             return (
-                                            <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                                            <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${rowHighlight}`}>
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
-                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}</td>
+                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{isTopHour ? ' 🎯' : isStrategyHour ? ' ★' : ''}</td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
                                                 </td>
