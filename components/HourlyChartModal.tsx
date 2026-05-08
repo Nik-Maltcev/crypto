@@ -169,6 +169,12 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
 
                             {/* Hourly direction table */}
                             <div className="mt-3 overflow-x-auto max-h-[200px]">
+                                <div className="flex items-center gap-4 mb-2 text-[10px] text-gray-500 sticky top-0 bg-gray-900 py-1 z-10 flex-wrap">
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/25 border-l-4 border-l-yellow-400 inline-block"></span> ⚡🎯 2x — двойное совпадение</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/15 border-l-4 border-l-yellow-400 inline-block"></span> ⚡ Opus — первые часы (56-60%)</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/15 border-l-4 border-l-emerald-400 inline-block"></span> 🎯 60%+ — топ паттерн</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-orange-500/10 border-l-4 border-l-orange-400 inline-block"></span> ★ 55%+ — стратегия</span>
+                                </div>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 bg-gray-900">
                                         <tr className="text-gray-500 border-b border-gray-800">
@@ -202,28 +208,35 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             // Count how many patterns overlap
                                             const matchCount = [isOpusPattern, isTopHour, isStrategyHour].filter(Boolean).length;
 
-                                            // Build highlight: double border for overlaps
+                                            // Build highlight: use distinct background colors
                                             let rowHighlight = '';
                                             let icons = '';
+                                            let labelTag = '';
                                             if (matchCount >= 2) {
-                                                // Double pattern overlap — bright double border
-                                                rowHighlight = 'bg-yellow-500/20 border-l-4 border-l-yellow-400 border-r-4 border-r-emerald-500';
+                                                rowHighlight = 'bg-yellow-500/25 border-l-4 border-l-yellow-400';
                                                 icons = ' ⚡🎯';
+                                                labelTag = '2x';
                                             } else if (isOpusPattern) {
-                                                rowHighlight = 'bg-yellow-500/15 border-l-2 border-l-yellow-400';
+                                                rowHighlight = 'bg-yellow-500/15 border-l-4 border-l-yellow-400';
                                                 icons = ' ⚡';
+                                                labelTag = 'Opus';
                                             } else if (isTopHour) {
-                                                rowHighlight = 'bg-emerald-500/10 border-l-2 border-l-emerald-500';
+                                                rowHighlight = 'bg-emerald-500/15 border-l-4 border-l-emerald-400';
                                                 icons = ' 🎯';
+                                                labelTag = '60%+';
                                             } else if (isStrategyHour) {
-                                                rowHighlight = 'bg-orange-500/5 border-l-2 border-l-orange-500/50';
+                                                rowHighlight = 'bg-orange-500/10 border-l-4 border-l-orange-400';
                                                 icons = ' ★';
+                                                labelTag = '55%+';
                                             }
 
                                             return (
                                             <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${rowHighlight}`}>
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
-                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{icons}</td>
+                                                <td className="py-1 px-2 text-blue-400 font-mono">
+                                                    {etLabel}{icons}
+                                                    {labelTag && <span className={`ml-1 text-[9px] px-1 py-0.5 rounded font-bold ${matchCount >= 2 ? 'bg-yellow-400/20 text-yellow-300' : isOpusPattern ? 'bg-yellow-400/15 text-yellow-400' : isTopHour ? 'bg-emerald-400/15 text-emerald-400' : 'bg-orange-400/15 text-orange-400'}`}>{labelTag}</span>}
+                                                </td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
                                                 </td>
