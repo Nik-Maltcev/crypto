@@ -302,12 +302,17 @@ const AnalysisHistory: React.FC = () => {
                                                             // Pattern highlighting for reddit_only mode
                                                             const isRedditOnly = (expandedData.mode || '').indexOf('reddit_twitter') === -1;
                                                             const isPatternCoin = isRedditOnly && ['BTC', 'ETH', 'SOL'].includes(coin.symbol);
+                                                            // Opus 4.7 pattern: BTC/ETH + Bullish + confidence >= 65 (first hours structural edge)
+                                                            const isOpusPattern = isRedditOnly && ['BTC', 'ETH'].includes(coin.symbol) && coin.prediction === 'Bullish' && coin.confidence >= 65;
                                                             const isTopPattern = isRedditOnly && coin.prediction === 'Bullish' && coin.confidence >= 65 && ['BTC', 'ETH'].includes(coin.symbol);
                                                             const isStrategyMatch = isPatternCoin && coin.prediction === 'Bullish' && coin.confidence >= 60;
 
                                                             let wrapperClass = '';
                                                             let badge = '';
-                                                            if (isTopPattern) {
+                                                            if (isOpusPattern) {
+                                                                wrapperClass = 'ring-2 ring-yellow-400/60 rounded-xl';
+                                                                badge = '⚡ Opus 4.7 (56-60%)';
+                                                            } else if (isTopPattern) {
                                                                 wrapperClass = 'ring-2 ring-emerald-500/50 rounded-xl';
                                                                 badge = '🎯 Паттерн 60%+';
                                                             } else if (isStrategyMatch) {
@@ -318,7 +323,7 @@ const AnalysisHistory: React.FC = () => {
                                                             return (
                                                                 <div key={`${coin.symbol}-${idx}`} className={`relative ${wrapperClass}`}>
                                                                     {badge && (
-                                                                        <div className={`absolute -top-2 left-3 z-10 px-2 py-0.5 rounded text-[10px] font-bold ${isTopPattern ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'}`}>
+                                                                        <div className={`absolute -top-2 left-3 z-10 px-2 py-0.5 rounded text-[10px] font-bold ${isOpusPattern ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-400/40' : isTopPattern ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'}`}>
                                                                             {badge}
                                                                         </div>
                                                                     )}

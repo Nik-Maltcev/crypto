@@ -192,14 +192,18 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const topPatternHours: Record<string, number[]> = { 'BTC': [8, 19], 'ETH': [1] };
                                             const strategyHours = [1, 6, 8, 12, 16, 19, 24];
                                             const strategyCoins = ['BTC', 'ETH', 'SOL'];
+                                            // Opus 4.7 pattern: first 1-3 hours after analysis for BTC/ETH Bullish confidence>=65
+                                            const opusPatternHours = [1, 2, 3];
+                                            const opusCoins = ['BTC', 'ETH'];
+                                            const isOpusPattern = opusCoins.includes(coin.symbol) && coin.prediction === 'Bullish' && coin.confidence >= 65 && opusPatternHours.includes(d.hourOffset);
                                             const isTopHour = topPatternHours[coin.symbol]?.includes(etStart);
                                             const isStrategyHour = strategyCoins.includes(coin.symbol) && strategyHours.includes(etStart);
-                                            const rowHighlight = isTopHour ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500' : isStrategyHour ? 'bg-orange-500/5 border-l-2 border-l-orange-500/50' : '';
+                                            const rowHighlight = isOpusPattern ? 'bg-yellow-500/15 border-l-2 border-l-yellow-400' : isTopHour ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500' : isStrategyHour ? 'bg-orange-500/5 border-l-2 border-l-orange-500/50' : '';
 
                                             return (
                                             <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${rowHighlight}`}>
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
-                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{isTopHour ? ' 🎯' : isStrategyHour ? ' ★' : ''}</td>
+                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{isOpusPattern ? ' ⚡' : isTopHour ? ' 🎯' : isStrategyHour ? ' ★' : ''}</td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
                                                 </td>
