@@ -298,13 +298,37 @@ const AnalysisHistory: React.FC = () => {
                                                 <div>
                                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Монеты</h3>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                        {expandedData.result.coins.map((coin, idx) => (
-                                                            <CryptoCard 
-                                                                key={`${coin.symbol}-${idx}`} 
-                                                                coin={{...coin, analysisDate: expandedData.created_at}} 
-                                                                forecastLabel={expandedData.result?.forecastLabel} 
-                                                            />
-                                                        ))}
+                                                        {expandedData.result.coins.map((coin, idx) => {
+                                                            // Pattern highlighting for reddit_only mode
+                                                            const isRedditOnly = (expandedData.mode || '').indexOf('reddit_twitter') === -1;
+                                                            const isPatternCoin = isRedditOnly && ['BTC', 'ETH', 'SOL'].includes(coin.symbol);
+                                                            const isTopPattern = isRedditOnly && coin.prediction === 'Bullish' && coin.confidence >= 65 && ['BTC', 'ETH'].includes(coin.symbol);
+                                                            const isStrategyMatch = isPatternCoin && coin.prediction === 'Bullish' && coin.confidence >= 60;
+
+                                                            let wrapperClass = '';
+                                                            let badge = '';
+                                                            if (isTopPattern) {
+                                                                wrapperClass = 'ring-2 ring-emerald-500/50 rounded-xl';
+                                                                badge = '🎯 Паттерн 60%+';
+                                                            } else if (isStrategyMatch) {
+                                                                wrapperClass = 'ring-2 ring-orange-500/40 rounded-xl';
+                                                                badge = '📊 Стратегия 55%+';
+                                                            }
+
+                                                            return (
+                                                                <div key={`${coin.symbol}-${idx}`} className={`relative ${wrapperClass}`}>
+                                                                    {badge && (
+                                                                        <div className={`absolute -top-2 left-3 z-10 px-2 py-0.5 rounded text-[10px] font-bold ${isTopPattern ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'}`}>
+                                                                            {badge}
+                                                                        </div>
+                                                                    )}
+                                                                    <CryptoCard 
+                                                                        coin={{...coin, analysisDate: expandedData.created_at}} 
+                                                                        forecastLabel={expandedData.result?.forecastLabel} 
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
