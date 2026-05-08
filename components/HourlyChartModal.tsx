@@ -198,12 +198,32 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const isOpusPattern = opusCoins.includes(coin.symbol) && coin.prediction === 'Bullish' && coin.confidence >= 65 && opusPatternHours.includes(d.hourOffset);
                                             const isTopHour = topPatternHours[coin.symbol]?.includes(etStart);
                                             const isStrategyHour = strategyCoins.includes(coin.symbol) && strategyHours.includes(etStart);
-                                            const rowHighlight = isOpusPattern ? 'bg-yellow-500/15 border-l-2 border-l-yellow-400' : isTopHour ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500' : isStrategyHour ? 'bg-orange-500/5 border-l-2 border-l-orange-500/50' : '';
+
+                                            // Count how many patterns overlap
+                                            const matchCount = [isOpusPattern, isTopHour, isStrategyHour].filter(Boolean).length;
+
+                                            // Build highlight: double border for overlaps
+                                            let rowHighlight = '';
+                                            let icons = '';
+                                            if (matchCount >= 2) {
+                                                // Double pattern overlap — bright double border
+                                                rowHighlight = 'bg-yellow-500/20 border-l-4 border-l-yellow-400 border-r-4 border-r-emerald-500';
+                                                icons = ' ⚡🎯';
+                                            } else if (isOpusPattern) {
+                                                rowHighlight = 'bg-yellow-500/15 border-l-2 border-l-yellow-400';
+                                                icons = ' ⚡';
+                                            } else if (isTopHour) {
+                                                rowHighlight = 'bg-emerald-500/10 border-l-2 border-l-emerald-500';
+                                                icons = ' 🎯';
+                                            } else if (isStrategyHour) {
+                                                rowHighlight = 'bg-orange-500/5 border-l-2 border-l-orange-500/50';
+                                                icons = ' ★';
+                                            }
 
                                             return (
                                             <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${rowHighlight}`}>
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
-                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{isOpusPattern ? ' ⚡' : isTopHour ? ' 🎯' : isStrategyHour ? ' ★' : ''}</td>
+                                                <td className="py-1 px-2 text-blue-400 font-mono">{etLabel}{icons}</td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
                                                 </td>

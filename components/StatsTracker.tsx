@@ -358,6 +358,9 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 // Strategy hours (orange): h1,h6,h8,h12,h16,h19,h24 for BTC/ETH/SOL
                                 const strategyHours = [1, 6, 8, 12, 16, 19, 24];
                                 const strategyCoins = ['BTC', 'ETH', 'SOL'];
+                                // Opus 4.7 pattern: first 1-3 hours for BTC/ETH
+                                const opusHours = [1, 2, 3];
+                                const opusCoins = ['BTC', 'ETH'];
 
                                 const isRedditOnly = modeFilter === 'reddit_only';
 
@@ -374,7 +377,14 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                             if (isRedditOnly && cs) {
                                                 const isTopPattern = topPatterns[c.symbol]?.includes(hour);
                                                 const isStrategy = strategyCoins.includes(c.symbol) && strategyHours.includes(hour);
-                                                if (isTopPattern) {
+                                                const isOpus = opusCoins.includes(c.symbol) && opusHours.includes(hour);
+                                                const matchCount = [isTopPattern, isStrategy, isOpus].filter(Boolean).length;
+
+                                                if (matchCount >= 2) {
+                                                    bgHighlight = 'bg-yellow-500/20 border-2 border-yellow-400/60 rounded ring-2 ring-emerald-500/40';
+                                                } else if (isOpus) {
+                                                    bgHighlight = 'bg-yellow-500/15 border border-yellow-400/40 rounded';
+                                                } else if (isTopPattern) {
                                                     bgHighlight = 'bg-emerald-500/20 border border-emerald-500/40 rounded';
                                                 } else if (isStrategy) {
                                                     bgHighlight = 'bg-orange-500/10 border border-orange-500/30 rounded';
