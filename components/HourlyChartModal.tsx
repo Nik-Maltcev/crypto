@@ -205,14 +205,13 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                                 icons = ' ⚡';
                                                 labelTag = 'Opus';
                                             }
-                                            }
 
                                             return (
                                             <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${rowHighlight}`}>
                                                 <td className="py-1 px-2 text-gray-400 font-mono">{d.time}</td>
                                                 <td className="py-1 px-2 text-blue-400 font-mono">
                                                     {etLabel}{icons}
-                                                    {labelTag && <span className={`ml-1 text-[9px] px-1 py-0.5 rounded font-bold ${matchCount >= 2 ? 'bg-yellow-400/20 text-yellow-300' : isOpusPattern ? 'bg-yellow-400/15 text-yellow-400' : isTopHour ? 'bg-emerald-400/15 text-emerald-400' : 'bg-orange-400/15 text-orange-400'}`}>{labelTag}</span>}
+                                                    {labelTag && <span className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-yellow-400/15 text-yellow-400">{labelTag}</span>}
                                                 </td>
                                                 <td className="py-1 px-2 text-right text-gray-300 font-mono">
                                                     ${d.price < 1 ? d.price.toFixed(6) : d.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
