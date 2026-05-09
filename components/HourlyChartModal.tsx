@@ -170,10 +170,7 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                             {/* Hourly direction table */}
                             <div className="mt-3 overflow-x-auto max-h-[200px]">
                                 <div className="flex items-center gap-4 mb-2 text-[10px] text-gray-500 sticky top-0 bg-gray-900 py-1 z-10 flex-wrap">
-                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/25 border-l-4 border-l-yellow-400 inline-block"></span> ⚡🎯 2x — двойное совпадение</span>
-                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/15 border-l-4 border-l-yellow-400 inline-block"></span> ⚡ Opus — первые часы (56-60%)</span>
-                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/15 border-l-4 border-l-emerald-400 inline-block"></span> 🎯 60%+ — топ паттерн</span>
-                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-orange-500/10 border-l-4 border-l-orange-400 inline-block"></span> ★ 55%+ — стратегия</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/15 border-l-4 border-l-yellow-400 inline-block"></span> ⚡ Opus 4.7 — первые 1-3 часа, BTC/ETH Bullish conf≥65 (56-60%)</span>
                                 </div>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 bg-gray-900">
@@ -194,40 +191,20 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
                                             const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
 
-                                            // Pattern highlighting for strategy hours
-                                            const topPatternHours: Record<string, number[]> = { 'BTC': [8, 19], 'ETH': [1] };
-                                            const strategyHours = [1, 6, 8, 12, 16, 19, 24];
-                                            const strategyCoins = ['BTC', 'ETH', 'SOL'];
                                             // Opus 4.7 pattern: first 1-3 hours after analysis for BTC/ETH Bullish confidence>=65
                                             const opusPatternHours = [1, 2, 3];
                                             const opusCoins = ['BTC', 'ETH'];
                                             const isOpusPattern = opusCoins.includes(coin.symbol) && coin.prediction === 'Bullish' && coin.confidence >= 65 && opusPatternHours.includes(d.hourOffset);
-                                            const isTopHour = topPatternHours[coin.symbol]?.includes(etStart);
-                                            const isStrategyHour = strategyCoins.includes(coin.symbol) && strategyHours.includes(etStart);
 
-                                            // Count how many patterns overlap
-                                            const matchCount = [isOpusPattern, isTopHour, isStrategyHour].filter(Boolean).length;
-
-                                            // Build highlight: use distinct background colors
+                                            // Build highlight
                                             let rowHighlight = '';
                                             let icons = '';
                                             let labelTag = '';
-                                            if (matchCount >= 2) {
-                                                rowHighlight = 'bg-yellow-500/25 border-l-4 border-l-yellow-400';
-                                                icons = ' ⚡🎯';
-                                                labelTag = '2x';
-                                            } else if (isOpusPattern) {
+                                            if (isOpusPattern) {
                                                 rowHighlight = 'bg-yellow-500/15 border-l-4 border-l-yellow-400';
                                                 icons = ' ⚡';
                                                 labelTag = 'Opus';
-                                            } else if (isTopHour) {
-                                                rowHighlight = 'bg-emerald-500/15 border-l-4 border-l-emerald-400';
-                                                icons = ' 🎯';
-                                                labelTag = '60%+';
-                                            } else if (isStrategyHour) {
-                                                rowHighlight = 'bg-orange-500/10 border-l-4 border-l-orange-400';
-                                                icons = ' ★';
-                                                labelTag = '55%+';
+                                            }
                                             }
 
                                             return (

@@ -296,10 +296,9 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">{'\uD83C\uDFC6 \u0420\u0435\u0439\u0442\u0438\u043D\u0433 \u043C\u043E\u043D\u0435\u0442'}</h3>
                     <div className="space-y-2">
                         {coinRanking.map((c, i) => {
-                            const isPatternCoin = modeFilter === 'reddit_only' && ['BTC', 'ETH', 'SOL'].includes(c.symbol);
                             return (
-                            <div key={i} className={`flex items-center justify-between ${isPatternCoin ? 'bg-orange-500/5 border border-orange-500/20 rounded-lg px-2 py-1 -mx-2' : ''}`}>
-                                <span className="text-white font-bold text-sm">{c.symbol} {isPatternCoin && <span className="text-orange-400 text-[10px] ml-1">★</span>}</span>
+                            <div key={i} className="flex items-center justify-between">
+                                <span className="text-white font-bold text-sm">{c.symbol}</span>
                                 <div className="flex items-center gap-3">
                                     <div className="w-24 bg-gray-800 rounded-full h-2">
                                         <div className={`h-2 rounded-full ${c.pct >= 52 ? 'bg-emerald-500' : c.pct >= 48 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${c.pct}%` }}></div>
@@ -334,8 +333,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{'\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0430\u043C'}</h3>
                 <div className="flex items-center gap-4 mb-4 text-[10px] text-gray-500">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/30 border border-emerald-500/50 inline-block"></span> Паттерн 60%+ (надёжный)</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-orange-500/20 border border-orange-500/40 inline-block"></span> Стратегия 55%+</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/15 border border-yellow-400/40 inline-block"></span> ⚡ Opus 4.7 — первые 1-3ч, BTC/ETH Bullish conf≥65 (56-60%)</span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs">
@@ -353,11 +351,6 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 const allPct = hs['ALL'] ? Math.round((hs['ALL'].wins / hs['ALL'].total) * 100) : 0;
 
                                 // Pattern highlighting (only for reddit_only mode)
-                                // Top patterns (green): BTC+h8, BTC+h19, ETH+h1
-                                const topPatterns: Record<string, number[]> = { 'BTC': [8, 19], 'ETH': [1] };
-                                // Strategy hours (orange): h1,h6,h8,h12,h16,h19,h24 for BTC/ETH/SOL
-                                const strategyHours = [1, 6, 8, 12, 16, 19, 24];
-                                const strategyCoins = ['BTC', 'ETH', 'SOL'];
                                 // Opus 4.7 pattern: first 1-3 hours for BTC/ETH
                                 const opusHours = [1, 2, 3];
                                 const opusCoins = ['BTC', 'ETH'];
@@ -375,19 +368,9 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                             // Determine highlight
                                             let bgHighlight = '';
                                             if (isRedditOnly && cs) {
-                                                const isTopPattern = topPatterns[c.symbol]?.includes(hour);
-                                                const isStrategy = strategyCoins.includes(c.symbol) && strategyHours.includes(hour);
                                                 const isOpus = opusCoins.includes(c.symbol) && opusHours.includes(hour);
-                                                const matchCount = [isTopPattern, isStrategy, isOpus].filter(Boolean).length;
-
-                                                if (matchCount >= 2) {
-                                                    bgHighlight = 'bg-yellow-500/20 border-2 border-yellow-400/60 rounded ring-2 ring-emerald-500/40';
-                                                } else if (isOpus) {
+                                                if (isOpus) {
                                                     bgHighlight = 'bg-yellow-500/15 border border-yellow-400/40 rounded';
-                                                } else if (isTopPattern) {
-                                                    bgHighlight = 'bg-emerald-500/20 border border-emerald-500/40 rounded';
-                                                } else if (isStrategy) {
-                                                    bgHighlight = 'bg-orange-500/10 border border-orange-500/30 rounded';
                                                 }
                                             }
 
