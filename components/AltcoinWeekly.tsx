@@ -112,7 +112,7 @@ const AltcoinWeekly: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-2">🔮 Недельные альткоины</h2>
                     <p className="text-gray-400 text-sm">
-                        CMC + Reddit + Twitter → Claude Opus 4.7 • Цель: +10% за неделю
+                        CMC + Reddit + Twitter → Claude Opus 4.6 • Цель: +10% за неделю
                     </p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
@@ -146,7 +146,7 @@ const AltcoinWeekly: React.FC = () => {
                 <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 flex-shrink-0">📅</div>
                 <div>
                     <p className="text-sm text-purple-300 font-semibold">Авто-запуск: каждый понедельник в 08:00 МСК</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (trending+gainers+new) + Reddit (24ч) + Twitter (24ч) → Claude Opus 4.7</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (trending+gainers+new) + Reddit (24ч) + Twitter (24ч) → Claude Opus 4.6</p>
                 </div>
             </div>
 

@@ -246,7 +246,7 @@ Current date: {datetime.utcnow().isoformat()}Z"""
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-opus-4-7",
+                "model": "claude-opus-4-20250514",
                 "max_tokens": 8192,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
