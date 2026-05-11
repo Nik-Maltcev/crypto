@@ -42,18 +42,59 @@ interface AltcoinHistoryItem {
     result: AltcoinResult | null;
 }
 
+interface TrackingItem {
+    id: number;
+    analysis_id: number;
+    symbol: string;
+    name: string;
+    confidence: number;
+    risk: string;
+    target_change_7d: number;
+    catalyst: string;
+    reasoning: string;
+    start_price: number;
+    target_price_7d: number;
+    end_price: number | null;
+    actual_change_7d: number | null;
+    status: string;
+    created_at: string;
+    completed_at: string | null;
+}
+
+interface TrackingStats {
+    total_picks: number;
+    completed: number;
+    active: number;
+    winners_10pct: number;
+    positive: number;
+    win_rate_10pct: number;
+    positive_rate: number;
+    avg_change: number;
+}
+
 const AltcoinWeekly: React.FC = () => {
     const [items, setItems] = useState<AltcoinHistoryItem[]>([]);
+    const [tracking, setTracking] = useState<TrackingItem[]>([]);
+    const [trackingStats, setTrackingStats] = useState<TrackingStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRunning, setIsRunning] = useState(false);
     const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
 
     const fetchHistory = async () => {
         setIsLoading(true);
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/altcoin/history?limit=10`);
-            const data = await resp.json();
-            if (data.success) setItems(data.items);
+            const [histResp, trackResp] = await Promise.all([
+                fetch(`${BACKEND_URL}/api/altcoin/history?limit=10`),
+                fetch(`${BACKEND_URL}/api/altcoin/tracking?limit=50`)
+            ]);
+            const histData = await histResp.json();
+            const trackData = await trackResp.json();
+            if (histData.success) setItems(histData.items);
+            if (trackData.success) {
+                setTracking(trackData.items);
+                setTrackingStats(trackData.stats);
+            }
         } catch (e: any) {
             setError(e.message);
         } finally {
@@ -150,6 +191,22 @@ const AltcoinWeekly: React.FC = () => {
                 </div>
             </div>
 
+            {/* Tab switcher */}
+            <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1 w-fit">
+                <button
+                    onClick={() => setActiveTab('current')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'current' ? 'bg-purple-600/30 text-purple-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    🔮 Текущий анализ
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'history' ? 'bg-purple-600/30 text-purple-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    📊 История результатов
+                </button>
+            </div>
+
             {/* Error */}
             {error && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">❌ {error}</div>
@@ -165,9 +222,13 @@ const AltcoinWeekly: React.FC = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
-                    <span className="text-yellow-400 text-sm font-semibold">Анализ выполняется... Обычно занимает 2-5 минут.</span>
+                    <span className="text-yellow-400 text-sm font-semibold">Анализ выполняется... Обычно занимает 15-25 минут.</span>
                 </div>
             )}
+
+            {/* CURRENT TAB */}
+            {activeTab === 'current' && (
+                <>
 
             {/* Latest result */}
             {latestResult && (
@@ -292,6 +353,142 @@ const AltcoinWeekly: React.FC = () => {
                             </div>
                         ))}
                     </div>
+                </div>
+            )}
+            </>
+            )}
+
+            {/* HISTORY TAB */}
+            {activeTab === 'history' && (
+                <div className="space-y-6">
+                    {/* Stats summary */}
+                    {trackingStats && trackingStats.completed > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className="text-2xl font-bold text-white">{trackingStats.completed}</div>
+                                <div className="text-xs text-gray-500 uppercase">Завершено</div>
+                            </div>
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className="text-2xl font-bold text-emerald-400">{trackingStats.positive_rate.toFixed(0)}%</div>
+                                <div className="text-xs text-gray-500 uppercase">Выросло</div>
+                            </div>
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className="text-2xl font-bold text-purple-400">{trackingStats.win_rate_10pct.toFixed(0)}%</div>
+                                <div className="text-xs text-gray-500 uppercase">+10% и выше</div>
+                            </div>
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className={`text-2xl font-bold ${trackingStats.avg_change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {trackingStats.avg_change >= 0 ? '+' : ''}{trackingStats.avg_change.toFixed(1)}%
+                                </div>
+                                <div className="text-xs text-gray-500 uppercase">Средний рост</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Active picks */}
+                    {tracking.filter(t => t.status === 'active').length > 0 && (
+                        <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5">
+                            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">⏳ Активные пики (ждём результатов)</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
+                                            <th className="text-left py-2 px-2">Монета</th>
+                                            <th className="text-right py-2 px-2">Старт</th>
+                                            <th className="text-right py-2 px-2">Цель</th>
+                                            <th className="text-right py-2 px-2">Прогноз</th>
+                                            <th className="text-center py-2 px-2">Риск</th>
+                                            <th className="text-left py-2 px-2">Дата</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tracking.filter(t => t.status === 'active').map(t => (
+                                            <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                                                <td className="py-2 px-2">
+                                                    <span className="font-bold text-white">{t.symbol}</span>
+                                                    <span className="text-gray-500 text-xs ml-1">{t.name}</span>
+                                                </td>
+                                                <td className="text-right py-2 px-2 font-mono text-gray-300">{formatPrice(t.start_price)}</td>
+                                                <td className="text-right py-2 px-2 font-mono text-purple-400">{formatPrice(t.target_price_7d || 0)}</td>
+                                                <td className="text-right py-2 px-2 font-mono text-emerald-400">+{t.target_change_7d.toFixed(1)}%</td>
+                                                <td className="text-center py-2 px-2">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
+                                                </td>
+                                                <td className="py-2 px-2 text-gray-500 text-xs">
+                                                    {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Completed picks */}
+                    {tracking.filter(t => t.status === 'completed').length > 0 && (
+                        <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
+                            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">📊 Завершённые пики</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
+                                            <th className="text-left py-2 px-2">Монета</th>
+                                            <th className="text-right py-2 px-2">Старт</th>
+                                            <th className="text-right py-2 px-2">Финиш</th>
+                                            <th className="text-right py-2 px-2">Прогноз</th>
+                                            <th className="text-right py-2 px-2">Факт</th>
+                                            <th className="text-center py-2 px-2">Риск</th>
+                                            <th className="text-left py-2 px-2">Период</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tracking.filter(t => t.status === 'completed').map(t => {
+                                            const actualChange = t.actual_change_7d || 0;
+                                            const isPositive = actualChange > 0;
+                                            const isWinner = actualChange >= 10;
+                                            return (
+                                                <tr key={t.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${isWinner ? 'bg-emerald-500/5' : ''}`}>
+                                                    <td className="py-2 px-2">
+                                                        <span className="font-bold text-white">{t.symbol}</span>
+                                                        <span className="text-gray-500 text-xs ml-1">{t.name}</span>
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 font-mono text-gray-400">{formatPrice(t.start_price)}</td>
+                                                    <td className="text-right py-2 px-2 font-mono text-gray-300">{t.end_price ? formatPrice(t.end_price) : '—'}</td>
+                                                    <td className="text-right py-2 px-2 font-mono text-purple-400">+{t.target_change_7d.toFixed(1)}%</td>
+                                                    <td className={`text-right py-2 px-2 font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {isPositive ? '+' : ''}{actualChange.toFixed(1)}%
+                                                        {isWinner && <span className="ml-1">🎯</span>}
+                                                    </td>
+                                                    <td className="text-center py-2 px-2">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
+                                                    </td>
+                                                    <td className="py-2 px-2 text-gray-500 text-xs">
+                                                        {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                                                        {' → '}
+                                                        {t.completed_at ? new Date(t.completed_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '—'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty state */}
+                    {tracking.length === 0 && !isLoading && (
+                        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-gray-800 rounded-xl">
+                            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                                <span className="text-3xl">📊</span>
+                            </div>
+                            <h3 className="text-xl font-semibold text-white mb-2">Нет истории</h3>
+                            <p className="text-gray-400 max-w-md">
+                                После первого анализа здесь появится история результатов.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

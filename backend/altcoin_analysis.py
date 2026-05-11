@@ -16,9 +16,11 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from sqlalchemy import select
+
 from core.config import get_settings
 from core.database import get_async_session
-from core.models import AnalysisLog
+from core.models import AnalysisLog, AltcoinTracking
 from auto_analysis import (
     DEFAULT_SUBREDDITS,
     DEFAULT_TWITTER_ACCOUNTS,
@@ -333,6 +335,27 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             log.telegram_msgs_count = 0
             await session.commit()
 
+            # 5. Save picks to AltcoinTracking for weekly performance tracking
+            logger.info("[ALTCOIN] Saving picks to tracking table...")
+            picks = result.get("picks", [])
+            for pick in picks:
+                tracking = AltcoinTracking(
+                    analysis_id=log.id,
+                    symbol=pick.get("symbol", ""),
+                    name=pick.get("name", ""),
+                    confidence=pick.get("confidence", 0),
+                    risk=pick.get("risk", ""),
+                    target_change_7d=pick.get("targetChange7d", 0),
+                    catalyst=pick.get("catalyst", ""),
+                    reasoning=pick.get("reasoning", ""),
+                    start_price=pick.get("currentPrice", 0),
+                    target_price_7d=pick.get("targetPrice7d", 0),
+                    status="active",
+                )
+                session.add(tracking)
+            await session.commit()
+            logger.info(f"[ALTCOIN] Saved {len(picks)} picks to tracking")
+
             logger.info(f"=== ALTCOIN analysis complete (ID: {log.id}) ===")
 
         except Exception as e:
@@ -343,3 +366,88 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             log.status = "failed"
             log.error_message = str(e)
             await session.commit()
+
+
+
+async def _fetch_cmc_prices(symbols: list[str], cmc_key: str) -> dict[str, float]:
+    """Fetch current prices for specific symbols from CMC."""
+    if not symbols or not cmc_key:
+        return {}
+    
+    prices = {}
+    async with httpx.AsyncClient(timeout=30) as client:
+        headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
+        
+        # CMC allows up to 100 symbols per request
+        symbols_str = ",".join(symbols[:100])
+        try:
+            resp = await client.get(
+                f"{CMC_BASE}/v1/cryptocurrency/quotes/latest",
+                headers=headers,
+                params={"symbol": symbols_str, "convert": "USD"}
+            )
+            if resp.status_code == 200:
+                data = resp.json().get("data", {})
+                for sym, coin_data in data.items():
+                    price = coin_data.get("quote", {}).get("USD", {}).get("price", 0)
+                    prices[sym.upper()] = price
+        except Exception as e:
+            logger.warning(f"CMC price fetch error: {e}")
+    
+    return prices
+
+
+async def update_altcoin_tracking() -> None:
+    """Update active altcoin trackings with current prices from CMC.
+    
+    Called every Monday before new analysis to check last week's picks.
+    """
+    logger.info("=== Updating altcoin tracking results ===")
+    
+    cmc_key = os.environ.get("CMC_API_KEY", "")
+    if not cmc_key:
+        logger.warning("CMC_API_KEY not set, skipping altcoin tracking update")
+        return
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        # Get all active trackings (created more than 6 days ago)
+        cutoff = datetime.utcnow() - timedelta(days=6)
+        result = await session.execute(
+            select(AltcoinTracking)
+            .where(AltcoinTracking.status == "active")
+            .where(AltcoinTracking.created_at < cutoff)
+        )
+        active_trackings = result.scalars().all()
+        
+        if not active_trackings:
+            logger.info("No active altcoin trackings to update")
+            return
+        
+        # Get unique symbols
+        symbols = list(set(t.symbol for t in active_trackings))
+        logger.info(f"Fetching prices for {len(symbols)} symbols: {symbols}")
+        
+        # Fetch current prices
+        prices = await _fetch_cmc_prices(symbols, cmc_key)
+        logger.info(f"Got prices for {len(prices)} symbols")
+        
+        # Update trackings
+        updated = 0
+        for tracking in active_trackings:
+            current_price = prices.get(tracking.symbol.upper())
+            if current_price and tracking.start_price > 0:
+                tracking.end_price = current_price
+                tracking.actual_change_7d = ((current_price - tracking.start_price) / tracking.start_price) * 100
+                tracking.status = "completed"
+                tracking.completed_at = datetime.utcnow()
+                updated += 1
+                logger.info(f"  {tracking.symbol}: ${tracking.start_price:.6f} -> ${current_price:.6f} ({tracking.actual_change_7d:+.1f}%)")
+            else:
+                # Mark as completed even if price not found
+                tracking.status = "completed"
+                tracking.completed_at = datetime.utcnow()
+                logger.warning(f"  {tracking.symbol}: price not found, marking as completed")
+        
+        await session.commit()
+        logger.info(f"=== Updated {updated} altcoin trackings ===")

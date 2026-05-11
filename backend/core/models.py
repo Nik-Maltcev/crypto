@@ -100,3 +100,40 @@ class ForecastTracking(Base):
     def __repr__(self) -> str:
         return f"<ForecastTracking({self.symbol}, {self.prediction}, {self.hits}/{self.hours_tracked})>"
 
+
+
+class AltcoinTracking(Base):
+    """Tracks weekly altcoin picks vs actual performance."""
+
+    __tablename__ = "altcoin_trackings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    analysis_id: Mapped[int] = mapped_column(Integer, nullable=False)  # FK to AnalysisLog.id
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False)  # PEPE, WIF, etc.
+    name: Mapped[str] = mapped_column(String(100), nullable=True)
+
+    # AI prediction
+    confidence: Mapped[int] = mapped_column(Integer, default=0)
+    risk: Mapped[str] = mapped_column(String(20), nullable=True)  # Medium, High, Degen
+    target_change_7d: Mapped[float] = mapped_column(Float, default=0)  # AI predicted % change
+    catalyst: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Prices at analysis time
+    start_price: Mapped[float] = mapped_column(Float, nullable=False)
+    target_price_7d: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Actual result (filled after 7 days)
+    end_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_change_7d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hit_target: Mapped[bool | None] = mapped_column(Integer, nullable=True)  # 1 = hit 10%+, 0 = miss
+
+    # Status
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active, completed
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<AltcoinTracking({self.symbol}, target={self.target_change_7d}%, actual={self.actual_change_7d}%)>"

@@ -15,14 +15,14 @@ from sqlalchemy import select
 
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
-from core.models import ParseLog, AnalysisLog, ForecastTracking
+from core.models import ParseLog, AnalysisLog, ForecastTracking, AltcoinTracking
 # Telethon disabled — lazy import only when telegram endpoints are called
 # from worker.jobs.parser import ChatParser
 # from worker.telethon_client import get_telethon_client, close_telethon_client
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
-from altcoin_analysis import run_altcoin_analysis
+from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -139,6 +139,13 @@ async def lifespan(app: FastAPI):
                 id="weekly_altcoin_analysis",
                 name="Weekly Altcoin Analysis (Monday 08:00 MSK)",
                 kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                update_altcoin_tracking,
+                trigger=CronTrigger(day_of_week="mon", hour=4, minute=55),  # Monday 04:55 UTC (before new analysis)
+                id="weekly_altcoin_tracking_update",
+                name="Weekly Altcoin Tracking Update (Monday 07:55 MSK)",
                 replace_existing=True,
             )
             scheduler.start()
@@ -707,6 +714,70 @@ async def get_altcoin_history(limit: int = 20):
             })
         
         return {"success": True, "items": items}
+
+
+@app.get("/api/altcoin/tracking")
+async def get_altcoin_tracking(limit: int = 50):
+    """Get altcoin picks tracking history with actual results."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AltcoinTracking)
+            .order_by(AltcoinTracking.created_at.desc())
+            .limit(limit)
+        )
+        trackings = result.scalars().all()
+        
+        items = []
+        for t in trackings:
+            items.append({
+                "id": t.id,
+                "analysis_id": t.analysis_id,
+                "symbol": t.symbol,
+                "name": t.name,
+                "confidence": t.confidence,
+                "risk": t.risk,
+                "target_change_7d": t.target_change_7d,
+                "catalyst": t.catalyst,
+                "reasoning": t.reasoning,
+                "start_price": t.start_price,
+                "target_price_7d": t.target_price_7d,
+                "end_price": t.end_price,
+                "actual_change_7d": t.actual_change_7d,
+                "status": t.status,
+                "created_at": (t.created_at.isoformat() + "Z") if t.created_at else None,
+                "completed_at": (t.completed_at.isoformat() + "Z") if t.completed_at else None,
+            })
+        
+        # Calculate stats
+        completed = [i for i in items if i["status"] == "completed" and i["actual_change_7d"] is not None]
+        total_completed = len(completed)
+        winners = len([i for i in completed if i["actual_change_7d"] and i["actual_change_7d"] >= 10])
+        positive = len([i for i in completed if i["actual_change_7d"] and i["actual_change_7d"] > 0])
+        avg_change = sum(i["actual_change_7d"] for i in completed if i["actual_change_7d"]) / total_completed if total_completed > 0 else 0
+        
+        return {
+            "success": True,
+            "items": items,
+            "stats": {
+                "total_picks": len(items),
+                "completed": total_completed,
+                "active": len([i for i in items if i["status"] == "active"]),
+                "winners_10pct": winners,
+                "positive": positive,
+                "win_rate_10pct": (winners / total_completed * 100) if total_completed > 0 else 0,
+                "positive_rate": (positive / total_completed * 100) if total_completed > 0 else 0,
+                "avg_change": avg_change,
+            }
+        }
+
+
+@app.post("/api/altcoin/tracking/update")
+async def trigger_altcoin_tracking_update():
+    """Manually trigger altcoin tracking update (fetch current prices for active picks)."""
+    asyncio.create_task(update_altcoin_tracking())
+    return {"status": "started", "message": "Altcoin tracking update triggered."}
+
 
 @app.post("/api/analysis/log/start")
 async def start_frontend_analysis_log():
