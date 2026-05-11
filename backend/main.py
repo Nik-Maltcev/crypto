@@ -668,8 +668,6 @@ async def trigger_altcoin_analysis():
     """Manually trigger weekly altcoin analysis."""
     if not os.environ.get("CLAUDE_API_KEY"):
         raise HTTPException(400, "CLAUDE_API_KEY not configured on server")
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise HTTPException(400, "GEMINI_API_KEY not configured on server")
     
     asyncio.create_task(run_altcoin_analysis(trigger="manual"))
     return {"status": "started", "message": "Altcoin analysis triggered. Check /api/altcoin/history for results."}
