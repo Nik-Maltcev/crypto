@@ -14,6 +14,7 @@ import AnalysisHistory from './components/AnalysisHistory';
 import BinanceTracker from './components/BinanceTracker';
 import PolymarketTracker from './components/PolymarketTracker';
 import StatsTracker from './components/StatsTracker';
+import AltcoinWeekly from './components/AltcoinWeekly';
 
 // Icons
 const RefreshIcon = () => (
@@ -45,7 +46,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'binance' | 'polymarket' | 'stats'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'binance' | 'polymarket' | 'stats' | 'altcoins'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -521,6 +522,12 @@ const App: React.FC = () => {
               >
                 📈 Статистика
               </button>
+              <button
+                onClick={() => setActiveTab('altcoins')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'altcoins' ? 'bg-purple-700/50 text-purple-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🔮 Альткоины
+              </button>
             </div>
           </div>
 
@@ -574,6 +581,8 @@ const App: React.FC = () => {
           <PolymarketTracker />
         ) : activeTab === 'stats' ? (
           <StatsTracker />
+        ) : activeTab === 'altcoins' ? (
+          <AltcoinWeekly />
         ) : (
           <>
             {/* Progress Display */}

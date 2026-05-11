@@ -22,6 +22,7 @@ from core.models import ParseLog, AnalysisLog, ForecastTracking
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
+from altcoin_analysis import run_altcoin_analysis
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -132,8 +133,16 @@ async def lifespan(app: FastAPI):
                 name="Hourly Polymarket-style Tracker",
                 replace_existing=True,
             )
+            scheduler.add_job(
+                run_altcoin_analysis,
+                trigger=CronTrigger(day_of_week="mon", hour=5, minute=0),  # Monday 05:00 UTC = 08:00 MSK
+                id="weekly_altcoin_analysis",
+                name="Weekly Altcoin Analysis (Monday 08:00 MSK)",
+                kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
             scheduler.start()
-            logger.info("APScheduler started — daily analysis at 08:00 MSK (05:00 UTC)")
+            logger.info("APScheduler started — daily analysis at 08:00 MSK, weekly altcoin on Monday 08:00 MSK")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
@@ -652,6 +661,54 @@ async def trigger_analysis(mode: str = "reddit_only"):
     
     asyncio.create_task(run_scheduled_analysis(trigger="manual", mode=mode))
     return {"status": "started", "mode": mode, "message": "Analysis triggered. Check /api/analysis/history for results."}
+
+
+@app.post("/api/altcoin/run")
+async def trigger_altcoin_analysis():
+    """Manually trigger weekly altcoin analysis."""
+    if not os.environ.get("CLAUDE_API_KEY"):
+        raise HTTPException(400, "CLAUDE_API_KEY not configured on server")
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(400, "GEMINI_API_KEY not configured on server")
+    
+    asyncio.create_task(run_altcoin_analysis(trigger="manual"))
+    return {"status": "started", "message": "Altcoin analysis triggered. Check /api/altcoin/history for results."}
+
+
+@app.get("/api/altcoin/history")
+async def get_altcoin_history(limit: int = 20):
+    """Get altcoin analysis history."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "altcoin_weekly")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+        
+        items = []
+        for log in logs:
+            result_data = None
+            if log.result_json:
+                try:
+                    result_data = json.loads(log.result_json)
+                except:
+                    pass
+            items.append({
+                "id": log.id,
+                "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+                "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
+                "status": log.status,
+                "trigger": log.trigger,
+                "reddit_posts_count": log.reddit_posts_count,
+                "twitter_tweets_count": log.twitter_tweets_count,
+                "error_message": log.error_message,
+                "result": result_data,
+            })
+        
+        return {"success": True, "items": items}
 
 @app.post("/api/analysis/log/start")
 async def start_frontend_analysis_log():
