@@ -662,13 +662,12 @@ async def run_scheduled_analysis(trigger: str = "scheduled", mode: str = "reddit
 
 
 async def run_dual_analysis(trigger: str = "scheduled") -> None:
-    """Run both reddit_only and reddit_twitter analyses.
+    """Run reddit_only analysis (Twitter removed).
     
-    Variant 3: One data fetch, two Gemini filters, two Claude analyses.
-    Reddit is fetched once and reused. Twitter fetched once.
-    Each mode gets its own Gemini filtration for clean context.
+    Previously ran both reddit_only and reddit_twitter, but Twitter API
+    was unreliable. Now only runs Reddit-based analysis.
     """
-    logger.info("=== Starting DUAL auto-analysis (Variant 3: shared fetch, separate Gemini+Claude) ===")
+    logger.info("=== Starting auto-analysis (Reddit Only) ===")
     settings = get_settings()
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
@@ -680,22 +679,20 @@ async def run_dual_analysis(trigger: str = "scheduled") -> None:
     cmc_key = os.environ.get("CMC_API_KEY", "") or settings.CMC_API_KEY
 
     if not claude_key or not gemini_key:
-        logger.error("CLAUDE_API_KEY or GEMINI_API_KEY missing. Skipping dual analysis.")
+        logger.error("CLAUDE_API_KEY or GEMINI_API_KEY missing. Skipping analysis.")
         return
 
-    # === PHASE 1: Shared data collection ===
-    logger.info(f"[DUAL] Phase 1: Fetching data (Reddit + Twitter, window: {lookback}h)...")
+    # === PHASE 1: Data collection (Reddit only) ===
+    logger.info(f"[AUTO] Phase 1: Fetching Reddit data (window: {lookback}h)...")
 
     reddit_posts = []
     if reddit_id and reddit_secret:
         reddit_token = await _get_reddit_token(reddit_id, reddit_secret)
         reddit_posts = await _fetch_reddit_posts(DEFAULT_SUBREDDITS, reddit_token, lookback)
     else:
-        logger.warning("[DUAL] REDDIT_CLIENT_ID/SECRET not set")
+        logger.warning("[AUTO] REDDIT_CLIENT_ID/SECRET not set")
 
-    twitter_posts = await _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
-
-    logger.info(f"[DUAL] Data collected: Reddit={len(reddit_posts)}, Twitter={len(twitter_posts)}")
+    logger.info(f"[AUTO] Data collected: Reddit={len(reddit_posts)}")
 
     # Market context (shared)
     market_context = "MARKET CONTEXT: Data unavailable."
@@ -704,7 +701,7 @@ async def run_dual_analysis(trigger: str = "scheduled") -> None:
 
     # === PHASE 2: Reddit Only analysis ===
     if reddit_posts:
-        logger.info("[DUAL] Phase 2a: Reddit Only — Gemini filter...")
+        logger.info("[AUTO] Phase 2: Reddit Only — Gemini filter + Claude...")
         await _run_single_analysis(
             mode="reddit_only",
             trigger=trigger,
@@ -716,29 +713,9 @@ async def run_dual_analysis(trigger: str = "scheduled") -> None:
             twitter_count=0,
         )
     else:
-        logger.warning("[DUAL] No Reddit data, skipping reddit_only analysis")
+        logger.warning("[AUTO] No Reddit data, skipping analysis")
 
-    # Small delay between analyses
-    await asyncio.sleep(5)
-
-    # === PHASE 3: Reddit + Twitter analysis ===
-    combined = reddit_posts + twitter_posts
-    if combined:
-        logger.info("[DUAL] Phase 2b: Reddit+Twitter — Gemini filter...")
-        await _run_single_analysis(
-            mode="reddit_twitter",
-            trigger=trigger,
-            data=combined,
-            market_context=market_context,
-            gemini_key=gemini_key,
-            claude_key=claude_key,
-            reddit_count=len(reddit_posts),
-            twitter_count=len(twitter_posts),
-        )
-    else:
-        logger.warning("[DUAL] No combined data, skipping reddit_twitter analysis")
-
-    logger.info("=== DUAL auto-analysis complete ===")
+    logger.info("=== Auto-analysis complete ===")
 
 
 async def _run_single_analysis(
