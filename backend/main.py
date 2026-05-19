@@ -790,12 +790,25 @@ async def get_daily_performance():
     """
     async_session = get_async_session()
     async with async_session() as session:
-        # Only from April 15, 2026+
+        # Only from April 15, 2026+, reddit_only mode
         cutoff = datetime(2026, 4, 15)
+        
+        # Get analysis IDs for reddit_only mode
+        reddit_only_ids_result = await session.execute(
+            select(AnalysisLog.id)
+            .where(AnalysisLog.mode == "reddit_only")
+            .where(AnalysisLog.created_at >= cutoff)
+        )
+        reddit_only_ids = [r[0] for r in reddit_only_ids_result]
+        
+        if not reddit_only_ids:
+            return {"success": True, "rows": [], "stats": {"total_forecasts": 0, "direction_matched": 0, "win_rate": 0, "bullish_count": 0, "bullish_matched": 0, "bearish_count": 0, "bearish_matched": 0, "avg_actual_change": 0, "by_coin": {}}}
+        
         result = await session.execute(
             select(ForecastTracking)
             .where(ForecastTracking.status.in_(["completed", "expired"]))
             .where(ForecastTracking.created_at >= cutoff)
+            .where(ForecastTracking.analysis_id.in_(reddit_only_ids))
             .order_by(ForecastTracking.created_at.desc())
             .limit(500)
         )
