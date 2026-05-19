@@ -793,10 +793,10 @@ async def get_daily_performance():
         # Only from April 15, 2026+, reddit_only mode
         cutoff = datetime(2026, 4, 15)
         
-        # Get analysis IDs for reddit_only mode
+        # Get analysis IDs for reddit_only mode (exclude reddit_twitter)
         reddit_only_ids_result = await session.execute(
             select(AnalysisLog.id)
-            .where(AnalysisLog.mode == "reddit_only")
+            .where(AnalysisLog.mode != "reddit_twitter")
             .where(AnalysisLog.created_at >= cutoff)
         )
         reddit_only_ids = [r[0] for r in reddit_only_ids_result]
