@@ -37,6 +37,28 @@ CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 # Exclude major coins — we only want altcoins
 EXCLUDED_SYMBOLS = {"BTC", "ETH", "BNB", "SOL", "XRP", "USDT", "USDC", "DOGE", "STETH", "WBTC", "WETH"}
 
+BYBIT_INSTRUMENTS_URL = "https://api.bybit.com/v5/market/instruments-info"
+
+
+async def _fetch_bybit_spot_symbols() -> set[str]:
+    """Fetch all available spot trading symbols from Bybit."""
+    symbols = set()
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(BYBIT_INSTRUMENTS_URL, params={"category": "spot", "limit": 1000})
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("result", {}).get("list", [])
+                for item in items:
+                    # Symbol format: "BTCUSDT" -> extract base coin "BTC"
+                    symbol = item.get("baseCoin", "").upper()
+                    if symbol:
+                        symbols.add(symbol)
+                logger.info(f"[BYBIT] Fetched {len(symbols)} spot symbols")
+        except Exception as e:
+            logger.warning(f"[BYBIT] Failed to fetch symbols: {e}")
+    return symbols
+
 
 async def _fetch_cmc_altcoins(cmc_key: str) -> dict:
     """Fetch altcoin candidates from multiple CMC endpoints."""
@@ -147,8 +169,8 @@ async def _fetch_cmc_altcoins(cmc_key: str) -> dict:
     return results
 
 
-async def _analyze_altcoins_claude(cmc_data: dict, reddit_posts: list, twitter_posts: list, claude_key: str) -> dict:
-    """Send all data directly to Claude Opus 4.7 for altcoin analysis."""
+async def _analyze_altcoins_claude(cmc_data: dict, reddit_posts: list, twitter_posts: list, claude_key: str, bybit_symbols: set[str] = None) -> dict:
+    """Send all data directly to Claude Opus 4.6 for altcoin analysis."""
     # Build market context from CMC
     all_coins = {}
     for category in ["trending", "gainers", "new_listings", "high_volume"]:
@@ -178,7 +200,7 @@ async def _analyze_altcoins_claude(cmc_data: dict, reddit_posts: list, twitter_p
         "user": t.get("user", ""),
     } for t in twitter_posts[:150]], ensure_ascii=False) if twitter_posts else "No Twitter data."
 
-    system_prompt = """You are CryptoPulse AI Altcoin Analyst. Your task: identify altcoins with 10%+ growth potential this week.
+    system_prompt = """You are CryptoPulse AI Altcoin Analyst. Your task: identify altcoins with 10%+ growth potential AND altcoins likely to DROP 20%+ this week.
 
 Output pure JSON only. No markdown wrappers. Response must be parseable by JSON.parse().
 
@@ -203,6 +225,22 @@ Response Format:
       "timeframe": "3-5 days" | "5-7 days" | "1-3 days"
     }
   ],
+  "shorts": [
+    {
+      "symbol": "COIN",
+      "name": "Full Name",
+      "currentPrice": 1.23,
+      "targetPrice7d": 0.95,
+      "targetChange7d": -22.5,
+      "confidence": 70,
+      "risk": "Medium" | "High" | "Degen",
+      "catalyst": "String (Russian) - What will cause the drop",
+      "reasoning": "String (Russian) - Detailed analysis why this coin will fall",
+      "volume24h": 5000000,
+      "marketCap": 50000000,
+      "timeframe": "3-5 days" | "5-7 days" | "1-3 days"
+    }
+  ],
   "avoid": [
     {
       "symbol": "SCAM",
@@ -212,16 +250,26 @@ Response Format:
 }
 
 RULES:
-- Pick 5-10 altcoins with HIGHEST probability of 10%+ growth this week
+- "picks": 5-10 altcoins with HIGHEST probability of 10%+ growth this week
+- "shorts": 2-5 altcoins most likely to DROP 20%+ this week (for short positions)
 - Sort by confidence (highest first)
-- Be REALISTIC — not every coin will moon. Only pick coins with clear catalysts or momentum
+- Be REALISTIC — not every coin will moon or crash. Only pick coins with clear catalysts
 - Include risk assessment honestly
 - "avoid" section: list 2-3 coins that look tempting but are likely traps
 - All text in Russian
 - Prices must match the market data provided
-- EXCLUDE: BTC, ETH, BNB, SOL, XRP, USDT, USDC, DOGE"""
+- EXCLUDE: BTC, ETH, BNB, SOL, XRP, USDT, USDC, DOGE
+- CRITICAL: ONLY pick coins from the BYBIT AVAILABLE list provided below. Do NOT suggest coins not on Bybit."""
 
+    # Bybit available symbols context
+    bybit_context = ""
+    if bybit_symbols:
+        # Filter CMC coins to only those on Bybit
+        bybit_available = [sym for sym in all_coins.keys() if sym in bybit_symbols]
+        bybit_context = f"\nBYBIT AVAILABLE SYMBOLS (ONLY pick from these): {json.dumps(sorted(bybit_available))}"
+    
     user_prompt = f"""{market_context}
+{bybit_context}
 
 CMC CATEGORIES:
 - Trending: {json.dumps([c['symbol'] for c in cmc_data.get('trending', [])[:15]])}
@@ -234,9 +282,12 @@ REDDIT (last 24h, {len(reddit_posts)} posts, top 300 by score):
 TWITTER (last 24h, {len(twitter_posts)} tweets):
 {twitter_payload}
 
-TASK: Select 5-10 altcoins most likely to grow 10%+ this week.
-Consider: momentum, volume trends, social buzz, upcoming catalysts, technical setup.
+TASK: 
+1. Select 5-10 altcoins most likely to GROW 10%+ this week (picks).
+2. Select 2-5 altcoins most likely to DROP 20%+ this week (shorts).
+Consider: momentum, volume trends, social buzz, upcoming catalysts, technical setup, overvaluation signs.
 Be selective — quality over quantity. Only pick coins where you see a clear edge.
+IMPORTANT: ALL coins must be available on Bybit exchange.
 Current date: {datetime.utcnow().isoformat()}Z"""
 
     async with httpx.AsyncClient(timeout=300) as client:
@@ -298,8 +349,13 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
         await session.refresh(log)
 
         try:
+            # 0. Bybit symbols
+            logger.info("[ALTCOIN] Step 0: Fetching Bybit spot symbols...")
+            bybit_symbols = await _fetch_bybit_spot_symbols()
+            logger.info(f"[ALTCOIN] Bybit: {len(bybit_symbols)} symbols available")
+
             # 1. CMC data
-            logger.info("[ALTCOIN] Step 1/3: Fetching CMC altcoin data...")
+            logger.info("[ALTCOIN] Step 1/4: Fetching CMC altcoin data...")
             cmc_data = {"trending": [], "gainers": [], "new_listings": [], "high_volume": []}
             if cmc_key:
                 cmc_data = await _fetch_cmc_altcoins(cmc_key)
@@ -307,7 +363,7 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             logger.info(f"[ALTCOIN] CMC: {total_cmc} altcoins found")
 
             # 2. Reddit (all subs, 24h)
-            logger.info("[ALTCOIN] Step 2/3: Fetching Reddit (24h, all subs)...")
+            logger.info("[ALTCOIN] Step 2/4: Fetching Reddit (24h, all subs)...")
             reddit_posts = []
             if reddit_id and reddit_secret:
                 reddit_token = await _get_reddit_token(reddit_id, reddit_secret)
@@ -315,7 +371,7 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             logger.info(f"[ALTCOIN] Reddit: {len(reddit_posts)} posts")
 
             # 3. Twitter (all accounts, 24h)
-            logger.info("[ALTCOIN] Step 3/3: Fetching Twitter (24h, all accounts)...")
+            logger.info("[ALTCOIN] Step 3/4: Fetching Twitter (24h, all accounts)...")
             twitter_posts = await _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback_hours=24)
             logger.info(f"[ALTCOIN] Twitter: {len(twitter_posts)} tweets")
 
@@ -323,8 +379,13 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
                 raise RuntimeError("No altcoin data collected")
 
             # 4. Claude analysis (direct, no Gemini)
-            logger.info("[ALTCOIN] Sending to Claude Opus 4.7 (direct)...")
-            result = await _analyze_altcoins_claude(cmc_data, reddit_posts, twitter_posts, claude_key)
+            logger.info("[ALTCOIN] Sending to Claude Opus 4.6 (direct)...")
+            result = await _analyze_altcoins_claude(cmc_data, reddit_posts, twitter_posts, claude_key, bybit_symbols)
+            
+            # Post-process: verify all picks/shorts are on Bybit
+            if bybit_symbols:
+                result["picks"] = [p for p in result.get("picks", []) if p.get("symbol", "").upper() in bybit_symbols]
+                result["shorts"] = [s for s in result.get("shorts", []) if s.get("symbol", "").upper() in bybit_symbols]
 
             # Save
             log.finished_at = datetime.utcnow()
