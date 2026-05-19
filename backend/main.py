@@ -837,6 +837,15 @@ async def get_daily_performance():
                 except:
                     pass
             
+            # If no polymarket/binance, try actual_prices (CMC hourly — older data)
+            if end_price is None and t.actual_prices_json:
+                try:
+                    actual_data = json.loads(t.actual_prices_json)
+                    if actual_data:
+                        end_price = actual_data[-1].get("price")
+                except:
+                    pass
+            
             if end_price is None or t.start_price <= 0:
                 continue
             
