@@ -790,9 +790,12 @@ async def get_daily_performance():
     """
     async_session = get_async_session()
     async with async_session() as session:
+        # Only from April 15, 2026+
+        cutoff = datetime(2026, 4, 15)
         result = await session.execute(
             select(ForecastTracking)
             .where(ForecastTracking.status.in_(["completed", "expired"]))
+            .where(ForecastTracking.created_at >= cutoff)
             .order_by(ForecastTracking.created_at.desc())
             .limit(500)
         )
