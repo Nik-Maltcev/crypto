@@ -6,7 +6,7 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 const StatsTracker: React.FC = () => {
     const [trackings, setTrackings] = useState<ForecastTracking[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [modeFilter, setModeFilter] = useState<'reddit_only' | 'reddit_twitter'>('reddit_only');
+    const [modeFilter] = useState<'reddit_only' | 'reddit_twitter'>('reddit_only');
     const [patternLoading, setPatternLoading] = useState(false);
     const [patternResult, setPatternResult] = useState<string | null>(null);
     const [patternError, setPatternError] = useState<string | null>(null);
@@ -234,17 +234,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 </button>
             </div>
 
-            {/* Mode toggle */}
-            <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1 w-fit">
-                <button onClick={() => setModeFilter('reddit_only')}
-                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_only' ? 'bg-orange-600/30 text-orange-400 shadow border border-orange-500/30' : 'text-gray-400 hover:text-gray-200'}`}>
-                    Reddit Only
-                </button>
-                <button onClick={() => setModeFilter('reddit_twitter')}
-                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${modeFilter === 'reddit_twitter' ? 'bg-blue-600/30 text-blue-400 shadow border border-blue-500/30' : 'text-gray-400 hover:text-gray-200'}`}>
-                    Reddit + Twitter
-                </button>
-            </div>
+            {/* Mode: Reddit Only */}
 
             {/* Pattern Analysis Result */}
             {patternError && (
