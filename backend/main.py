@@ -779,6 +779,125 @@ async def trigger_altcoin_tracking_update():
     return {"status": "started", "message": "Altcoin tracking update triggered."}
 
 
+@app.get("/api/forecast/daily-performance")
+async def get_daily_performance():
+    """Get daily forecast performance: prediction vs actual 24h result.
+    
+    For each completed forecast, shows:
+    - Date, coin, prediction (Bullish/Bearish), confidence
+    - Start price, end price (24h later), actual change %
+    - Whether direction matched
+    """
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(ForecastTracking)
+            .where(ForecastTracking.status.in_(["completed", "expired"]))
+            .order_by(ForecastTracking.created_at.desc())
+            .limit(500)
+        )
+        trackings = result.scalars().all()
+        
+        rows = []
+        for t in trackings:
+            # Get actual price at end of 24h from polymarket data
+            poly_data = []
+            if t.polymarket_prices_json:
+                try:
+                    poly_data = json.loads(t.polymarket_prices_json)
+                except:
+                    pass
+            
+            # End price = last candle close in polymarket data
+            end_price = None
+            if poly_data:
+                end_price = poly_data[-1].get("close")
+            
+            # If no polymarket data, try binance
+            if end_price is None and t.binance_prices_json:
+                try:
+                    binance_data = json.loads(t.binance_prices_json)
+                    if binance_data:
+                        end_price = binance_data[-1].get("close_price")
+                except:
+                    pass
+            
+            if end_price is None or t.start_price <= 0:
+                continue
+            
+            actual_change = ((end_price - t.start_price) / t.start_price) * 100
+            
+            # Direction match
+            predicted_up = t.prediction == "Bullish"
+            actual_up = actual_change > 0
+            direction_matched = predicted_up == actual_up
+            
+            rows.append({
+                "date": (t.created_at.isoformat() + "Z") if t.created_at else None,
+                "symbol": t.symbol,
+                "prediction": t.prediction,
+                "confidence": t.confidence,
+                "start_price": round(t.start_price, 6),
+                "end_price": round(end_price, 6),
+                "actual_change_pct": round(actual_change, 2),
+                "target_change_pct": round(t.target_change_24h, 2) if t.target_change_24h else None,
+                "direction_matched": direction_matched,
+                "hours_tracked": t.hours_tracked,
+                "analysis_id": t.analysis_id,
+                "mode": None,  # will fill below
+            })
+        
+        # Fetch analysis modes
+        if rows:
+            analysis_ids = list(set(r["analysis_id"] for r in rows))
+            mode_result = await session.execute(
+                select(AnalysisLog.id, AnalysisLog.mode)
+                .where(AnalysisLog.id.in_(analysis_ids))
+            )
+            mode_map = {row[0]: row[1] for row in mode_result}
+            for r in rows:
+                r["mode"] = mode_map.get(r["analysis_id"], "unknown")
+        
+        # Stats
+        total = len(rows)
+        matched = len([r for r in rows if r["direction_matched"]])
+        bullish_rows = [r for r in rows if r["prediction"] == "Bullish"]
+        bearish_rows = [r for r in rows if r["prediction"] == "Bearish"]
+        
+        # By coin
+        coins_stats = {}
+        for r in rows:
+            sym = r["symbol"]
+            if sym not in coins_stats:
+                coins_stats[sym] = {"total": 0, "matched": 0, "avg_change": 0, "changes": []}
+            coins_stats[sym]["total"] += 1
+            if r["direction_matched"]:
+                coins_stats[sym]["matched"] += 1
+            coins_stats[sym]["changes"].append(r["actual_change_pct"])
+        
+        for sym in coins_stats:
+            changes = coins_stats[sym]["changes"]
+            coins_stats[sym]["avg_change"] = round(sum(changes) / len(changes), 2) if changes else 0
+            coins_stats[sym]["win_rate"] = round(coins_stats[sym]["matched"] / coins_stats[sym]["total"] * 100, 1) if coins_stats[sym]["total"] > 0 else 0
+            del coins_stats[sym]["changes"]
+        
+        return {
+            "success": True,
+            "rows": rows,
+            "stats": {
+                "total_forecasts": total,
+                "direction_matched": matched,
+                "win_rate": round(matched / total * 100, 1) if total > 0 else 0,
+                "bullish_count": len(bullish_rows),
+                "bullish_matched": len([r for r in bullish_rows if r["direction_matched"]]),
+                "bearish_count": len(bearish_rows),
+                "bearish_matched": len([r for r in bearish_rows if r["direction_matched"]]),
+                "avg_actual_change": round(sum(r["actual_change_pct"] for r in rows) / total, 2) if total > 0 else 0,
+                "by_coin": coins_stats,
+            }
+        }
+
+
 @app.post("/api/analysis/log/start")
 async def start_frontend_analysis_log():
     """Create a new running analysis log for frontend tracking."""

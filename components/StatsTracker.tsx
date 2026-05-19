@@ -10,6 +10,8 @@ const StatsTracker: React.FC = () => {
     const [patternLoading, setPatternLoading] = useState(false);
     const [patternResult, setPatternResult] = useState<string | null>(null);
     const [patternError, setPatternError] = useState<string | null>(null);
+    const [dailyData, setDailyData] = useState<any>(null);
+    const [dailyLoading, setDailyLoading] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -21,6 +23,16 @@ const StatsTracker: React.FC = () => {
             finally { setIsLoading(false); }
         })();
     }, []);
+
+    const fetchDailyPerformance = async () => {
+        setDailyLoading(true);
+        try {
+            const resp = await fetch(`${BACKEND_URL}/api/forecast/daily-performance`);
+            const data = await resp.json();
+            if (data.success) setDailyData(data);
+        } catch (e) { console.error(e); }
+        finally { setDailyLoading(false); }
+    };
 
     if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>;
 
@@ -383,6 +395,136 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Daily Performance Section */}
+            <div className="bg-brand-card border border-cyan-500/20 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider">📅 Дневная точность (прогноз vs реальность за 24ч)</h3>
+                    <div className="flex items-center gap-2">
+                        {dailyData && (
+                            <button
+                                onClick={() => {
+                                    const header = 'Дата,Монета,Прогноз,Confidence,Цена старт,Цена финиш (24ч),Изменение %,Направление совпало,Режим\n';
+                                    const rows = dailyData.rows.map((r: any) =>
+                                        `${new Date(r.date).toLocaleDateString('ru-RU')},${r.symbol},${r.prediction},${r.confidence},${r.start_price},${r.end_price},${r.actual_change_pct},${r.direction_matched ? 'Да' : 'Нет'},${r.mode || ''}`
+                                    ).join('\n');
+                                    const csv = header + rows;
+                                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `forecast_daily_${new Date().toISOString().split('T')[0]}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="px-4 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+                            >
+                                📥 CSV
+                            </button>
+                        )}
+                        <button
+                            onClick={fetchDailyPerformance}
+                            disabled={dailyLoading}
+                            className="px-4 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+                        >
+                            {dailyLoading ? 'Загрузка...' : '📊 Загрузить'}
+                        </button>
+                    </div>
+                </div>
+
+                {dailyData && (
+                    <div className="space-y-4">
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-xl font-bold text-white">{dailyData.stats.total_forecasts}</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Всего прогнозов</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className={`text-xl font-bold ${dailyData.stats.win_rate >= 55 ? 'text-emerald-400' : dailyData.stats.win_rate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                    {dailyData.stats.win_rate}%
+                                </div>
+                                <div className="text-[10px] text-gray-500 uppercase">Направление совпало</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-xl font-bold text-emerald-400">
+                                    {dailyData.stats.bullish_count > 0 ? Math.round(dailyData.stats.bullish_matched / dailyData.stats.bullish_count * 100) : 0}%
+                                </div>
+                                <div className="text-[10px] text-gray-500 uppercase">Bullish точность</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className={`text-xl font-bold ${dailyData.stats.avg_actual_change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {dailyData.stats.avg_actual_change >= 0 ? '+' : ''}{dailyData.stats.avg_actual_change}%
+                                </div>
+                                <div className="text-[10px] text-gray-500 uppercase">Среднее изменение</div>
+                            </div>
+                        </div>
+
+                        {/* By coin stats */}
+                        {dailyData.stats.by_coin && (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                                {Object.entries(dailyData.stats.by_coin).map(([sym, s]: [string, any]) => (
+                                    <div key={sym} className="bg-gray-900/50 rounded-lg p-2 text-center">
+                                        <div className="text-xs font-bold text-white">{sym}</div>
+                                        <div className={`text-sm font-bold ${s.win_rate >= 55 ? 'text-emerald-400' : s.win_rate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                            {s.win_rate}%
+                                        </div>
+                                        <div className="text-[9px] text-gray-500">{s.matched}/{s.total} • avg {s.avg_change >= 0 ? '+' : ''}{s.avg_change}%</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Table of all forecasts */}
+                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                            <table className="w-full text-xs">
+                                <thead className="sticky top-0 bg-gray-900">
+                                    <tr className="text-gray-500 border-b border-gray-800 uppercase">
+                                        <th className="py-2 px-2 text-left">Дата</th>
+                                        <th className="py-2 px-2 text-left">Монета</th>
+                                        <th className="py-2 px-2 text-center">Прогноз</th>
+                                        <th className="py-2 px-2 text-center">Conf</th>
+                                        <th className="py-2 px-2 text-right">Старт</th>
+                                        <th className="py-2 px-2 text-right">Финиш (24ч)</th>
+                                        <th className="py-2 px-2 text-right">Изменение</th>
+                                        <th className="py-2 px-2 text-center">Результат</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {dailyData.rows.map((r: any, i: number) => (
+                                        <tr key={i} className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${r.direction_matched ? '' : 'bg-red-500/5'}`}>
+                                            <td className="py-1.5 px-2 text-gray-400 font-mono">
+                                                {new Date(r.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                                            </td>
+                                            <td className="py-1.5 px-2 font-bold text-white">{r.symbol}</td>
+                                            <td className={`py-1.5 px-2 text-center font-bold ${r.prediction === 'Bullish' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {r.prediction === 'Bullish' ? '📈' : '📉'} {r.prediction}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-center text-gray-300">{r.confidence}</td>
+                                            <td className="py-1.5 px-2 text-right font-mono text-gray-400">
+                                                ${r.start_price < 1 ? r.start_price.toFixed(5) : r.start_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right font-mono text-gray-300">
+                                                ${r.end_price < 1 ? r.end_price.toFixed(5) : r.end_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
+                                            <td className={`py-1.5 px-2 text-right font-mono font-bold ${r.actual_change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {r.actual_change_pct >= 0 ? '+' : ''}{r.actual_change_pct}%
+                                            </td>
+                                            <td className="py-1.5 px-2 text-center text-lg">
+                                                {r.direction_matched ? '✅' : '❌'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {!dailyData && !dailyLoading && (
+                    <p className="text-gray-500 text-sm text-center py-4">Нажмите «Загрузить» чтобы увидеть дневную статистику прогнозов</p>
+                )}
             </div>
         </div>
     );
