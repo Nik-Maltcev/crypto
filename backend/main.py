@@ -806,11 +806,10 @@ async def get_daily_performance():
         
         result = await session.execute(
             select(ForecastTracking)
-            .where(ForecastTracking.status.in_(["completed", "expired"]))
             .where(ForecastTracking.created_at >= cutoff)
             .where(ForecastTracking.analysis_id.in_(reddit_only_ids))
             .order_by(ForecastTracking.created_at.desc())
-            .limit(500)
+            .limit(1000)
         )
         trackings = result.scalars().all()
         
