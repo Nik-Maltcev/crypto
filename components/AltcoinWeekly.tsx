@@ -169,7 +169,7 @@ const AltcoinWeekly: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-2">🔮 Недельные альткоины</h2>
                     <p className="text-gray-400 text-sm">
-                        CMC + Reddit + Twitter → Claude Opus 4.6 • Цель: +10% за неделю
+                        CMC + Reddit + Twitter → Claude Opus 4.6 • Шорт-кандидаты: -20% за неделю • Только Bybit
                     </p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
@@ -261,70 +261,6 @@ const AltcoinWeekly: React.FC = () => {
                             )}
                         </div>
                         <p className="text-gray-300 text-sm">{latestResult.weeklyOutlook}</p>
-                    </div>
-
-                    {/* Picks */}
-                    <div>
-                        <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">🎯 Топ пики недели ({latestResult.picks?.length || 0})</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {(latestResult.picks || []).map((pick, idx) => (
-                                <div key={pick.symbol} className="bg-brand-card border border-gray-800 rounded-xl p-5 hover:border-purple-500/30 transition-colors">
-                                    {/* Header */}
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div>
-                                            <span className="text-xl font-bold text-white">{pick.symbol}</span>
-                                            <span className="text-xs text-gray-500 ml-2">{pick.name}</span>
-                                        </div>
-                                        <span className="text-xs text-gray-500 font-mono">#{idx + 1}</span>
-                                    </div>
-
-                                    {/* Price target */}
-                                    <div className="bg-gray-900/50 rounded-lg p-3 mb-3">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <div className="text-[10px] text-gray-500 uppercase">Сейчас</div>
-                                                <div className="text-sm font-mono text-white">{formatPrice(pick.currentPrice)}</div>
-                                            </div>
-                                            <div className="text-emerald-400 text-lg">→</div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] text-gray-500 uppercase">Цель 7д</div>
-                                                <div className="text-sm font-mono text-emerald-400">{formatPrice(pick.targetPrice7d)}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-center mt-2">
-                                            <span className="text-lg font-bold text-emerald-400">+{pick.targetChange7d.toFixed(1)}%</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Meta */}
-                                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(pick.risk)}`}>{pick.risk}</span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold">{pick.confidence}%</span>
-                                        <span className={`text-[10px] font-bold ${getBuzzColor(pick.socialBuzz)}`}>📢 {pick.socialBuzz}</span>
-                                        <span className="text-[10px] text-gray-500">{pick.timeframe}</span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-bold">Bybit ✓</span>
-                                    </div>
-
-                                    {/* Catalyst */}
-                                    <div className="mb-2">
-                                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Катализатор</div>
-                                        <p className="text-xs text-yellow-400">{pick.catalyst}</p>
-                                    </div>
-
-                                    {/* Reasoning */}
-                                    <div>
-                                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Анализ</div>
-                                        <p className="text-xs text-gray-400 line-clamp-3 hover:line-clamp-none transition-all">{pick.reasoning}</p>
-                                    </div>
-
-                                    {/* Volume/MCap */}
-                                    <div className="flex justify-between mt-3 pt-3 border-t border-gray-800 text-[10px] text-gray-500">
-                                        <span>Vol: ${(pick.volume24h / 1e6).toFixed(1)}M</span>
-                                        <span>MCap: ${(pick.marketCap / 1e6).toFixed(1)}M</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
                     </div>
 
                     {/* Shorts */}

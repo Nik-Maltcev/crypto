@@ -200,7 +200,7 @@ async def _analyze_altcoins_claude(cmc_data: dict, reddit_posts: list, twitter_p
         "user": t.get("user", ""),
     } for t in twitter_posts[:150]], ensure_ascii=False) if twitter_posts else "No Twitter data."
 
-    system_prompt = """You are CryptoPulse AI Altcoin Analyst. Your task: identify altcoins with 10%+ growth potential AND altcoins likely to DROP 20%+ this week.
+    system_prompt = """You are CryptoPulse AI Altcoin Analyst. Your task: identify altcoins likely to DROP 20%+ this week (short candidates).
 
 Output pure JSON only. No markdown wrappers. Response must be parseable by JSON.parse().
 
@@ -208,23 +208,6 @@ Response Format:
 {
   "weeklyOutlook": "String (Russian) - Overall altcoin market outlook for the week, 2-3 sentences",
   "analysisDate": "ISO date string",
-  "picks": [
-    {
-      "symbol": "COIN",
-      "name": "Full Name",
-      "currentPrice": 0.123,
-      "targetPrice7d": 0.145,
-      "targetChange7d": 17.8,
-      "confidence": 75,
-      "risk": "Medium" | "High" | "Degen",
-      "catalyst": "String (Russian) - What will drive growth",
-      "reasoning": "String (Russian) - Detailed analysis why this coin",
-      "volume24h": 5000000,
-      "marketCap": 50000000,
-      "socialBuzz": "High" | "Medium" | "Low",
-      "timeframe": "3-5 days" | "5-7 days" | "1-3 days"
-    }
-  ],
   "shorts": [
     {
       "symbol": "COIN",
@@ -243,19 +226,18 @@ Response Format:
   ],
   "avoid": [
     {
-      "symbol": "SCAM",
-      "reason": "String (Russian) - Why to avoid"
+      "symbol": "COIN",
+      "reason": "String (Russian) - Why to avoid shorting this (looks like it will drop but won't)"
     }
   ]
 }
 
 RULES:
-- "picks": 5-10 altcoins with HIGHEST probability of 10%+ growth this week
-- "shorts": 2-5 altcoins most likely to DROP 20%+ this week (for short positions)
+- "shorts": 4-8 altcoins most likely to DROP 20%+ this week (for short positions)
 - Sort by confidence (highest first)
-- Be REALISTIC — not every coin will moon or crash. Only pick coins with clear catalysts
+- Be REALISTIC — only pick coins with clear reasons to fall (hype dying, unlock events, broken support, negative news, pump-and-dump aftermath)
 - Include risk assessment honestly
-- "avoid" section: list 2-3 coins that look tempting but are likely traps
+- "avoid" section: list 2-3 coins that look like they'll crash but are actually traps (short squeeze risk, strong support, etc)
 - All text in Russian
 - Prices must match the market data provided
 - EXCLUDE: BTC, ETH, BNB, SOL, XRP, USDT, USDC, DOGE
@@ -283,10 +265,9 @@ TWITTER (last 24h, {len(twitter_posts)} tweets):
 {twitter_payload}
 
 TASK: 
-1. Select 5-10 altcoins most likely to GROW 10%+ this week (picks).
-2. Select 2-5 altcoins most likely to DROP 20%+ this week (shorts).
-Consider: momentum, volume trends, social buzz, upcoming catalysts, technical setup, overvaluation signs.
-Be selective — quality over quantity. Only pick coins where you see a clear edge.
+Select 4-8 altcoins most likely to DROP 20%+ this week (short candidates).
+Look for: dying hype, token unlocks, broken support levels, negative news, pump-and-dump aftermath, overvaluation.
+Be selective — only pick coins where you see a clear reason for decline.
 IMPORTANT: ALL coins must be available on Bybit exchange.
 Current date: {datetime.utcnow().isoformat()}Z"""
 
@@ -382,9 +363,8 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             logger.info("[ALTCOIN] Sending to Claude Opus 4.6 (direct)...")
             result = await _analyze_altcoins_claude(cmc_data, reddit_posts, twitter_posts, claude_key, bybit_symbols)
             
-            # Post-process: verify all picks/shorts are on Bybit
+            # Post-process: verify all shorts are on Bybit
             if bybit_symbols:
-                result["picks"] = [p for p in result.get("picks", []) if p.get("symbol", "").upper() in bybit_symbols]
                 result["shorts"] = [s for s in result.get("shorts", []) if s.get("symbol", "").upper() in bybit_symbols]
 
             # Save
@@ -396,10 +376,10 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
             log.telegram_msgs_count = 0
             await session.commit()
 
-            # 5. Save picks to AltcoinTracking for weekly performance tracking
-            logger.info("[ALTCOIN] Saving picks to tracking table...")
-            picks = result.get("picks", [])
-            for pick in picks:
+            # 5. Save shorts to AltcoinTracking for weekly performance tracking
+            logger.info("[ALTCOIN] Saving shorts to tracking table...")
+            shorts = result.get("shorts", [])
+            for pick in shorts:
                 tracking = AltcoinTracking(
                     analysis_id=log.id,
                     symbol=pick.get("symbol", ""),
@@ -415,7 +395,7 @@ async def run_altcoin_analysis(trigger: str = "scheduled") -> None:
                 )
                 session.add(tracking)
             await session.commit()
-            logger.info(f"[ALTCOIN] Saved {len(picks)} picks to tracking")
+            logger.info(f"[ALTCOIN] Saved {len(shorts)} shorts to tracking")
 
             logger.info(f"=== ALTCOIN analysis complete (ID: {log.id}) ===")
 
