@@ -171,6 +171,12 @@ const StatsTracker: React.FC = () => {
     const h3h5Pct = strategyStats.h3h5_primary.total > 0 ? Math.round((strategyStats.h3h5_primary.wins / strategyStats.h3h5_primary.total) * 100) : 0;
     const h2Pct = strategyStats.h2_all.total > 0 ? Math.round((strategyStats.h2_all.wins / strategyStats.h2_all.total) * 100) : 0;
     
+    // H2 + H5 combined (active strategy)
+    const h2h5Stats = { wins: strategyStats.h2_all.wins + strategyStats.h5_primary.wins, total: strategyStats.h2_all.total + strategyStats.h5_primary.total };
+    const h2h5Pct = h2h5Stats.total > 0 ? Math.round((h2h5Stats.wins / h2h5Stats.total) * 100) : 0;
+    const h5Pct = strategyStats.h5_primary.total > 0 ? Math.round((strategyStats.h5_primary.wins / strategyStats.h5_primary.total) * 100) : 0;
+    const h3Pct = strategyStats.h3_primary.total > 0 ? Math.round((strategyStats.h3_primary.wins / strategyStats.h3_primary.total) * 100) : 0;
+
     // Weekly min/max for h3+h5
     const weeklyPcts = Object.values(weeklyH3H5).filter(w => w.total >= 4).map(w => Math.round((w.wins / w.total) * 100));
     const weeklyMin = weeklyPcts.length > 0 ? Math.min(...weeklyPcts) : 0;
@@ -314,86 +320,86 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Strategy block */}
-                <div className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border border-emerald-500/30 rounded-xl p-5 md:col-span-2">
-                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">🎯 Стратегия Polymarket: BTC (с 15 апреля)</h3>
-                    
-                    {/* Main strategy - highlighted */}
-                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 mb-4">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-lg">⭐</span>
-                            <span className="text-sm font-bold text-emerald-400 uppercase">Основная: Час 3 + Час 5 (Пн/Вт/Чт/Сб)</span>
+                {/* ACTIVE Strategy - Hour 2 + Hour 5 */}
+                <div className="bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border-2 border-yellow-500/50 rounded-xl p-5 md:col-span-2 shadow-lg shadow-yellow-500/5">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="text-xl">🔥</span>
+                        <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">Активная стратегия: BTC Час 2 + Час 5</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 font-bold ml-auto">СТАВИТЬ СЕЙЧАС</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-yellow-400">{h2h5Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Общий</div>
+                            <div className="text-[10px] text-gray-600">{h2h5Stats.wins}/{h2h5Stats.total}</div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-emerald-400">{h3h5Pct}%</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
-                                <div className="text-[10px] text-gray-600">{strategyStats.h3h5_primary.wins}/{strategyStats.h3h5_primary.total}</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-cyan-400">{weeklyMin}-{weeklyMax}%</div>
-                                <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
-                                <div className="text-[10px] text-gray-600">Мин. {weeklyMin}%</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-white">8</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
-                                <div className="text-[10px] text-gray-600">2 × 4 дня</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-yellow-400">⚡</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Стабильность</div>
-                                <div className="text-[10px] text-gray-600">{weeklyMin >= 60 ? 'Высокая' : weeklyMin >= 50 ? 'Средняя' : 'Низкая'}</div>
-                            </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-blue-400">{h2Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Час 2</div>
+                            <div className="text-[10px] text-gray-600">{strategyStats.h2_all.wins}/{strategyStats.h2_all.total}</div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="text-sm text-gray-300">
-                                <span className="text-emerald-400 font-bold">Час 3</span> (10:00-11:00 МСК) — ловит тренд, азиатская сессия
-                            </div>
-                            <div className="text-sm text-gray-300">
-                                <span className="text-emerald-400 font-bold">Час 5</span> (12:00-13:00 МСК) — ловит боковик, европейская сессия
-                            </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-emerald-400">{h5Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Час 5</div>
+                            <div className="text-[10px] text-gray-600">{strategyStats.h5_primary.wins}/{strategyStats.h5_primary.total}</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-white">Пн/Вт/Чт/Сб</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Дни (час 5)</div>
+                            <div className="text-[10px] text-gray-600">Час 2 — все дни</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-white">~11</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
+                            <div className="text-[10px] text-gray-600">7 (ч2) + 4 (ч5)</div>
                         </div>
                     </div>
-
-                    {/* Additional - hour 2 */}
-                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-lg">➕</span>
-                            <span className="text-sm font-bold text-gray-300 uppercase">Дополнительная: Час 2 (все дни)</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="bg-gray-900/30 rounded-lg p-3">
+                            <span className="text-blue-400 font-bold">Час 2</span> <span className="text-gray-500">(09:00-10:00 МСК)</span> — каждый день, направление по прогнозу
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-blue-400">{h2Pct}%</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
-                                <div className="text-[10px] text-gray-600">{strategyStats.h2_all.wins}/{strategyStats.h2_all.total}</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-blue-400">—</div>
-                                <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
-                                <div className="text-[10px] text-gray-600">Мин. 50%</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-white">7</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
-                                <div className="text-[10px] text-gray-600">Каждый день</div>
-                            </div>
-                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-yellow-400">⚡</div>
-                                <div className="text-[10px] text-gray-500 uppercase">Стабильность</div>
-                                <div className="text-[10px] text-gray-600">Средняя</div>
-                            </div>
-                        </div>
-                        <div className="text-sm text-gray-400">
-                            <span className="text-blue-400 font-bold">Час 2</span> (09:00-10:00 МСК) — работает каждый день, Пн/Вт/Чт/Сб: 67%, Ср/Пт/Вс: 71%. Низкая волатильность, но для Polymarket это не важно.
+                        <div className="bg-gray-900/30 rounded-lg p-3">
+                            <span className="text-emerald-400 font-bold">Час 5</span> <span className="text-gray-500">(12:00-13:00 МСК)</span> — только Пн/Вт/Чт/Сб, по прогнозу
                         </div>
                     </div>
+                </div>
 
-                    {/* Summary */}
-                    <div className="mt-4 p-3 bg-gray-900/30 rounded-lg">
-                        <div className="text-xs text-gray-400">
-                            <span className="text-yellow-400">⚠️</span> Данные: 15 апр — 21 мая 2026 (5 недель). Направление ставки = прогноз AI. Час 3+5 компенсируют друг друга при смене рыночного режима (тренд ↔ боковик).
+                {/* Monitoring: Hour 3+5 strategy */}
+                <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-700/50 rounded-xl p-5 md:col-span-2 opacity-80">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="text-lg">👁️</span>
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Мониторинг: BTC Час 3 + Час 5 (Пн/Вт/Чт/Сб)</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold ml-auto">ЧАС 3 ДЕГРАДИРУЕТ</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-300">{h3h5Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Ч3+Ч5</div>
+                            <div className="text-[10px] text-gray-600">{strategyStats.h3h5_primary.wins}/{strategyStats.h3h5_primary.total}</div>
                         </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className={`text-2xl font-bold ${h3Pct >= 60 ? 'text-emerald-400' : h3Pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{h3Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Час 3</div>
+                            <div className="text-[10px] text-gray-600">{strategyStats.h3_primary.wins}/{strategyStats.h3_primary.total}</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-emerald-400">{h5Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Час 5</div>
+                            <div className="text-[10px] text-gray-600">{strategyStats.h5_primary.wins}/{strategyStats.h5_primary.total}</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-400">{weeklyMin}-{weeklyMax}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
+                            <div className="text-[10px] text-gray-600">Мин. {weeklyMin}%</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-400">{weeklyMin >= 60 ? '✅' : weeklyMin >= 50 ? '⚠️' : '❌'}</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Статус</div>
+                            <div className="text-[10px] text-gray-600">{h3Pct >= 60 ? 'Можно вернуть ч3' : 'Ч3 на паузе'}</div>
+                        </div>
+                    </div>
+                    <div className="mt-3 text-xs text-gray-500">
+                        ⚠️ Час 3 показывает деградацию (последние недели ≤50%). Вернуть когда покажет 2 недели подряд ≥65%.
                     </div>
                 </div>
             </div>
