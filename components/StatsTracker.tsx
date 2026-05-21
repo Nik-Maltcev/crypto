@@ -255,78 +255,46 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Best hours */}
-                <div className="bg-brand-card border border-emerald-500/20 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">{'\uD83C\uDFAF \u041B\u0443\u0447\u0448\u0438\u0435 \u0447\u0430\u0441\u044B \u0434\u043B\u044F \u0441\u0442\u0430\u0432\u043E\u043A'}</h3>
-                    <div className="space-y-2">
-                        {bestHours.map((h, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                                <span className="text-white font-mono text-sm">{h.et}</span>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-24 bg-gray-800 rounded-full h-2">
-                                        <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${h.pct}%` }}></div>
-                                    </div>
-                                    <span className="text-emerald-400 font-bold text-sm w-12 text-right">{h.pct}%</span>
-                                    <span className="text-gray-500 text-xs">({h.wins}/{h.total})</span>
-                                </div>
-                            </div>
-                        ))}
+                {/* Strategy block */}
+                <div className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border border-emerald-500/30 rounded-xl p-5 md:col-span-2">
+                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">🎯 Стратегия: BTC час 3 + час 5 (Пн/Вт/Чт/Сб)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
+                            <div className="text-3xl font-bold text-emerald-400">70%</div>
+                            <div className="text-xs text-gray-500 uppercase mt-1">Общий винрейт</div>
+                            <div className="text-[10px] text-gray-600">28/40 ставок</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
+                            <div className="text-3xl font-bold text-cyan-400">63-75%</div>
+                            <div className="text-xs text-gray-500 uppercase mt-1">Диапазон по неделям</div>
+                            <div className="text-[10px] text-gray-600">Ни одной недели ниже 63%</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
+                            <div className="text-3xl font-bold text-yellow-400">8</div>
+                            <div className="text-xs text-gray-500 uppercase mt-1">Ставок в неделю</div>
+                            <div className="text-[10px] text-gray-600">2 ставки × 4 дня</div>
+                        </div>
                     </div>
-                </div>
-
-                {/* Worst hours */}
-                <div className="bg-brand-card border border-red-500/20 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider mb-4">{'\uD83D\uDC80 \u0425\u0443\u0434\u0448\u0438\u0435 \u0447\u0430\u0441\u044B (\u043D\u0435 \u0441\u0442\u0430\u0432\u0438\u0442\u044C)'}</h3>
-                    <div className="space-y-2">
-                        {worstHours.map((h, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                                <span className="text-white font-mono text-sm">{h.et}</span>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-24 bg-gray-800 rounded-full h-2">
-                                        <div className="bg-red-500 h-2 rounded-full" style={{ width: `${h.pct}%` }}></div>
-                                    </div>
-                                    <span className="text-red-400 font-bold text-sm w-12 text-right">{h.pct}%</span>
-                                    <span className="text-gray-500 text-xs">({h.wins}/{h.total})</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Coin ranking */}
-                <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">{'\uD83C\uDFC6 \u0420\u0435\u0439\u0442\u0438\u043D\u0433 \u043C\u043E\u043D\u0435\u0442'}</h3>
-                    <div className="space-y-2">
-                        {coinRanking.map((c, i) => {
-                            return (
-                            <div key={i} className="flex items-center justify-between">
-                                <span className="text-white font-bold text-sm">{c.symbol}</span>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-24 bg-gray-800 rounded-full h-2">
-                                        <div className={`h-2 rounded-full ${c.pct >= 52 ? 'bg-emerald-500' : c.pct >= 48 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${c.pct}%` }}></div>
-                                    </div>
-                                    <span className={`font-bold text-sm w-12 text-right ${c.pct >= 52 ? 'text-emerald-400' : c.pct >= 48 ? 'text-yellow-400' : 'text-red-400'}`}>{c.pct}%</span>
-                                    <span className="text-gray-500 text-xs">({c.total})</span>
-                                </div>
-                            </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Best hour per coin */}
-                <div className="bg-brand-card border border-indigo-500/20 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-4">{'\u2B50 \u041B\u0443\u0447\u0448\u0438\u0439 \u0447\u0430\u0441 \u043F\u043E \u043C\u043E\u043D\u0435\u0442\u0435'}</h3>
-                    <div className="space-y-2">
-                        {coinRanking.map((c, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                                <span className="text-white font-bold text-sm">{c.symbol}</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-indigo-400 font-mono text-sm">{bestPerCoin[c.symbol]?.et || '—'}</span>
-                                    <span className="text-emerald-400 font-bold text-sm">{bestPerCoin[c.symbol]?.pct || 0}%</span>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-900/50 rounded-lg p-4">
+                            <div className="text-xs text-gray-400 uppercase font-bold mb-2">Правила входа</div>
+                            <ul className="text-sm text-gray-300 space-y-1.5">
+                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Монета: только BTC</li>
+                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Дни: Пн, Вт, Чт, Сб</li>
+                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Час 3: 10:00-11:00 МСК</li>
+                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Час 5: 12:00-13:00 МСК</li>
+                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Направление: по прогнозу AI</li>
+                            </ul>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-4">
+                            <div className="text-xs text-gray-400 uppercase font-bold mb-2">Почему работает</div>
+                            <ul className="text-sm text-gray-300 space-y-1.5">
+                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Час 3 ловит тренд (азиатская сессия)</li>
+                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Час 5 ловит боковик (европейская сессия)</li>
+                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Вместе компенсируют смену режимов</li>
+                                <li className="flex items-start gap-2"><span className="text-yellow-400">⚠️</span> Данные: 15 апр — 21 мая (5 недель)</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
