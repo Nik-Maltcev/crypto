@@ -771,15 +771,32 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 </div>
                             </div>
 
-                            {/* Daily results */}
+                            {/* Daily results grouped by week */}
                             <div className="bg-gray-800 rounded-lg p-4">
-                                <div className="text-xs text-gray-400 uppercase font-bold mb-2">📅 По дням (новые → старые)</div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {[...dailyResults].reverse().map((r, i) => (
-                                        <div key={i} className={`px-2 py-1 rounded text-[10px] font-mono ${r.matched ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
-                                            {r.date} {r.day} {r.matched ? '✅' : '❌'}
-                                        </div>
-                                    ))}
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-2">📅 По дням (старые → новые)</div>
+                                <div className="space-y-2">
+                                    {(() => {
+                                        // Group by week
+                                        const weeks: Record<number, typeof dailyResults> = {};
+                                        dailyResults.forEach(r => {
+                                            if (!weeks[r.weekNum]) weeks[r.weekNum] = [];
+                                            weeks[r.weekNum].push(r);
+                                        });
+                                        return Object.entries(weeks).sort(([a], [b]) => Number(a) - Number(b)).map(([wk, days]) => {
+                                            const wkWins = days.filter(d => d.matched).length;
+                                            const wkPct = days.length > 0 ? Math.round((wkWins / days.length) * 100) : 0;
+                                            return (
+                                                <div key={wk} className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${wkPct >= 60 ? 'bg-emerald-500/20 text-emerald-400' : wkPct >= 50 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>Н{wk} {wkPct}%</span>
+                                                    {days.map((r, i) => (
+                                                        <div key={i} className={`px-2 py-1 rounded text-[10px] font-mono ${r.matched ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                                            {r.date} {r.day} {r.matched ? '✅' : '❌'}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        });
+                                    })()}
                                 </div>
                             </div>
                         </div>
