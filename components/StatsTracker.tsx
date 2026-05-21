@@ -669,16 +669,18 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             {cellModal && (() => {
                 const { hour, symbol } = cellModal;
                 // Collect daily results for this hour+symbol
-                const dailyResults: { date: string; day: string; matched: boolean }[] = [];
+                const dailyResults: { date: string; day: string; matched: boolean; weekNum: number }[] = [];
                 valid.filter(t => t.symbol === symbol).forEach(t => {
                     const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
                     const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                    const weekNum = Math.floor((new Date(t.created_at).getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
                     (t.polymarket_prices || []).forEach(pp => {
                         if (pp.hour === hour && pp.matched !== null) {
                             dailyResults.push({
                                 date: mskDate.toISOString().slice(5, 10).replace('-', '.'),
                                 day: dayNames[mskDate.getUTCDay()],
                                 matched: pp.matched,
+                                weekNum,
                             });
                         }
                     });
@@ -698,6 +700,14 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 const last7 = dailyResults.slice(-7);
                 const last7Wins = last7.filter(r => r.matched).length;
                 const last7Pct = last7.length > 0 ? Math.round((last7Wins / last7.length) * 100) : 0;
+
+                // Weekly breakdown
+                const weeklyBreakdown: Record<number, { wins: number; total: number }> = {};
+                dailyResults.forEach(r => {
+                    if (!weeklyBreakdown[r.weekNum]) weeklyBreakdown[r.weekNum] = { wins: 0, total: 0 };
+                    weeklyBreakdown[r.weekNum].total++;
+                    if (r.matched) weeklyBreakdown[r.weekNum].wins++;
+                });
 
                 return (
                     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCellModal(null)}>
@@ -720,6 +730,23 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 <div className="bg-gray-800 rounded-lg p-3 text-center">
                                     <div className="text-xl font-bold text-white">{dailyResults.length}</div>
                                     <div className="text-[10px] text-gray-500">Наблюдений</div>
+                                </div>
+                            </div>
+
+                            {/* Weekly breakdown */}
+                            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-3">📊 По неделям</div>
+                                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                                    {Object.entries(weeklyBreakdown).sort(([a], [b]) => Number(a) - Number(b)).map(([wk, s]) => {
+                                        const pct = s.total > 0 ? Math.round((s.wins / s.total) * 100) : 0;
+                                        return (
+                                            <div key={wk} className={`rounded-lg p-2 text-center ${pct >= 75 ? 'bg-emerald-500/10 border border-emerald-500/30' : pct >= 50 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                                                <div className="text-[10px] text-gray-500">Нед. {wk}</div>
+                                                <div className={`text-lg font-bold ${pct >= 75 ? 'text-emerald-400' : pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{pct}%</div>
+                                                <div className="text-[10px] text-gray-600">{s.wins}/{s.total}</div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
