@@ -194,6 +194,9 @@ const AnalysisHistory: React.FC = () => {
                                         <div className="text-lg font-bold text-white leading-tight">
                                             {item.created_at ? formatMSKDate(item.created_at).split(' ')[0] : '—'}
                                         </div>
+                                        <div className="text-[10px] text-gray-500">
+                                            {item.created_at ? new Date(new Date(item.created_at).getTime() + 3 * 60 * 60 * 1000).toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' }) : ''}
+                                        </div>
                                         <div className="text-sm font-mono text-indigo-400">
                                             {item.created_at ? formatMSKDate(item.created_at).split(' ').slice(1).join(' ') : ''}
                                         </div>
