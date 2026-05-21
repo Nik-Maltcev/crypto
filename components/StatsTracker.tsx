@@ -257,43 +257,83 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Strategy block */}
                 <div className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border border-emerald-500/30 rounded-xl p-5 md:col-span-2">
-                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">🎯 Стратегия: BTC час 3 + час 5 (Пн/Вт/Чт/Сб)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
-                            <div className="text-3xl font-bold text-emerald-400">70%</div>
-                            <div className="text-xs text-gray-500 uppercase mt-1">Общий винрейт</div>
-                            <div className="text-[10px] text-gray-600">28/40 ставок</div>
+                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">🎯 Стратегия Polymarket: BTC (с 15 апреля)</h3>
+                    
+                    {/* Main strategy - highlighted */}
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 mb-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-lg">⭐</span>
+                            <span className="text-sm font-bold text-emerald-400 uppercase">Основная: Час 3 + Час 5 (Пн/Вт/Чт/Сб)</span>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
-                            <div className="text-3xl font-bold text-cyan-400">63-75%</div>
-                            <div className="text-xs text-gray-500 uppercase mt-1">Диапазон по неделям</div>
-                            <div className="text-[10px] text-gray-600">Ни одной недели ниже 63%</div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-emerald-400">70%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
+                                <div className="text-[10px] text-gray-600">28/40</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-cyan-400">63-75%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
+                                <div className="text-[10px] text-gray-600">Мин. 63%</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-white">8</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
+                                <div className="text-[10px] text-gray-600">2 × 4 дня</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-yellow-400">⚡</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Стабильность</div>
+                                <div className="text-[10px] text-gray-600">Высокая</div>
+                            </div>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4 text-center">
-                            <div className="text-3xl font-bold text-yellow-400">8</div>
-                            <div className="text-xs text-gray-500 uppercase mt-1">Ставок в неделю</div>
-                            <div className="text-[10px] text-gray-600">2 ставки × 4 дня</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="text-sm text-gray-300">
+                                <span className="text-emerald-400 font-bold">Час 3</span> (10:00-11:00 МСК) — ловит тренд, азиатская сессия
+                            </div>
+                            <div className="text-sm text-gray-300">
+                                <span className="text-emerald-400 font-bold">Час 5</span> (12:00-13:00 МСК) — ловит боковик, европейская сессия
+                            </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                            <div className="text-xs text-gray-400 uppercase font-bold mb-2">Правила входа</div>
-                            <ul className="text-sm text-gray-300 space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Монета: только BTC</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Дни: Пн, Вт, Чт, Сб</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Час 3: 10:00-11:00 МСК</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Час 5: 12:00-13:00 МСК</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400">•</span> Направление: по прогнозу AI</li>
-                            </ul>
+
+                    {/* Additional - hour 2 */}
+                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-lg">➕</span>
+                            <span className="text-sm font-bold text-gray-300 uppercase">Дополнительная: Час 2 (все дни)</span>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                            <div className="text-xs text-gray-400 uppercase font-bold mb-2">Почему работает</div>
-                            <ul className="text-sm text-gray-300 space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Час 3 ловит тренд (азиатская сессия)</li>
-                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Час 5 ловит боковик (европейская сессия)</li>
-                                <li className="flex items-start gap-2"><span className="text-cyan-400">•</span> Вместе компенсируют смену режимов</li>
-                                <li className="flex items-start gap-2"><span className="text-yellow-400">⚠️</span> Данные: 15 апр — 21 мая (5 недель)</li>
-                            </ul>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-blue-400">69%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
+                                <div className="text-[10px] text-gray-600">24/35</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-blue-400">50-100%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
+                                <div className="text-[10px] text-gray-600">Мин. 50%</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-white">7</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
+                                <div className="text-[10px] text-gray-600">Каждый день</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-yellow-400">⚡</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Стабильность</div>
+                                <div className="text-[10px] text-gray-600">Средняя</div>
+                            </div>
+                        </div>
+                        <div className="text-sm text-gray-400">
+                            <span className="text-blue-400 font-bold">Час 2</span> (09:00-10:00 МСК) — работает каждый день, Пн/Вт/Чт/Сб: 67%, Ср/Пт/Вс: 71%. Низкая волатильность, но для Polymarket это не важно.
+                        </div>
+                    </div>
+
+                    {/* Summary */}
+                    <div className="mt-4 p-3 bg-gray-900/30 rounded-lg">
+                        <div className="text-xs text-gray-400">
+                            <span className="text-yellow-400">⚠️</span> Данные: 15 апр — 21 мая 2026 (5 недель). Направление ставки = прогноз AI. Час 3+5 компенсируют друг друга при смене рыночного режима (тренд ↔ боковик).
                         </div>
                     </div>
                 </div>
