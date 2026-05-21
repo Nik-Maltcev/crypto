@@ -191,19 +191,31 @@ const HourlyChartModal: React.FC<HourlyChartModalProps> = ({ coin, isOpen, onClo
                                             const fmtHour = (h: number) => { const h12 = h % 12 || 12; return `${h12}${h < 12 ? 'AM' : 'PM'}`; };
                                             const etLabel = `${fmtHour(etStart)}-${fmtHour(etEnd)} ET`;
 
-                                            // Opus 4.7 pattern: first 1-3 hours after analysis for BTC/ETH Bullish confidence>=65
-                                            const opusPatternHours = [1, 2, 3];
-                                            const opusCoins = ['BTC', 'ETH'];
-                                            const isOpusPattern = opusCoins.includes(coin.symbol) && coin.prediction === 'Bullish' && coin.confidence >= 65 && opusPatternHours.includes(d.hourOffset);
+                                            // Day-of-week based patterns (ET hours)
+                                            // Map: day -> array of {etHour, symbol} that should be highlighted
+                                            const dayPatterns: Record<number, {et: number, sym: string}[]> = {
+                                                1: [{et:3,sym:'BTC'},{et:3,sym:'BNB'},{et:5,sym:'SOL'}], // Mon
+                                                2: [{et:3,sym:'BTC'},{et:7,sym:'DOGE'},{et:8,sym:'BTC'},{et:8,sym:'SOL'},{et:13,sym:'BNB'},{et:21,sym:'BTC'}], // Tue
+                                                3: [{et:5,sym:'SOL'},{et:7,sym:'BTC'},{et:7,sym:'ETH'}], // Wed
+                                                4: [], // Thu
+                                                5: [{et:2,sym:'BTC'},{et:7,sym:'DOGE'},{et:8,sym:'BTC'},{et:8,sym:'SOL'},{et:13,sym:'SOL'},{et:21,sym:'BTC'}], // Fri
+                                                6: [{et:3,sym:'BTC'},{et:3,sym:'BNB'},{et:5,sym:'SOL'},{et:8,sym:'SOL'},{et:13,sym:'BNB'},{et:13,sym:'SOL'}], // Sat
+                                                0: [{et:2,sym:'BTC'},{et:7,sym:'BTC'},{et:7,sym:'DOGE'},{et:21,sym:'BTC'}], // Sun
+                                            };
+
+                                            // Get day of week from analysisDate (MSK)
+                                            const analysisDay = coin.analysisDate ? new Date(new Date(coin.analysisDate).getTime() + 3 * 60 * 60 * 1000).getUTCDay() : -1;
+                                            const todayPatterns = dayPatterns[analysisDay] || [];
+                                            const isDayPattern = todayPatterns.some(p => p.et === etStart && p.sym === coin.symbol);
 
                                             // Build highlight
                                             let rowHighlight = '';
                                             let icons = '';
                                             let labelTag = '';
-                                            if (isOpusPattern) {
-                                                rowHighlight = 'bg-yellow-500/15 border-l-4 border-l-yellow-400';
-                                                icons = ' ⚡';
-                                                labelTag = 'Opus';
+                                            if (isDayPattern) {
+                                                rowHighlight = 'bg-emerald-500/15 border-l-4 border-l-emerald-400';
+                                                icons = ' 🎯';
+                                                labelTag = '60%+';
                                             }
 
                                             return (
