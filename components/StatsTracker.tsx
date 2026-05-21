@@ -673,12 +673,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 valid.filter(t => t.symbol === symbol).forEach(t => {
                     const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
                     const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-                    // ISO week number (Mon-Sun)
-                    const d = new Date(mskDate);
-                    d.setUTCHours(0, 0, 0, 0);
-                    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-                    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-                    const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+                    const weekNum = Math.floor((new Date(t.created_at).getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
                     (t.polymarket_prices || []).forEach(pp => {
                         if (pp.hour === hour && pp.matched !== null) {
                             dailyResults.push({
