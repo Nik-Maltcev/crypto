@@ -14,6 +14,7 @@ const StatsTracker: React.FC = () => {
     const [dailyLoading, setDailyLoading] = useState(false);
     const [showStrategyDetail, setShowStrategyDetail] = useState(false);
     const [cellModal, setCellModal] = useState<{ hour: number; symbol: string } | null>(null);
+    const [modalDayFilter, setModalDayFilter] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -730,35 +731,38 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     });
                 });
 
-                // Calculate running winrate (cumulative)
+                // Filter by selected day
+                const filteredResults = modalDayFilter ? dailyResults.filter(r => r.day === modalDayFilter) : dailyResults;
+
+                // Calculate running winrate (cumulative) from filtered results
                 let cumWins = 0;
-                const runningWinrate = dailyResults.map((r, i) => {
+                const runningWinrate = filteredResults.map((r, i) => {
                     if (r.matched) cumWins++;
                     return { ...r, cumPct: Math.round((cumWins / (i + 1)) * 100), idx: i + 1 };
                 });
 
-                const totalWins = dailyResults.filter(r => r.matched).length;
-                const totalPct = dailyResults.length > 0 ? Math.round((totalWins / dailyResults.length) * 100) : 0;
+                const totalWins = filteredResults.filter(r => r.matched).length;
+                const totalPct = filteredResults.length > 0 ? Math.round((totalWins / filteredResults.length) * 100) : 0;
 
                 // Last 7 results
-                const last7 = dailyResults.slice(-7);
+                const last7 = filteredResults.slice(-7);
                 const last7Wins = last7.filter(r => r.matched).length;
                 const last7Pct = last7.length > 0 ? Math.round((last7Wins / last7.length) * 100) : 0;
 
-                // Weekly breakdown
+                // Weekly breakdown from filtered
                 const weeklyBreakdown: Record<number, { wins: number; total: number }> = {};
-                dailyResults.forEach(r => {
+                filteredResults.forEach(r => {
                     if (!weeklyBreakdown[r.weekNum]) weeklyBreakdown[r.weekNum] = { wins: 0, total: 0 };
                     weeklyBreakdown[r.weekNum].total++;
                     if (r.matched) weeklyBreakdown[r.weekNum].wins++;
                 });
 
                 return (
-                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCellModal(null)}>
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setCellModal(null); setModalDayFilter(null); }}>
                         <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-white">{symbol} • {fmtET(hour)} • Час {hour}</h3>
-                                <button onClick={() => setCellModal(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                                <h3 className="text-lg font-bold text-white">{symbol} • {fmtET(hour)} • Час {hour}{modalDayFilter ? ` • ${modalDayFilter}` : ''}</h3>
+                                <button onClick={() => { setCellModal(null); setModalDayFilter(null); }} className="text-gray-400 hover:text-white text-xl">✕</button>
                             </div>
 
                             {/* Summary */}
@@ -779,14 +783,18 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
 
                             {/* By day of week */}
                             <div className="bg-gray-800 rounded-lg p-4 mb-4">
-                                <div className="text-xs text-gray-400 uppercase font-bold mb-3">📆 По дням недели</div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="text-xs text-gray-400 uppercase font-bold">📆 По дням недели</div>
+                                    {modalDayFilter && <button onClick={() => setModalDayFilter(null)} className="text-[10px] text-blue-400 hover:text-blue-300">Показать все</button>}
+                                </div>
                                 <div className="grid grid-cols-7 gap-2">
                                     {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(dayName => {
                                         const dayResults = dailyResults.filter(r => r.day === dayName);
                                         const dayWins = dayResults.filter(r => r.matched).length;
                                         const dayPct = dayResults.length > 0 ? Math.round((dayWins / dayResults.length) * 100) : -1;
+                                        const isSelected = modalDayFilter === dayName;
                                         return (
-                                            <div key={dayName} className={`rounded-lg p-2 text-center ${dayPct === -1 ? 'bg-gray-900/50' : dayPct >= 60 ? 'bg-emerald-500/15 border border-emerald-500/30' : dayPct >= 50 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                                            <div key={dayName} onClick={() => setModalDayFilter(isSelected ? null : dayName)} className={`rounded-lg p-2 text-center cursor-pointer transition hover:opacity-80 ${isSelected ? 'ring-2 ring-white' : ''} ${dayPct === -1 ? 'bg-gray-900/50' : dayPct >= 60 ? 'bg-emerald-500/15 border border-emerald-500/30' : dayPct >= 50 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
                                                 <div className="text-[10px] text-gray-500">{dayName}</div>
                                                 <div className={`text-sm font-bold ${dayPct === -1 ? 'text-gray-600' : dayPct >= 60 ? 'text-emerald-400' : dayPct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{dayPct === -1 ? '—' : dayPct + '%'}</div>
                                                 <div className="text-[9px] text-gray-600">{dayResults.length > 0 ? `${dayWins}/${dayResults.length}` : ''}</div>
@@ -794,6 +802,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                         );
                                     })}
                                 </div>
+                                {modalDayFilter && <div className="mt-2 text-[10px] text-blue-400">Фильтр: только {modalDayFilter}</div>}
                             </div>
 
                             {/* Weekly breakdown */}
@@ -840,8 +849,8 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 <div className="space-y-2">
                                     {(() => {
                                         // Group by week
-                                        const weeks: Record<number, typeof dailyResults> = {};
-                                        dailyResults.forEach(r => {
+                                        const weeks: Record<number, typeof filteredResults> = {};
+                                        filteredResults.forEach(r => {
                                             if (!weeks[r.weekNum]) weeks[r.weekNum] = [];
                                             weeks[r.weekNum].push(r);
                                         });
