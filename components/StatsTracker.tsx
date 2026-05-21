@@ -485,7 +485,8 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{'\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0430\u043C'}</h3>
                 <div className="flex items-center gap-4 mb-4 text-[10px] text-gray-500">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-yellow-500/15 border border-yellow-400/40 inline-block"></span> ⚡ Opus 4.7 — первые 1-3ч, BTC/ETH Bullish conf≥65 (56-60%)</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/15 border border-emerald-400/40 inline-block"></span> 60%+ винрейт</span>
+                    <span className="text-gray-600">• Кликни на ячейку для детальной статистики</span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs">
@@ -519,11 +520,8 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
 
                                             // Determine highlight
                                             let bgHighlight = '';
-                                            if (isRedditOnly && cs) {
-                                                const isOpus = opusCoins.includes(c.symbol) && opusHours.includes(hour);
-                                                if (isOpus) {
-                                                    bgHighlight = 'bg-yellow-500/15 border border-yellow-400/40 rounded';
-                                                }
+                                            if (cs && pct >= 60) {
+                                                bgHighlight = 'bg-emerald-500/15 border border-emerald-400/40 rounded';
                                             }
 
                                             return <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono cursor-pointer hover:bg-gray-700/50 transition ${color} ${bgHighlight}`} onClick={() => cs && setCellModal({ hour, symbol: c.symbol })}>{cs ? `${pct}%` : '—'}</td>;
