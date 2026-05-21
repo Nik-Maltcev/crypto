@@ -177,6 +177,24 @@ const StatsTracker: React.FC = () => {
     const h5Pct = strategyStats.h5_primary.total > 0 ? Math.round((strategyStats.h5_primary.wins / strategyStats.h5_primary.total) * 100) : 0;
     const h3Pct = strategyStats.h3_primary.total > 0 ? Math.round((strategyStats.h3_primary.wins / strategyStats.h3_primary.total) * 100) : 0;
 
+    // Recent performance (last 14 days) for alerts
+    const recentCutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
+    const recentH2 = { wins: 0, total: 0 };
+    const recentH5 = { wins: 0, total: 0 };
+    valid.filter(t => t.symbol === 'BTC' && new Date(t.created_at).getTime() >= recentCutoff).forEach(t => {
+        const dayOfWeek = new Date(t.created_at).getDay();
+        const isPrimaryDay = primaryDays.has(dayOfWeek);
+        (t.polymarket_prices || []).forEach(pp => {
+            if (pp.matched === null) return;
+            if (pp.hour === 2) { recentH2.total++; if (pp.matched) recentH2.wins++; }
+            if (pp.hour === 5 && isPrimaryDay) { recentH5.total++; if (pp.matched) recentH5.wins++; }
+        });
+    });
+    const recentH2Pct = recentH2.total > 0 ? Math.round((recentH2.wins / recentH2.total) * 100) : 0;
+    const recentH5Pct = recentH5.total > 0 ? Math.round((recentH5.wins / recentH5.total) * 100) : 0;
+    const h2Alert = recentH2.total >= 5 && recentH2Pct < 55;
+    const h5Alert = recentH5.total >= 5 && recentH5Pct < 55;
+
     // Weekly min/max for h3+h5
     const weeklyPcts = Object.values(weeklyH3H5).filter(w => w.total >= 4).map(w => Math.round((w.wins / w.total) * 100));
     const weeklyMin = weeklyPcts.length > 0 ? Math.min(...weeklyPcts) : 0;
@@ -320,47 +338,46 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* ACTIVE Strategy - Hour 2 + Hour 5 */}
+                {/* ACTIVE Strategy - Hour 5 only */}
                 <div className="bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border-2 border-yellow-500/50 rounded-xl p-5 md:col-span-2 shadow-lg shadow-yellow-500/5">
                     <div className="flex items-center gap-2 mb-4">
                         <span className="text-xl">🔥</span>
-                        <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">Активная стратегия: BTC Час 2 + Час 5</h3>
+                        <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">Активная стратегия: BTC Час 5 (Пн/Вт/Чт/Сб)</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 font-bold ml-auto">СТАВИТЬ СЕЙЧАС</span>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-yellow-400">{h2h5Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Общий</div>
-                            <div className="text-[10px] text-gray-600">{h2h5Stats.wins}/{h2h5Stats.total}</div>
+                    
+                    {/* Alert */}
+                    {h5Alert && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 flex items-center gap-2">
+                            <span className="text-red-400 text-lg">🚨</span>
+                            <span className="text-red-400 text-sm font-bold">Час 5 деградирует!</span>
+                            <span className="text-red-300 text-sm">Последние 14 дней: {recentH5Pct}% ({recentH5.wins}/{recentH5.total}) — рассмотри паузу</span>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-blue-400">{h2Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Час 2</div>
-                            <div className="text-[10px] text-gray-600">{strategyStats.h2_all.wins}/{strategyStats.h2_all.total}</div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-emerald-400">{h5Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Час 5</div>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        <div className={`bg-gray-900/50 rounded-lg p-3 text-center ${h5Alert ? 'ring-1 ring-red-500/50' : ''}`}>
+                            <div className={`text-2xl font-bold ${h5Alert ? 'text-red-400' : 'text-emerald-400'}`}>{h5Pct}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Винрейт (всего)</div>
                             <div className="text-[10px] text-gray-600">{strategyStats.h5_primary.wins}/{strategyStats.h5_primary.total}</div>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-white">Пн/Вт/Чт/Сб</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Дни (час 5)</div>
-                            <div className="text-[10px] text-gray-600">Час 2 — все дни</div>
+                            <div className={`text-2xl font-bold ${recentH5Pct >= 60 ? 'text-emerald-400' : recentH5Pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{recentH5.total > 0 ? recentH5Pct + '%' : '—'}</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Последние 14д</div>
+                            <div className="text-[10px] text-gray-600">{recentH5.wins}/{recentH5.total}</div>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-white">~11</div>
+                            <div className="text-2xl font-bold text-white">Пн/Вт/Чт/Сб</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Дни</div>
+                            <div className="text-[10px] text-gray-600">4 дня в неделю</div>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                            <div className="text-2xl font-bold text-white">4</div>
                             <div className="text-[10px] text-gray-500 uppercase">Ставок/нед</div>
-                            <div className="text-[10px] text-gray-600">7 (ч2) + 4 (ч5)</div>
+                            <div className="text-[10px] text-gray-600">1 × 4 дня</div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="bg-gray-900/30 rounded-lg p-3">
-                            <span className="text-blue-400 font-bold">Час 2</span> <span className="text-gray-500">(09:00-10:00 МСК)</span> — каждый день, направление по прогнозу
-                        </div>
-                        <div className="bg-gray-900/30 rounded-lg p-3">
-                            <span className="text-emerald-400 font-bold">Час 5</span> <span className="text-gray-500">(12:00-13:00 МСК)</span> — только Пн/Вт/Чт/Сб, по прогнозу
-                        </div>
+                    <div className="bg-gray-900/30 rounded-lg p-3 text-sm">
+                        <span className="text-emerald-400 font-bold">Час 5</span> <span className="text-gray-500">(13:00-14:00 МСК)</span> — ставить в направлении прогноза AI. Кэф должен быть ≥1.45 для прибыли.
                     </div>
                 </div>
 
