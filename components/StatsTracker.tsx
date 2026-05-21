@@ -125,7 +125,9 @@ const StatsTracker: React.FC = () => {
     const weeklyH3H5: Record<string, { wins: number; total: number }> = {};
 
     valid.filter(t => t.symbol === 'BTC').forEach(t => {
-        const dayOfWeek = new Date(t.created_at).getDay();
+        // Use MSK (UTC+3) for day of week calculation
+        const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+        const dayOfWeek = mskDate.getUTCDay();
         const isPrimaryDay = primaryDays.has(dayOfWeek);
         const weekKey = new Date(t.created_at).toISOString().slice(0, 10).replace(/-\d{2}$/, ''); // YYYY-MM as week approx
         // Better: use ISO week
@@ -182,7 +184,8 @@ const StatsTracker: React.FC = () => {
     const recentH2 = { wins: 0, total: 0 };
     const recentH5 = { wins: 0, total: 0 };
     valid.filter(t => t.symbol === 'BTC' && new Date(t.created_at).getTime() >= recentCutoff).forEach(t => {
-        const dayOfWeek = new Date(t.created_at).getDay();
+        const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+        const dayOfWeek = mskDate.getUTCDay();
         const isPrimaryDay = primaryDays.has(dayOfWeek);
         (t.polymarket_prices || []).forEach(pp => {
             if (pp.matched === null) return;
