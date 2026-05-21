@@ -12,6 +12,7 @@ const StatsTracker: React.FC = () => {
     const [patternError, setPatternError] = useState<string | null>(null);
     const [dailyData, setDailyData] = useState<any>(null);
     const [dailyLoading, setDailyLoading] = useState(false);
+    const [showStrategyDetail, setShowStrategyDetail] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -123,6 +124,8 @@ const StatsTracker: React.FC = () => {
     
     const strategyStats = { h2_all: { wins: 0, total: 0 }, h3_primary: { wins: 0, total: 0 }, h5_primary: { wins: 0, total: 0 }, h3h5_primary: { wins: 0, total: 0 } };
     const weeklyH3H5: Record<string, { wins: number; total: number }> = {};
+    const weeklyH5: Record<string, { wins: number; total: number }> = {};
+    const dailyH5Log: { date: string; day: string; matched: boolean }[] = [];
 
     valid.filter(t => t.symbol === 'BTC').forEach(t => {
         // Use MSK (UTC+3) for day of week calculation
@@ -160,6 +163,15 @@ const StatsTracker: React.FC = () => {
                 if (!weeklyH3H5[wk]) weeklyH3H5[wk] = { wins: 0, total: 0 };
                 weeklyH3H5[wk].total++;
                 if (pp.matched) weeklyH3H5[wk].wins++;
+                if (!weeklyH5[wk]) weeklyH5[wk] = { wins: 0, total: 0 };
+                weeklyH5[wk].total++;
+                if (pp.matched) weeklyH5[wk].wins++;
+                const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                dailyH5Log.push({
+                    date: mskDate.toISOString().slice(5, 10).replace('-', '.'),
+                    day: dayNames[dayOfWeek],
+                    matched: pp.matched,
+                });
             }
         });
     });
@@ -382,6 +394,49 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     <div className="bg-gray-900/30 rounded-lg p-3 text-sm">
                         <span className="text-emerald-400 font-bold">Час 5</span> <span className="text-gray-500">(13:00-14:00 МСК)</span> — ставить в направлении прогноза AI. Кэф должен быть ≥1.45 для прибыли.
                     </div>
+                    
+                    {/* Expand button */}
+                    <button 
+                        onClick={() => setShowStrategyDetail(!showStrategyDetail)}
+                        className="mt-3 text-xs text-yellow-400 hover:text-yellow-300 transition flex items-center gap-1"
+                    >
+                        {showStrategyDetail ? '▼ Скрыть детали' : '▶ Показать по дням и неделям'}
+                    </button>
+
+                    {/* Expandable detail */}
+                    {showStrategyDetail && (
+                        <div className="mt-4 space-y-4">
+                            {/* Weekly breakdown */}
+                            <div className="bg-gray-900/50 rounded-lg p-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-3">📊 Час 5 по неделям</div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                                    {Object.entries(weeklyH5).sort(([a], [b]) => a.localeCompare(b)).map(([wk, s]) => {
+                                        const pct = s.total > 0 ? Math.round((s.wins / s.total) * 100) : 0;
+                                        const weekIdx = parseInt(wk.replace('w', '')) + 1;
+                                        return (
+                                            <div key={wk} className={`rounded-lg p-2 text-center ${pct >= 75 ? 'bg-emerald-500/10 border border-emerald-500/30' : pct >= 50 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                                                <div className="text-[10px] text-gray-500">Нед. {weekIdx}</div>
+                                                <div className={`text-lg font-bold ${pct >= 75 ? 'text-emerald-400' : pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{pct}%</div>
+                                                <div className="text-[10px] text-gray-600">{s.wins}/{s.total}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Daily log */}
+                            <div className="bg-gray-900/50 rounded-lg p-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-3">📅 Час 5 по дням (последние → первые)</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[...dailyH5Log].reverse().map((entry, i) => (
+                                        <div key={i} className={`px-2 py-1 rounded text-[10px] font-mono ${entry.matched ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                            {entry.date} {entry.day} {entry.matched ? '✅' : '❌'}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Monitoring: Hour 3+5 strategy */}
