@@ -117,6 +117,65 @@ const StatsTracker: React.FC = () => {
         bestPerCoin[c.symbol] = best;
     });
 
+    // === Dynamic Strategy Calculation: BTC hour 2/3/5 ===
+    // Days: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+    const primaryDays = new Set([1, 2, 4, 6]); // Mon, Tue, Thu, Sat
+    
+    const strategyStats = { h2_all: { wins: 0, total: 0 }, h3_primary: { wins: 0, total: 0 }, h5_primary: { wins: 0, total: 0 }, h3h5_primary: { wins: 0, total: 0 } };
+    const weeklyH3H5: Record<string, { wins: number; total: number }> = {};
+
+    valid.filter(t => t.symbol === 'BTC').forEach(t => {
+        const dayOfWeek = new Date(t.created_at).getDay();
+        const isPrimaryDay = primaryDays.has(dayOfWeek);
+        const weekKey = new Date(t.created_at).toISOString().slice(0, 10).replace(/-\d{2}$/, ''); // YYYY-MM as week approx
+        // Better: use ISO week
+        const d = new Date(t.created_at);
+        const weekNum = Math.floor((d.getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000));
+        const wk = `w${weekNum}`;
+
+        (t.polymarket_prices || []).forEach(pp => {
+            if (pp.matched === null) return;
+            
+            // Hour 2 - all days
+            if (pp.hour === 2) {
+                strategyStats.h2_all.total++;
+                if (pp.matched) strategyStats.h2_all.wins++;
+            }
+            
+            // Hour 3 - primary days only
+            if (pp.hour === 3 && isPrimaryDay) {
+                strategyStats.h3_primary.total++;
+                if (pp.matched) strategyStats.h3_primary.wins++;
+                if (!weeklyH3H5[wk]) weeklyH3H5[wk] = { wins: 0, total: 0 };
+                weeklyH3H5[wk].total++;
+                if (pp.matched) weeklyH3H5[wk].wins++;
+            }
+            
+            // Hour 5 - primary days only
+            if (pp.hour === 5 && isPrimaryDay) {
+                strategyStats.h5_primary.total++;
+                if (pp.matched) strategyStats.h5_primary.wins++;
+                if (!weeklyH3H5[wk]) weeklyH3H5[wk] = { wins: 0, total: 0 };
+                weeklyH3H5[wk].total++;
+                if (pp.matched) weeklyH3H5[wk].wins++;
+            }
+        });
+    });
+
+    // Combined h3+h5 primary
+    strategyStats.h3h5_primary = {
+        wins: strategyStats.h3_primary.wins + strategyStats.h5_primary.wins,
+        total: strategyStats.h3_primary.total + strategyStats.h5_primary.total,
+    };
+
+    const h3h5Pct = strategyStats.h3h5_primary.total > 0 ? Math.round((strategyStats.h3h5_primary.wins / strategyStats.h3h5_primary.total) * 100) : 0;
+    const h2Pct = strategyStats.h2_all.total > 0 ? Math.round((strategyStats.h2_all.wins / strategyStats.h2_all.total) * 100) : 0;
+    
+    // Weekly min/max for h3+h5
+    const weeklyPcts = Object.values(weeklyH3H5).filter(w => w.total >= 4).map(w => Math.round((w.wins / w.total) * 100));
+    const weeklyMin = weeklyPcts.length > 0 ? Math.min(...weeklyPcts) : 0;
+    const weeklyMax = weeklyPcts.length > 0 ? Math.max(...weeklyPcts) : 0;
+
     const findPattern = async () => {
         setPatternLoading(true);
         setPatternResult(null);
@@ -267,14 +326,14 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-emerald-400">70%</div>
+                                <div className="text-2xl font-bold text-emerald-400">{h3h5Pct}%</div>
                                 <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
-                                <div className="text-[10px] text-gray-600">28/40</div>
+                                <div className="text-[10px] text-gray-600">{strategyStats.h3h5_primary.wins}/{strategyStats.h3h5_primary.total}</div>
                             </div>
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-cyan-400">63-75%</div>
+                                <div className="text-2xl font-bold text-cyan-400">{weeklyMin}-{weeklyMax}%</div>
                                 <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
-                                <div className="text-[10px] text-gray-600">Мин. 63%</div>
+                                <div className="text-[10px] text-gray-600">Мин. {weeklyMin}%</div>
                             </div>
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
                                 <div className="text-2xl font-bold text-white">8</div>
@@ -284,7 +343,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
                                 <div className="text-2xl font-bold text-yellow-400">⚡</div>
                                 <div className="text-[10px] text-gray-500 uppercase">Стабильность</div>
-                                <div className="text-[10px] text-gray-600">Высокая</div>
+                                <div className="text-[10px] text-gray-600">{weeklyMin >= 60 ? 'Высокая' : weeklyMin >= 50 ? 'Средняя' : 'Низкая'}</div>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -305,12 +364,12 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-blue-400">69%</div>
+                                <div className="text-2xl font-bold text-blue-400">{h2Pct}%</div>
                                 <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
-                                <div className="text-[10px] text-gray-600">24/35</div>
+                                <div className="text-[10px] text-gray-600">{strategyStats.h2_all.wins}/{strategyStats.h2_all.total}</div>
                             </div>
                             <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                                <div className="text-2xl font-bold text-blue-400">50-100%</div>
+                                <div className="text-2xl font-bold text-blue-400">—</div>
                                 <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
                                 <div className="text-[10px] text-gray-600">Мин. 50%</div>
                             </div>
