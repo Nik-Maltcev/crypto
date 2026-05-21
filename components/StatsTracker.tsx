@@ -13,6 +13,7 @@ const StatsTracker: React.FC = () => {
     const [dailyData, setDailyData] = useState<any>(null);
     const [dailyLoading, setDailyLoading] = useState(false);
     const [showStrategyDetail, setShowStrategyDetail] = useState(false);
+    const [cellModal, setCellModal] = useState<{ hour: number; symbol: string } | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -525,7 +526,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                                 }
                                             }
 
-                                            return <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono ${color} ${bgHighlight}`}>{cs ? `${pct}%` : '—'}</td>;
+                                            return <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono cursor-pointer hover:bg-gray-700/50 transition ${color} ${bgHighlight}`} onClick={() => cs && setCellModal({ hour, symbol: c.symbol })}>{cs ? `${pct}%` : '—'}</td>;
                                         })}
                                         <td className={`py-1.5 px-2 text-center font-bold ${allPct >= 55 ? 'text-emerald-400' : allPct >= 48 ? 'text-white' : 'text-red-400'}`}>{allPct}%</td>
                                     </tr>
@@ -665,6 +666,101 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     <p className="text-gray-500 text-sm text-center py-4">Нажмите «Загрузить» чтобы увидеть дневную статистику прогнозов</p>
                 )}
             </div>
+
+            {/* Cell Detail Modal */}
+            {cellModal && (() => {
+                const { hour, symbol } = cellModal;
+                // Collect daily results for this hour+symbol
+                const dailyResults: { date: string; day: string; matched: boolean }[] = [];
+                valid.filter(t => t.symbol === symbol).forEach(t => {
+                    const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                    (t.polymarket_prices || []).forEach(pp => {
+                        if (pp.hour === hour && pp.matched !== null) {
+                            dailyResults.push({
+                                date: mskDate.toISOString().slice(5, 10).replace('-', '.'),
+                                day: dayNames[mskDate.getUTCDay()],
+                                matched: pp.matched,
+                            });
+                        }
+                    });
+                });
+
+                // Calculate running winrate (cumulative)
+                let cumWins = 0;
+                const runningWinrate = dailyResults.map((r, i) => {
+                    if (r.matched) cumWins++;
+                    return { ...r, cumPct: Math.round((cumWins / (i + 1)) * 100), idx: i + 1 };
+                });
+
+                const totalWins = dailyResults.filter(r => r.matched).length;
+                const totalPct = dailyResults.length > 0 ? Math.round((totalWins / dailyResults.length) * 100) : 0;
+
+                // Last 7 results
+                const last7 = dailyResults.slice(-7);
+                const last7Wins = last7.filter(r => r.matched).length;
+                const last7Pct = last7.length > 0 ? Math.round((last7Wins / last7.length) * 100) : 0;
+
+                return (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCellModal(null)}>
+                        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-white">{symbol} • {fmtET(hour)} • Час {hour}</h3>
+                                <button onClick={() => setCellModal(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                            </div>
+
+                            {/* Summary */}
+                            <div className="grid grid-cols-3 gap-3 mb-4">
+                                <div className="bg-gray-800 rounded-lg p-3 text-center">
+                                    <div className={`text-xl font-bold ${totalPct >= 55 ? 'text-emerald-400' : totalPct >= 48 ? 'text-yellow-400' : 'text-red-400'}`}>{totalPct}%</div>
+                                    <div className="text-[10px] text-gray-500">Всего ({totalWins}/{dailyResults.length})</div>
+                                </div>
+                                <div className="bg-gray-800 rounded-lg p-3 text-center">
+                                    <div className={`text-xl font-bold ${last7Pct >= 55 ? 'text-emerald-400' : last7Pct >= 48 ? 'text-yellow-400' : 'text-red-400'}`}>{last7Pct}%</div>
+                                    <div className="text-[10px] text-gray-500">Посл. 7 дней ({last7Wins}/{last7.length})</div>
+                                </div>
+                                <div className="bg-gray-800 rounded-lg p-3 text-center">
+                                    <div className="text-xl font-bold text-white">{dailyResults.length}</div>
+                                    <div className="text-[10px] text-gray-500">Наблюдений</div>
+                                </div>
+                            </div>
+
+                            {/* Running winrate chart */}
+                            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-2">📈 Кумулятивный винрейт</div>
+                                <div className="flex items-end gap-[2px] h-24">
+                                    {runningWinrate.map((r, i) => (
+                                        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+                                            <div 
+                                                className={`w-full rounded-t-sm ${r.cumPct >= 55 ? 'bg-emerald-500' : r.cumPct >= 48 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                                style={{ height: `${r.cumPct}%` }}
+                                                title={`${r.date}: ${r.cumPct}%`}
+                                            ></div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex justify-between mt-1 text-[9px] text-gray-600">
+                                    <span>{runningWinrate[0]?.date || ''}</span>
+                                    <span className="text-gray-500">50% линия</span>
+                                    <span>{runningWinrate[runningWinrate.length - 1]?.date || ''}</span>
+                                </div>
+                            </div>
+
+                            {/* Daily results */}
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-2">📅 По дням (новые → старые)</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[...dailyResults].reverse().map((r, i) => (
+                                        <div key={i} className={`px-2 py-1 rounded text-[10px] font-mono ${r.matched ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                            {r.date} {r.day} {r.matched ? '✅' : '❌'}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
