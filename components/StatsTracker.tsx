@@ -441,45 +441,89 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     )}
                 </div>
 
-                {/* Monitoring: Hour 3+5 strategy */}
-                <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-700/50 rounded-xl p-5 md:col-span-2 opacity-80">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="text-lg">👁️</span>
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Мониторинг: BTC Час 3 + Час 5 (Пн/Вт/Чт/Сб)</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold ml-auto">ЧАС 3 ДЕГРАДИРУЕТ</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-gray-300">{h3h5Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Ч3+Ч5</div>
-                            <div className="text-[10px] text-gray-600">{strategyStats.h3h5_primary.wins}/{strategyStats.h3h5_primary.total}</div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className={`text-2xl font-bold ${h3Pct >= 60 ? 'text-emerald-400' : h3Pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{h3Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Час 3</div>
-                            <div className="text-[10px] text-gray-600">{strategyStats.h3_primary.wins}/{strategyStats.h3_primary.total}</div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-emerald-400">{h5Pct}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Час 5</div>
-                            <div className="text-[10px] text-gray-600">{strategyStats.h5_primary.wins}/{strategyStats.h5_primary.total}</div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-gray-400">{weeklyMin}-{weeklyMax}%</div>
-                            <div className="text-[10px] text-gray-500 uppercase">По неделям</div>
-                            <div className="text-[10px] text-gray-600">Мин. {weeklyMin}%</div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-3 text-center">
-                            <div className="text-2xl font-bold text-gray-400">{weeklyMin >= 60 ? '✅' : weeklyMin >= 50 ? '⚠️' : '❌'}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Статус</div>
-                            <div className="text-[10px] text-gray-600">{h3Pct >= 60 ? 'Можно вернуть ч3' : 'Ч3 на паузе'}</div>
-                        </div>
-                    </div>
-                    <div className="mt-3 text-xs text-gray-500">
-                        ⚠️ Час 3 показывает деградацию (последние недели ≤50%). Вернуть когда покажет 2 недели подряд ≥65%.
-                    </div>
-                </div>
             </div>
+
+            {/* Day-of-week pattern tracking */}
+            {(() => {
+                // Define patterns: day -> [{etHour, symbol}]
+                const dayPatterns: Record<number, {et: number, sym: string, label: string}[]> = {
+                    1: [{et:3,sym:'BTC',label:'3-4AM BTC'},{et:3,sym:'BNB',label:'3-4AM BNB'},{et:5,sym:'SOL',label:'5-6AM SOL'}],
+                    2: [{et:3,sym:'BTC',label:'3-4AM BTC'},{et:7,sym:'DOGE',label:'7-8AM DOGE'},{et:8,sym:'BTC',label:'8-9AM BTC'},{et:8,sym:'SOL',label:'8-9AM SOL'},{et:13,sym:'BNB',label:'1-2PM BNB'},{et:21,sym:'BTC',label:'9-10PM BTC'}],
+                    3: [{et:5,sym:'SOL',label:'5-6AM SOL'},{et:7,sym:'BTC',label:'7-8AM BTC'},{et:7,sym:'ETH',label:'7-8AM ETH'}],
+                    4: [],
+                    5: [{et:2,sym:'BTC',label:'2-3AM BTC'},{et:7,sym:'DOGE',label:'7-8AM DOGE'},{et:8,sym:'BTC',label:'8-9AM BTC'},{et:8,sym:'SOL',label:'8-9AM SOL'},{et:13,sym:'SOL',label:'1-2PM SOL'},{et:21,sym:'BTC',label:'9-10PM BTC'}],
+                    6: [{et:3,sym:'BTC',label:'3-4AM BTC'},{et:3,sym:'BNB',label:'3-4AM BNB'},{et:5,sym:'SOL',label:'5-6AM SOL'},{et:8,sym:'SOL',label:'8-9AM SOL'},{et:13,sym:'BNB',label:'1-2PM BNB'},{et:13,sym:'SOL',label:'1-2PM SOL'}],
+                    0: [{et:2,sym:'BTC',label:'2-3AM BTC'},{et:7,sym:'BTC',label:'7-8AM BTC'},{et:7,sym:'DOGE',label:'7-8AM DOGE'},{et:21,sym:'BTC',label:'9-10PM BTC'}],
+                };
+
+                // Calculate winrate for each pattern entry
+                // Need to map ET hour to polymarket hour number
+                // Hour 1 in polymarket = first hour after analysis (09:00 MSK = 06:00 UTC = 1AM ET + 1 = 2AM ET?)
+                // From StatsTracker fmtET: startUtcHour=5, candleStartUtc = 5 + hour - 1, etStart = (candleStartUtc - 4 + 24) % 24
+                // So: etStart = (5 + hour - 1 - 4 + 24) % 24 = (hour + 24) % 24 = hour (for hour < 24)
+                // Actually: etStart = (5 + hour - 1 - 4 + 24) % 24 = (hour) % 24
+                // So polymarket hour N corresponds to ET hour N (1AM for hour 1, 2AM for hour 2, etc.)
+                // Wait: hour=1 -> etStart = (5+1-1-4+24)%24 = 25%24 = 1 -> 1AM-2AM ET ✓
+
+                const patternStats: {label: string, sym: string, wins: number, total: number, day: string}[] = [];
+                const dayNames: Record<number, string> = {0:'Вс',1:'Пн',2:'Вт',3:'Ср',4:'Чт',5:'Пт',6:'Сб'};
+
+                Object.entries(dayPatterns).forEach(([dayStr, patterns]) => {
+                    const dayNum = Number(dayStr);
+                    if (patterns.length === 0) return;
+                    
+                    patterns.forEach(p => {
+                        let wins = 0, total = 0;
+                        // polymarket hour = ET hour (from the formula above)
+                        const polyHour = p.et;
+                        
+                        valid.filter(t => t.symbol === p.sym).forEach(t => {
+                            const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                            if (mskDate.getUTCDay() !== dayNum) return;
+                            (t.polymarket_prices || []).forEach(pp => {
+                                if (pp.hour === polyHour && pp.matched !== null) {
+                                    total++;
+                                    if (pp.matched) wins++;
+                                }
+                            });
+                        });
+                        
+                        if (total > 0) {
+                            patternStats.push({ label: p.label, sym: p.sym, wins, total, day: dayNames[dayNum] });
+                        }
+                    });
+                });
+
+                // Group by day
+                const grouped: Record<string, typeof patternStats> = {};
+                patternStats.forEach(p => {
+                    if (!grouped[p.day]) grouped[p.day] = [];
+                    grouped[p.day].push(p);
+                });
+
+                const dayOrder = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+                return (
+                    <div className="bg-brand-card border border-indigo-500/20 rounded-xl p-5 md:col-span-2">
+                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-4">🎯 Отслеживание паттернов по дням (60%+)</h3>
+                        <div className="space-y-3">
+                            {dayOrder.filter(d => grouped[d]).map(day => (
+                                <div key={day} className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-white bg-gray-800 px-2 py-1 rounded w-8 text-center">{day}</span>
+                                    {grouped[day].map((p, i) => {
+                                        const pct = Math.round((p.wins / p.total) * 100);
+                                        return (
+                                            <span key={i} className={`text-[10px] px-2 py-1 rounded font-mono ${pct >= 60 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : pct >= 50 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                                                {p.label} <span className="font-bold">{pct}%</span> <span className="text-gray-500">({p.wins}/{p.total})</span>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Full hour table */}
             <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
