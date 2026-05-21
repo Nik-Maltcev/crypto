@@ -733,6 +733,25 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                 </div>
                             </div>
 
+                            {/* By day of week */}
+                            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                                <div className="text-xs text-gray-400 uppercase font-bold mb-3">📆 По дням недели</div>
+                                <div className="grid grid-cols-7 gap-2">
+                                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(dayName => {
+                                        const dayResults = dailyResults.filter(r => r.day === dayName);
+                                        const dayWins = dayResults.filter(r => r.matched).length;
+                                        const dayPct = dayResults.length > 0 ? Math.round((dayWins / dayResults.length) * 100) : -1;
+                                        return (
+                                            <div key={dayName} className={`rounded-lg p-2 text-center ${dayPct === -1 ? 'bg-gray-900/50' : dayPct >= 60 ? 'bg-emerald-500/15 border border-emerald-500/30' : dayPct >= 50 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                                                <div className="text-[10px] text-gray-500">{dayName}</div>
+                                                <div className={`text-sm font-bold ${dayPct === -1 ? 'text-gray-600' : dayPct >= 60 ? 'text-emerald-400' : dayPct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{dayPct === -1 ? '—' : dayPct + '%'}</div>
+                                                <div className="text-[9px] text-gray-600">{dayResults.length > 0 ? `${dayWins}/${dayResults.length}` : ''}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
                             {/* Weekly breakdown */}
                             <div className="bg-gray-800 rounded-lg p-4 mb-4">
                                 <div className="text-xs text-gray-400 uppercase font-bold mb-3">📊 По неделям</div>
