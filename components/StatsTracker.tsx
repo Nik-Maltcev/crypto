@@ -465,7 +465,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 // So polymarket hour N corresponds to ET hour N (1AM for hour 1, 2AM for hour 2, etc.)
                 // Wait: hour=1 -> etStart = (5+1-1-4+24)%24 = 25%24 = 1 -> 1AM-2AM ET ✓
 
-                const patternStats: {label: string, sym: string, wins: number, total: number, day: string}[] = [];
+                const patternStats: {label: string, sym: string, wins: number, total: number, day: string, hour: number}[] = [];
                 const dayNames: Record<number, string> = {0:'Вс',1:'Пн',2:'Вт',3:'Ср',4:'Чт',5:'Пт',6:'Сб'};
 
                 Object.entries(dayPatterns).forEach(([dayStr, patterns]) => {
@@ -489,7 +489,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                         });
                         
                         if (total > 0) {
-                            patternStats.push({ label: p.label, sym: p.sym, wins, total, day: dayNames[dayNum] });
+                            patternStats.push({ label: p.label, sym: p.sym, wins, total, day: dayNames[dayNum], hour: polyHour });
                         }
                     });
                 });
@@ -513,7 +513,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                                     {grouped[day].map((p, i) => {
                                         const pct = Math.round((p.wins / p.total) * 100);
                                         return (
-                                            <span key={i} className={`text-[10px] px-2 py-1 rounded font-mono ${pct >= 60 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : pct >= 50 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                                            <span key={i} onClick={() => setCellModal({ hour: p.hour, symbol: p.sym })} className={`text-[10px] px-2 py-1 rounded font-mono cursor-pointer hover:opacity-80 transition ${pct >= 60 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : pct >= 50 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
                                                 {p.label} <span className="font-bold">{pct}%</span> <span className="text-gray-500">({p.wins}/{p.total})</span>
                                             </span>
                                         );
