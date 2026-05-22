@@ -60,34 +60,55 @@ const PolymarketTracker: React.FC = () => {
     };
 
     const exportDailyCSV = () => {
-        const rows = ['Дата Polymarket (ET),День недели,Монета,Прогноз,Уверенность%,Цена старт (07:00 МСК),Цена финиш (07:00 МСК +1д),Изменение %,Направление,Прогноз совпал,Винрейт часов %'];
+        const rows = ['Дата Polymarket,День недели,Монета,Прогноз,Уверенность%,Цена 07:00 МСК (старт),Цена 07:00 МСК +1д (финиш),Изменение %,Направление,Прогноз совпал'];
         const filtered = trackings.filter(t => {
             const m = t.mode || 'reddit_only';
             if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
             return m === 'reddit_twitter';
         });
+        
+        // Group by symbol and sort by date
+        const bySymbol: Record<string, typeof filtered> = {};
         filtered.forEach(t => {
-            const pp = t.polymarket_prices || [];
-            if (pp.length < 10) return; // need enough data
-            const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
-            const date = mskDate.toISOString().slice(0, 10);
-            const dayName = mskDate.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' });
+            if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+            bySymbol[t.symbol].push(t);
+        });
+
+        Object.entries(bySymbol).forEach(([symbol, items]) => {
+            const sorted = items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
             
-            // Polymarket day: hour 1 open to hour 22 close (09:00 MSK to 07:00 MSK next day)
-            const startPrice = pp[0]?.open || 0;
-            const endHour = pp.find(p => p.hour === 22) || pp[pp.length - 1];
-            const endPrice = endHour?.close || pp[pp.length - 1]?.close || 0;
-            
-            if (startPrice === 0) return;
-            const change = ((endPrice - startPrice) / startPrice) * 100;
-            const direction = endPrice >= startPrice ? 'Up' : 'Down';
-            const predictedDir = t.prediction === 'Bullish' ? 'Up' : t.prediction === 'Bearish' ? 'Down' : 'Neutral';
-            const matched = t.prediction === 'Neutral' ? '—' : (direction === predictedDir ? 'ДА' : 'НЕТ');
-            
-            const hits = pp.filter(p => p.matched === true).length;
-            const winrate = pp.length > 0 ? Math.round((hits / pp.length) * 100) : 0;
-            
-            rows.push(`${date},${dayName},${t.symbol},${t.prediction},${t.confidence},${startPrice},${endPrice},${change.toFixed(2)},${direction},${matched},${winrate}`);
+            for (let i = 0; i < sorted.length; i++) {
+                const today = sorted[i];
+                const pp = today.polymarket_prices || [];
+                if (pp.length < 22) continue;
+                
+                const mskDate = new Date(new Date(today.created_at).getTime() + 3 * 60 * 60 * 1000);
+                const date = mskDate.toISOString().slice(0, 10);
+                const dayName = mskDate.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' });
+                
+                // End price = hour 22 close (07:00 MSK next day = Polymarket settlement)
+                const endHour = pp.find(p => p.hour === 22);
+                const endPrice = endHour?.close || 0;
+                
+                // Start price = yesterday's hour 23 open (07:00 MSK today = Polymarket day start)
+                let startPrice = 0;
+                if (i > 0) {
+                    const yesterday = sorted[i - 1];
+                    const yesterdayPP = yesterday.polymarket_prices || [];
+                    const h23 = yesterdayPP.find(p => p.hour === 23);
+                    if (h23) startPrice = h23.open;
+                }
+                // Fallback: use hour 1 open if no yesterday data
+                if (startPrice === 0) startPrice = pp[0]?.open || 0;
+                
+                if (startPrice === 0 || endPrice === 0) continue;
+                const change = ((endPrice - startPrice) / startPrice) * 100;
+                const direction = endPrice >= startPrice ? 'Up' : 'Down';
+                const predictedDir = today.prediction === 'Bullish' ? 'Up' : today.prediction === 'Bearish' ? 'Down' : 'Neutral';
+                const matched = today.prediction === 'Neutral' ? '—' : (direction === predictedDir ? 'ДА' : 'НЕТ');
+                
+                rows.push(`${date},${dayName},${symbol},${today.prediction},${today.confidence},${startPrice},${endPrice},${change.toFixed(2)},${direction},${matched}`);
+            }
         });
         const csv = '\uFEFF' + rows.join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
