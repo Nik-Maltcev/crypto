@@ -421,16 +421,33 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                             <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">🎯 Отслеживание паттернов по дням (60%+)</h3>
                             <button
                                 onClick={() => {
-                                    const header = 'День,Час (ET),Монета,Винрейт %,Побед,Всего\n';
-                                    const rows = patternStats.map(p => 
-                                        `${p.day},${p.label.split(' ')[0]},${p.sym},${Math.round((p.wins / p.total) * 100)},${p.wins},${p.total}`
-                                    ).join('\n');
-                                    const csv = header + rows;
+                                    // Collect detailed daily data for each pattern
+                                    const detailRows: string[] = [];
+                                    Object.entries(dayPatterns).forEach(([dayStr, patterns]) => {
+                                        const dayNum = Number(dayStr);
+                                        if (patterns.length === 0) return;
+                                        const dayNames2: Record<number, string> = {0:'Вс',1:'Пн',2:'Вт',3:'Ср',4:'Чт',5:'Пт',6:'Сб'};
+                                        patterns.forEach(p => {
+                                            const polyHour = p.et;
+                                            valid.filter(t => t.symbol === p.sym).forEach(t => {
+                                                const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                                                if (mskDate.getUTCDay() !== dayNum) return;
+                                                (t.polymarket_prices || []).forEach(pp => {
+                                                    if (pp.hour === polyHour && pp.matched !== null) {
+                                                        const dateStr = mskDate.toISOString().slice(0, 10);
+                                                        detailRows.push(`${dayNames2[dayNum]},${p.label.split(' ')[0]},${p.sym},${dateStr},${pp.matched ? 'ДА' : 'НЕТ'}`);
+                                                    }
+                                                });
+                                            });
+                                        });
+                                    });
+                                    const header = 'День,Час (ET),Монета,Дата,Результат\n';
+                                    const csv = header + detailRows.join('\n');
                                     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
                                     const url = URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
-                                    a.download = `patterns_by_day_${new Date().toISOString().split('T')[0]}.csv`;
+                                    a.download = `patterns_detail_${new Date().toISOString().split('T')[0]}.csv`;
                                     a.click();
                                     URL.revokeObjectURL(url);
                                 }}
