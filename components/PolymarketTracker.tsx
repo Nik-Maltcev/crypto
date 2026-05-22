@@ -59,6 +59,79 @@ const PolymarketTracker: React.FC = () => {
         URL.revokeObjectURL(url);
     };
 
+    const exportDailyCSV = () => {
+        const rows = ['Дата,День недели,Монета,Прогноз,Уверенность%,Цена старт,Цена финиш (24ч),Изменение %,Направление совпало,Винрейт часов %'];
+        const filtered = trackings.filter(t => {
+            const m = t.mode || 'reddit_only';
+            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+            return m === 'reddit_twitter';
+        });
+        filtered.forEach(t => {
+            const pp = t.polymarket_prices || [];
+            if (pp.length === 0) return;
+            const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+            const date = mskDate.toISOString().slice(0, 10);
+            const dayName = mskDate.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' });
+            const startPrice = pp[0]?.open || 0;
+            const endPrice = pp[pp.length - 1]?.close || 0;
+            const change = startPrice > 0 ? (((endPrice - startPrice) / startPrice) * 100).toFixed(2) : '0';
+            const predictedUp = t.prediction === 'Bullish';
+            const actualUp = endPrice >= startPrice;
+            const directionMatched = predictedUp === actualUp ? 'ДА' : (t.prediction === 'Neutral' ? '—' : 'НЕТ');
+            const hits = pp.filter(p => p.matched === true).length;
+            const winrate = pp.length > 0 ? Math.round((hits / pp.length) * 100) : 0;
+            rows.push(`${date},${dayName},${t.symbol},${t.prediction},${t.confidence},${startPrice},${endPrice},${change},${directionMatched},${winrate}`);
+        });
+        const csv = '\uFEFF' + rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `polymarket_daily_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const exportWeeklyCSV = () => {
+        const rows = ['Неделя,Монета,Прогнозов,Цена старт (Пн),Цена финиш (Вс),Изменение %,Ср. винрейт часов %,Bullish дней,Bearish дней'];
+        const filtered = trackings.filter(t => {
+            const m = t.mode || 'reddit_only';
+            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+            return m === 'reddit_twitter';
+        });
+        // Group by week + symbol
+        const weeks: Record<string, typeof filtered> = {};
+        filtered.forEach(t => {
+            const weekNum = Math.floor((new Date(t.created_at).getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+            const key = `W${weekNum}_${t.symbol}`;
+            if (!weeks[key]) weeks[key] = [];
+            weeks[key].push(t);
+        });
+        Object.entries(weeks).sort(([a], [b]) => a.localeCompare(b)).forEach(([key, items]) => {
+            const [wk, sym] = [key.split('_')[0], key.split('_')[1]];
+            const sorted = items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            const firstPP = sorted[0]?.polymarket_prices || [];
+            const lastPP = sorted[sorted.length - 1]?.polymarket_prices || [];
+            const startPrice = firstPP[0]?.open || 0;
+            const endPrice = lastPP.length > 0 ? lastPP[lastPP.length - 1]?.close || 0 : 0;
+            const change = startPrice > 0 ? (((endPrice - startPrice) / startPrice) * 100).toFixed(2) : '0';
+            const allPP = sorted.flatMap(t => t.polymarket_prices || []);
+            const hits = allPP.filter(p => p.matched === true).length;
+            const avgWinrate = allPP.length > 0 ? Math.round((hits / allPP.length) * 100) : 0;
+            const bullishDays = sorted.filter(t => t.prediction === 'Bullish').length;
+            const bearishDays = sorted.filter(t => t.prediction === 'Bearish').length;
+            rows.push(`${wk},${sym},${sorted.length},${startPrice},${endPrice},${change},${avgWinrate},${bullishDays},${bearishDays}`);
+        });
+        const csv = '\uFEFF' + rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `polymarket_weekly_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -71,7 +144,15 @@ const PolymarketTracker: React.FC = () => {
                 <div className="flex space-x-2 mt-4 sm:mt-0">
                     <button onClick={exportCSV}
                         className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-medium transition">
-                        📥 CSV
+                        📥 Hourly
+                    </button>
+                    <button onClick={exportDailyCSV}
+                        className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium transition">
+                        📥 Daily
+                    </button>
+                    <button onClick={exportWeeklyCSV}
+                        className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-sm font-medium transition">
+                        📥 Weekly
                     </button>
                     <button onClick={fetchTrackings} disabled={isLoading}
                         className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50">
