@@ -13,7 +13,7 @@ const StatsTracker: React.FC = () => {
     const [dailyData, setDailyData] = useState<any>(null);
     const [dailyLoading, setDailyLoading] = useState(false);
     const [showStrategyDetail, setShowStrategyDetail] = useState(false);
-    const [cellModal, setCellModal] = useState<{ hour: number; symbol: string } | null>(null);
+    const [cellModal, setCellModal] = useState<{ hour: number; symbol: string; predictionFilter?: string } | null>(null);
     const [modalDayFilter, setModalDayFilter] = useState<string | null>(null);
 
     useEffect(() => {
@@ -355,6 +355,72 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 </div>
             )}
 
+            {/* HOT Pattern: Bullish BTC hours 2-3 */}
+            {(() => {
+                // Calculate Bullish BTC hours 2-3 stats
+                const bullishBtc = valid.filter(t => t.symbol === 'BTC' && t.prediction === 'Bullish');
+                const hotResults: { date: string; day: string; hour: number; matched: boolean; weekNum: number }[] = [];
+                bullishBtc.forEach(t => {
+                    const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                    const weekNum = Math.floor((new Date(t.created_at).getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+                    (t.polymarket_prices || []).forEach(pp => {
+                        if ((pp.hour === 2 || pp.hour === 3) && pp.matched !== null) {
+                            hotResults.push({
+                                date: mskDate.toISOString().slice(5, 10).replace('-', '.'),
+                                day: dayNames[mskDate.getUTCDay()],
+                                hour: pp.hour,
+                                matched: pp.matched,
+                                weekNum,
+                            });
+                        }
+                    });
+                });
+                const hotWins = hotResults.filter(r => r.matched).length;
+                const hotPct = hotResults.length > 0 ? Math.round((hotWins / hotResults.length) * 100) : 0;
+                const last7 = hotResults.slice(-7);
+                const last7Wins = last7.filter(r => r.matched).length;
+                const last7Pct = last7.length > 0 ? Math.round((last7Wins / last7.length) * 100) : 0;
+
+                return hotResults.length > 0 ? (
+                    <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 border-2 border-red-500/40 rounded-xl p-5 shadow-lg shadow-red-500/5">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl">🔥</span>
+                                <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider">HOT: Bullish BTC • Часы 2-3</h3>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold animate-pulse">HOT</span>
+                            </div>
+                            <button onClick={() => setCellModal({ hour: 2, symbol: 'BTC', predictionFilter: 'Bullish' })} className="text-[10px] text-red-400 hover:text-red-300 underline">Подробнее →</button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className={`text-2xl font-bold ${hotPct >= 60 ? 'text-emerald-400' : hotPct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{hotPct}%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
+                                <div className="text-[10px] text-gray-600">{hotWins}/{hotResults.length}</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className={`text-2xl font-bold ${last7Pct >= 60 ? 'text-emerald-400' : last7Pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{last7Pct}%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Посл. 7</div>
+                                <div className="text-[10px] text-gray-600">{last7Wins}/{last7.length}</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-white">{hotResults.length}</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Наблюдений</div>
+                                <div className="text-[10px] text-gray-600">Только Bullish</div>
+                            </div>
+                            <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                                <div className="text-2xl font-bold text-white">2-3 AM ET</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Часы</div>
+                                <div className="text-[10px] text-gray-600">10:00-12:00 МСК</div>
+                            </div>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                            Фильтр: только дни когда AI прогноз = Bullish для BTC. Часы 2-3 (2AM-4AM ET / 10:00-12:00 МСК).
+                        </div>
+                    </div>
+                ) : null;
+            })()}
+
             {/* Day-of-week pattern tracking */}
             {(() => {
                 // Define patterns: day -> [{etHour, symbol}]
@@ -661,15 +727,17 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
 
             {/* Cell Detail Modal */}
             {cellModal && (() => {
-                const { hour, symbol } = cellModal;
-                // Collect daily results for this hour+symbol
+                const { hour, symbol, predictionFilter } = cellModal;
+                // Collect daily results for this hour+symbol (optionally filtered by prediction)
                 const dailyResults: { date: string; day: string; matched: boolean; weekNum: number }[] = [];
-                valid.filter(t => t.symbol === symbol).forEach(t => {
+                valid.filter(t => t.symbol === symbol && (!predictionFilter || t.prediction === predictionFilter)).forEach(t => {
                     const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
                     const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
                     const weekNum = Math.floor((new Date(t.created_at).getTime() - new Date('2026-04-15').getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
                     (t.polymarket_prices || []).forEach(pp => {
-                        if (pp.hour === hour && pp.matched !== null) {
+                        // For HOT pattern (predictionFilter + hour 2), also include hour 3
+                        const matchHour = predictionFilter ? (pp.hour === hour || pp.hour === hour + 1) : pp.hour === hour;
+                        if (matchHour && pp.matched !== null) {
                             dailyResults.push({
                                 date: mskDate.toISOString().slice(5, 10).replace('-', '.'),
                                 day: dayNames[mskDate.getUTCDay()],
@@ -710,7 +778,7 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setCellModal(null); setModalDayFilter(null); }}>
                         <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-white">{symbol} • {fmtET(hour)} • Час {hour}{modalDayFilter ? ` • ${modalDayFilter}` : ''}</h3>
+                                <h3 className="text-lg font-bold text-white">{symbol} • {fmtET(hour)} • Час {hour}{predictionFilter ? ` • ${predictionFilter}` : ''}{modalDayFilter ? ` • ${modalDayFilter}` : ''}</h3>
                                 <button onClick={() => { setCellModal(null); setModalDayFilter(null); }} className="text-gray-400 hover:text-white text-xl">✕</button>
                             </div>
 
