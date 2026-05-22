@@ -77,8 +77,17 @@ const PolymarketTracker: React.FC = () => {
         Object.entries(bySymbol).forEach(([symbol, items]) => {
             const sorted = items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
             
-            for (let i = 0; i < sorted.length; i++) {
-                const today = sorted[i];
+            // Deduplicate: one entry per day (keep last analysis of the day)
+            const byDate: Record<string, typeof sorted[0]> = {};
+            sorted.forEach(t => {
+                const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                const dateKey = mskDate.toISOString().slice(0, 10);
+                byDate[dateKey] = t; // last one wins
+            });
+            const deduped = Object.values(byDate).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            
+            for (let i = 0; i < deduped.length; i++) {
+                const today = deduped[i];
                 const pp = today.polymarket_prices || [];
                 const forecast = today.hourly_forecast || [];
                 if (pp.length < 22 || forecast.length < 22) continue;
@@ -90,7 +99,7 @@ const PolymarketTracker: React.FC = () => {
                 // Start price = yesterday's hour 23 open (07:00 MSK) or fallback to hour 1 open
                 let startPrice = pp[0]?.open || 0;
                 if (i > 0) {
-                    const yesterday = sorted[i - 1];
+                    const yesterday = deduped[i - 1];
                     const yesterdayPP = yesterday.polymarket_prices || [];
                     const h23 = yesterdayPP.find(p => p.hour === 23);
                     if (h23) startPrice = h23.open;
