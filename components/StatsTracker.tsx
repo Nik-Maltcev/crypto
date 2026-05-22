@@ -417,7 +417,28 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
 
                 return (
                     <div className="bg-brand-card border border-indigo-500/20 rounded-xl p-5 md:col-span-2">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-4">🎯 Отслеживание паттернов по дням (60%+)</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">🎯 Отслеживание паттернов по дням (60%+)</h3>
+                            <button
+                                onClick={() => {
+                                    const header = 'День,Час (ET),Монета,Винрейт %,Побед,Всего\n';
+                                    const rows = patternStats.map(p => 
+                                        `${p.day},${p.label.split(' ')[0]},${p.sym},${Math.round((p.wins / p.total) * 100)},${p.wins},${p.total}`
+                                    ).join('\n');
+                                    const csv = header + rows;
+                                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `patterns_by_day_${new Date().toISOString().split('T')[0]}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+                            >
+                                📥 CSV
+                            </button>
+                        </div>
                         <div className="space-y-3">
                             {dayOrder.filter(d => grouped[d]).map(day => (
                                 <div key={day} className="flex items-center gap-2 flex-wrap">
