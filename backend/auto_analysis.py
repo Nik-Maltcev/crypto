@@ -395,10 +395,18 @@ You are the FIRST STAGE of a two-stage AI pipeline. Read all the above raw socia
 Filter out all spam, useless hype, unrelated chatter, and noise.
 Extract only the FACTUAL sentiment, warnings, news, and genuine community feelings about: BTC, ETH, XRP, SOL, DOGE, BNB (и любые крупные Altcoins).
 
+CRITICAL RULES FOR TWITTER DATA:
+- Twitter is ONLY used for BREAKING NEWS detection: hacks, exploits, SEC actions, exchange listings, major partnerships, protocol upgrades, whale movements.
+- IGNORE all Twitter opinions, predictions, shilling, FOMO, price targets, and sentiment.
+- If a Twitter post is just someone's opinion or prediction — DISCARD IT.
+- Only include Twitter data if it reports a VERIFIABLE FACT or EVENT.
+- Reddit is the PRIMARY source for sentiment analysis.
+
 OUTPUT RULES:
 - Output ONLY pure dense Markdown text. No JSON.
 - Group the summary logically by coin.
 - Cite specific trends and mentions from specific platforms.
+- Clearly mark any breaking news from Twitter with [BREAKING NEWS] tag.
 - Do NOT make your own price predictions. You are just a summarizer for Claude.
 - Language: Russian.
 - Keep the final output under 3,000 words."""
@@ -662,12 +670,12 @@ async def run_scheduled_analysis(trigger: str = "scheduled", mode: str = "reddit
 
 
 async def run_dual_analysis(trigger: str = "scheduled") -> None:
-    """Run reddit_only analysis (Twitter removed).
+    """Run analysis: Reddit (sentiment) + Twitter (breaking news only).
     
-    Previously ran both reddit_only and reddit_twitter, but Twitter API
-    was unreliable. Now only runs Reddit-based analysis.
+    Twitter is used ONLY for factual breaking news detection (hacks, SEC, listings).
+    Reddit provides the core sentiment signal.
     """
-    logger.info("=== Starting auto-analysis (Reddit Only) ===")
+    logger.info("=== Starting auto-analysis (Reddit + Twitter breaking news) ===")
     settings = get_settings()
     lookback = settings.ANALYSIS_LOOKBACK_HOURS
 
@@ -682,8 +690,8 @@ async def run_dual_analysis(trigger: str = "scheduled") -> None:
         logger.error("CLAUDE_API_KEY or GEMINI_API_KEY missing. Skipping analysis.")
         return
 
-    # === PHASE 1: Data collection (Reddit only) ===
-    logger.info(f"[AUTO] Phase 1: Fetching Reddit data (window: {lookback}h)...")
+    # === PHASE 1: Data collection (Reddit + Twitter) ===
+    logger.info(f"[AUTO] Phase 1: Fetching Reddit + Twitter data (window: {lookback}h)...")
 
     reddit_posts = []
     if reddit_id and reddit_secret:
@@ -692,28 +700,31 @@ async def run_dual_analysis(trigger: str = "scheduled") -> None:
     else:
         logger.warning("[AUTO] REDDIT_CLIENT_ID/SECRET not set")
 
-    logger.info(f"[AUTO] Data collected: Reddit={len(reddit_posts)}")
+    twitter_posts = await _fetch_twitter_posts(DEFAULT_TWITTER_ACCOUNTS, lookback)
 
-    # Market context (shared)
+    logger.info(f"[AUTO] Data collected: Reddit={len(reddit_posts)}, Twitter={len(twitter_posts)}")
+
+    # Market context
     market_context = "MARKET CONTEXT: Data unavailable."
     if cmc_key:
         market_context = await _fetch_market_data(cmc_key)
 
-    # === PHASE 2: Reddit Only analysis ===
-    if reddit_posts:
-        logger.info("[AUTO] Phase 2: Reddit Only — Gemini filter + Claude...")
+    # === PHASE 2: Combined analysis (Reddit sentiment + Twitter breaking news) ===
+    combined = reddit_posts + twitter_posts
+    if combined:
+        logger.info("[AUTO] Phase 2: Reddit + Twitter (breaking news) — Gemini filter + Claude...")
         await _run_single_analysis(
             mode="reddit_only",
             trigger=trigger,
-            data=reddit_posts,
+            data=combined,
             market_context=market_context,
             gemini_key=gemini_key,
             claude_key=claude_key,
             reddit_count=len(reddit_posts),
-            twitter_count=0,
+            twitter_count=len(twitter_posts),
         )
     else:
-        logger.warning("[AUTO] No Reddit data, skipping analysis")
+        logger.warning("[AUTO] No data collected, skipping analysis")
 
     logger.info("=== Auto-analysis complete ===")
 
