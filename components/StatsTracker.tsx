@@ -595,6 +595,132 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 </div>
             </div>
 
+            {/* 4-Hour Blocks Section */}
+            {(() => {
+                const blocks = [
+                    { label: '07-11 МСК', hours: [1, 2, 3] },
+                    { label: '11-15 МСК', hours: [4, 5, 6, 7] },
+                    { label: '15-19 МСК', hours: [8, 9, 10, 11] },
+                    { label: '19-23 МСК', hours: [12, 13, 14, 15] },
+                    { label: '23-03 МСК', hours: [16, 17, 18, 19] },
+                    { label: '03-07 МСК', hours: [20, 21, 22, 23, 24] },
+                ];
+
+                // Calculate 4h block stats per coin
+                const blockStats: Record<string, Record<string, { wins: number; total: number }>> = {};
+                blocks.forEach(b => { blockStats[b.label] = {}; });
+
+                valid.forEach(t => {
+                    (t.polymarket_prices || []).forEach(pp => {
+                        if (pp.matched === null) return;
+                        const block = blocks.find(b => b.hours.includes(pp.hour));
+                        if (!block) return;
+                        if (!blockStats[block.label][t.symbol]) blockStats[block.label][t.symbol] = { wins: 0, total: 0 };
+                        if (!blockStats[block.label]['ALL']) blockStats[block.label]['ALL'] = { wins: 0, total: 0 };
+                        blockStats[block.label][t.symbol].total++;
+                        blockStats[block.label]['ALL'].total++;
+                        if (pp.matched) {
+                            blockStats[block.label][t.symbol].wins++;
+                            blockStats[block.label]['ALL'].wins++;
+                        }
+                    });
+                });
+
+                // 4h block direction stats (open of first candle vs close of last candle in block)
+                const blockDirStats: Record<string, Record<string, { wins: number; total: number }>> = {};
+                blocks.forEach(b => { blockDirStats[b.label] = {}; });
+
+                valid.forEach(t => {
+                    const pp = t.polymarket_prices || [];
+                    if (pp.length < 4) return;
+
+                    blocks.forEach(block => {
+                        const blockPrices = pp.filter(p => block.hours.includes(p.hour));
+                        if (blockPrices.length < 2) return;
+
+                        const openPrice = blockPrices[0]?.open || 0;
+                        const closePrice = blockPrices[blockPrices.length - 1]?.close || 0;
+                        if (openPrice === 0 || closePrice === 0) return;
+
+                        const realDir = closePrice >= openPrice ? 'up' : 'down';
+                        const predDirs = blockPrices.map(p => p.predicted_direction).filter(Boolean);
+                        const upCount = predDirs.filter((d: string) => d === 'up').length;
+                        const downCount = predDirs.filter((d: string) => d === 'down').length;
+                        const predDir = upCount >= downCount ? 'up' : 'down';
+
+                        if (!blockDirStats[block.label][t.symbol]) blockDirStats[block.label][t.symbol] = { wins: 0, total: 0 };
+                        if (!blockDirStats[block.label]['ALL']) blockDirStats[block.label]['ALL'] = { wins: 0, total: 0 };
+                        blockDirStats[block.label][t.symbol].total++;
+                        blockDirStats[block.label]['ALL'].total++;
+                        if (predDir === realDir) {
+                            blockDirStats[block.label][t.symbol].wins++;
+                            blockDirStats[block.label]['ALL'].wins++;
+                        }
+                    });
+                });
+
+                return (
+                    <div className="bg-brand-card border border-orange-500/20 rounded-xl p-5">
+                        <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider mb-4">⏱️ 4-часовые блоки (направление за блок)</h3>
+                        <p className="text-[10px] text-gray-500 mb-3">Совпало ли направление прогноза с реальным движением за 4-часовой блок (open первой свечи → close последней)</p>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-gray-500 border-b border-gray-800">
+                                        <th className="py-2 px-2 text-left">Блок</th>
+                                        {coinRanking.map(c => <th key={c.symbol} className="py-2 px-2 text-center">{c.symbol}</th>)}
+                                        <th className="py-2 px-2 text-center font-bold">ИТОГО</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {blocks.map(block => {
+                                        const bs = blockDirStats[block.label] || {};
+                                        const allS = bs['ALL'];
+                                        const allPct = allS && allS.total > 0 ? Math.round((allS.wins / allS.total) * 100) : 0;
+                                        return (
+                                            <tr key={block.label} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                                                <td className="py-1.5 px-2 text-orange-400 font-mono text-xs">{block.label}</td>
+                                                {coinRanking.map(c => {
+                                                    const cs = bs[c.symbol];
+                                                    const pct = cs && cs.total > 0 ? Math.round((cs.wins / cs.total) * 100) : 0;
+                                                    const color = pct >= 60 ? 'text-emerald-400' : pct >= 50 ? 'text-gray-300' : 'text-red-400';
+                                                    const bg = cs && pct >= 60 ? 'bg-emerald-500/15 border border-emerald-400/40 rounded' : '';
+                                                    return (
+                                                        <td key={c.symbol} className={`py-1.5 px-2 text-center font-mono ${color} ${bg}`}>
+                                                            {cs && cs.total > 0 ? `${pct}%` : '—'}
+                                                            {cs && cs.total > 0 && <span className="text-gray-600 text-[9px] ml-0.5">({cs.wins}/{cs.total})</span>}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className={`py-1.5 px-2 text-center font-bold ${allPct >= 55 ? 'text-emerald-400' : allPct >= 48 ? 'text-white' : 'text-red-400'}`}>
+                                                    {allPct}%
+                                                    {allS && <span className="text-gray-600 text-[9px] ml-0.5">({allS.wins}/{allS.total})</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="mt-3 text-[10px] text-gray-600">
+                            Часовой винрейт внутри блоков (для сравнения):
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {blocks.map(block => {
+                                    const bs = blockStats[block.label] || {};
+                                    const allS = bs['ALL'];
+                                    const pct = allS && allS.total > 0 ? Math.round((allS.wins / allS.total) * 100) : 0;
+                                    return (
+                                        <span key={block.label} className={`px-2 py-0.5 rounded ${pct >= 55 ? 'bg-emerald-500/10 text-emerald-400' : pct >= 48 ? 'bg-gray-800 text-gray-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            {block.label}: {pct}% ({allS?.wins || 0}/{allS?.total || 0})
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Daily Performance Section */}
             <div className="bg-brand-card border border-cyan-500/20 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">
