@@ -595,6 +595,95 @@ ${JSON.stringify(dataForAnalysis, null, 0)}
                 </div>
             </div>
 
+            {/* Hour 1 + Confidence Analysis */}
+            {(() => {
+                // Collect hour 1 results with confidence
+                const h1Data: { date: string; day: string; symbol: string; prediction: string; confidence: number; matched: boolean }[] = [];
+                valid.forEach(t => {
+                    const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+                    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                    (t.polymarket_prices || []).forEach(pp => {
+                        if (pp.hour === 1 && pp.matched !== null) {
+                            h1Data.push({
+                                date: mskDate.toISOString().slice(0, 10),
+                                day: dayNames[mskDate.getUTCDay()],
+                                symbol: t.symbol,
+                                prediction: t.prediction,
+                                confidence: t.confidence,
+                                matched: pp.matched,
+                            });
+                        }
+                    });
+                });
+
+                // Group by confidence ranges
+                const ranges = [
+                    { label: '75%+', min: 75, max: 100 },
+                    { label: '65-74%', min: 65, max: 74 },
+                    { label: '55-64%', min: 55, max: 64 },
+                    { label: '<55%', min: 0, max: 54 },
+                ];
+                const rangeStats = ranges.map(r => {
+                    const items = h1Data.filter(d => d.confidence >= r.min && d.confidence <= r.max);
+                    const wins = items.filter(d => d.matched).length;
+                    return { ...r, wins, total: items.length, pct: items.length > 0 ? Math.round((wins / items.length) * 100) : 0 };
+                });
+
+                const totalWins = h1Data.filter(d => d.matched).length;
+                const totalPct = h1Data.length > 0 ? Math.round((totalWins / h1Data.length) * 100) : 0;
+
+                return (
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">🎯 Час 1 × Уверенность</h3>
+                            <button
+                                onClick={() => {
+                                    const header = 'Дата,День,Монета,Прогноз,Уверенность%,Совпало\n';
+                                    const csvRows = h1Data.map(d => `${d.date},${d.day},${d.symbol},${d.prediction},${d.confidence},${d.matched ? 'ДА' : 'НЕТ'}`).join('\n');
+                                    const csv = '\ufeff' + header + csvRows;
+                                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `hour1_confidence_${new Date().toISOString().split('T')[0]}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+                            >
+                                📥 CSV
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-gray-500 mb-3">Винрейт первого часа в зависимости от уверенности AI. Всего: {totalPct}% ({totalWins}/{h1Data.length})</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {rangeStats.map(r => (
+                                <div key={r.label} className={`rounded-lg p-3 text-center ${r.pct >= 60 ? 'bg-emerald-500/10 border border-emerald-500/30' : r.pct >= 50 ? 'bg-gray-800 border border-gray-700' : 'bg-red-500/10 border border-red-500/30'}`}>
+                                    <div className="text-[10px] text-gray-500 uppercase mb-1">Conf {r.label}</div>
+                                    <div className={`text-xl font-bold ${r.pct >= 60 ? 'text-emerald-400' : r.pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{r.total > 0 ? `${r.pct}%` : '—'}</div>
+                                    <div className="text-[9px] text-gray-600">{r.wins}/{r.total}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 md:grid-cols-6 gap-2">
+                            {coinRanking.map(c => {
+                                const coinH1 = h1Data.filter(d => d.symbol === c.symbol);
+                                const coinWins = coinH1.filter(d => d.matched).length;
+                                const coinPct = coinH1.length > 0 ? Math.round((coinWins / coinH1.length) * 100) : 0;
+                                const avgConf = coinH1.length > 0 ? Math.round(coinH1.reduce((s, d) => s + d.confidence, 0) / coinH1.length) : 0;
+                                return (
+                                    <div key={c.symbol} className="bg-gray-900/50 rounded-lg p-2 text-center">
+                                        <div className="text-xs font-bold text-white">{c.symbol}</div>
+                                        <div className={`text-sm font-bold ${coinPct >= 55 ? 'text-emerald-400' : coinPct >= 48 ? 'text-yellow-400' : 'text-red-400'}`}>{coinPct}%</div>
+                                        <div className="text-[9px] text-gray-500">avg conf: {avgConf}%</div>
+                                        <div className="text-[9px] text-gray-600">{coinWins}/{coinH1.length}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* 4-Hour Blocks Section */}
             {(() => {
                 const blocks = [
