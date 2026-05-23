@@ -172,6 +172,92 @@ const PolymarketTracker: React.FC = () => {
         URL.revokeObjectURL(url);
     };
 
+    const export4hCSV = () => {
+        // 4-hour intervals starting at 07:00 MSK (04:00 UTC)
+        // Interval 1: 07:00-11:00 MSK = hours 1-4 (analysis starts 08:00, hour 1 = 08:00-09:00)
+        // Wait - hour 1 = 08:00-09:00 MSK. So 07:00 MSK is before hour 1.
+        // Actually: hour 1 starts at 05:00 UTC = 08:00 MSK
+        // 4h blocks from 07:00 MSK: 07-11, 11-15, 15-19, 19-23, 23-03, 03-07
+        // In terms of our hours: 
+        //   07-11 MSK: hour 1 starts at 08:00, so this block covers ~hours 1-3 (08-11)
+        //   But user wants from 07:00 MSK exactly. Let's map:
+        //   Block 1: 07:00-11:00 MSK = hours 1-3 (08:00-11:00, close enough - first candle open is 08:00)
+        //   Block 2: 11:00-15:00 MSK = hours 4-7
+        //   Block 3: 15:00-19:00 MSK = hours 8-11
+        //   Block 4: 19:00-23:00 MSK = hours 12-15
+        //   Block 5: 23:00-03:00 MSK = hours 16-19
+        //   Block 6: 03:00-07:00 MSK = hours 20-23
+        // Actually more precise: hour N starts at (05 + N - 1) UTC = (08 + N - 1) MSK
+        // hour 1 = 08:00 MSK, hour 2 = 09:00, hour 3 = 10:00, hour 4 = 11:00...
+        // Block 07-11 MSK: covers 07:00-11:00. Our hours start at 08:00, so hours 1,2,3 (08-09, 09-10, 10-11)
+        // Block 11-15 MSK: hours 4,5,6,7 (11-12, 12-13, 13-14, 14-15)
+        // Block 15-19 MSK: hours 8,9,10,11 (15-16, 16-17, 17-18, 18-19)
+        // Block 19-23 MSK: hours 12,13,14,15 (19-20, 20-21, 21-22, 22-23)
+        // Block 23-03 MSK: hours 16,17,18,19 (23-00, 00-01, 01-02, 02-03)
+        // Block 03-07 MSK: hours 20,21,22,23 (03-04, 04-05, 05-06, 06-07)
+        
+        const blocks = [
+            { label: '07-11 МСК', hours: [1, 2, 3] },
+            { label: '11-15 МСК', hours: [4, 5, 6, 7] },
+            { label: '15-19 МСК', hours: [8, 9, 10, 11] },
+            { label: '19-23 МСК', hours: [12, 13, 14, 15] },
+            { label: '23-03 МСК', hours: [16, 17, 18, 19] },
+            { label: '03-07 МСК', hours: [20, 21, 22, 23, 24] },
+        ];
+
+        const rows = ['Дата,День недели,Монета,Прогноз,Блок (4ч),Цена Open,Цена Close,Направление,Прогноз направление,Совпало,Винрейт часов в блоке %'];
+        const filtered = trackings.filter(t => {
+            const m = t.mode || 'reddit_only';
+            if (modeFilter === 'reddit_only') return m !== 'reddit_twitter';
+            return m === 'reddit_twitter';
+        });
+
+        filtered.forEach(t => {
+            const pp = t.polymarket_prices || [];
+            if (pp.length < 4) return;
+            
+            const mskDate = new Date(new Date(t.created_at).getTime() + 3 * 60 * 60 * 1000);
+            const date = mskDate.toISOString().slice(0, 10);
+            const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            const dayName = dayNames[mskDate.getUTCDay()];
+
+            blocks.forEach(block => {
+                const blockPrices = pp.filter(p => block.hours.includes(p.hour));
+                if (blockPrices.length === 0) return;
+
+                const openPrice = blockPrices[0]?.open || 0;
+                const closePrice = blockPrices[blockPrices.length - 1]?.close || 0;
+                if (openPrice === 0 || closePrice === 0) return;
+
+                const realDir = closePrice >= openPrice ? 'Up' : 'Down';
+                
+                // Predicted direction for the block: majority of hourly predictions
+                const predDirs = blockPrices.map(p => p.predicted_direction).filter(Boolean);
+                const upCount = predDirs.filter(d => d === 'up').length;
+                const downCount = predDirs.filter(d => d === 'down').length;
+                const predDir = upCount >= downCount ? 'Up' : 'Down';
+                
+                const matched = predDir === realDir ? 'ДА' : 'НЕТ';
+                
+                // Hourly winrate within this block
+                const hourHits = blockPrices.filter(p => p.matched === true).length;
+                const hourTotal = blockPrices.filter(p => p.matched !== null).length;
+                const hourWR = hourTotal > 0 ? Math.round((hourHits / hourTotal) * 100) : 0;
+
+                rows.push(`${date},${dayName},${t.symbol},${t.prediction},${block.label},${openPrice},${closePrice},${realDir},${predDir},${matched},${hourWR}`);
+            });
+        });
+
+        const csv = '\uFEFF' + rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `polymarket_4h_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -181,10 +267,14 @@ const PolymarketTracker: React.FC = () => {
                         Сравнение AI-прогноза с направлением 1ч свечи Binance (open/close). Логика Polymarket: close &ge; open = Up.
                     </p>
                 </div>
-                <div className="flex space-x-2 mt-4 sm:mt-0">
+                <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
                     <button onClick={exportCSV}
                         className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-medium transition">
                         📥 Hourly
+                    </button>
+                    <button onClick={export4hCSV}
+                        className="px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-lg text-sm font-medium transition">
+                        📥 4h
                     </button>
                     <button onClick={exportDailyCSV}
                         className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium transition">
