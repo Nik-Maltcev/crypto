@@ -431,6 +431,34 @@ async def fetch_reddit_posts(subreddit: str, limit: int = 50, q: str | None = No
     return resp.json()
 
 
+@app.get("/api/reddit/comments")
+async def fetch_reddit_comments(subreddit: str, limit: int = 100):
+    """Fetch recent comments from a subreddit using OAuth."""
+    import httpx
+    
+    try:
+        token = await get_reddit_token()
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Unexpected Reddit OAuth error: {e}")
+        raise HTTPException(500, f"Reddit OAuth error: {str(e)}")
+    
+    url = f"https://oauth.reddit.com/r/{subreddit}/comments.json?limit={limit}"
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers={
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "CryptoPulseAI/1.0"
+        })
+    
+    if resp.status_code != 200:
+        logger.warning(f"Reddit comments API error for r/{subreddit}: {resp.status_code}")
+        return {"data": {"children": []}}
+    
+    return resp.json()
+
+
 @app.get("/api/proxy")
 async def proxy_request(url: str, headers: str | None = None):
     """Generic CORS proxy: forwards GET requests to external APIs server-side."""

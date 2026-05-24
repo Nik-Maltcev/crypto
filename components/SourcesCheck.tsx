@@ -7,6 +7,8 @@ interface SourceResult {
     name: string;
     type: 'reddit' | 'twitter';
     count: number;
+    posts?: number;
+    comments?: number;
     status: 'ok' | 'error' | 'pending';
     error?: string;
 }
@@ -30,26 +32,48 @@ const SourcesCheck: React.FC = () => {
         const total = topSubreddits.length + twitterAccounts.length;
         setProgress({ current: 0, total });
 
-        // Check Reddit subreddits
+        // Check Reddit subreddits (posts + comments via separate endpoint)
         for (let i = 0; i < topSubreddits.length; i++) {
             const sub = topSubreddits[i];
+            let postCount = 0;
+            let commentCount = 0;
+            let status: 'ok' | 'error' = 'ok';
+            let error = '';
+
             try {
+                // Fetch posts
                 const resp = await fetch(`${BACKEND_URL}/api/reddit/posts?subreddit=${encodeURIComponent(sub)}&limit=100`);
                 if (resp.ok) {
                     const data = await resp.json();
                     const posts = data?.data?.children || [];
-                    const recentCount = posts.filter((p: any) => p.data?.created_utc >= cutoffTime).length;
-                    allResults.push({ name: `r/${sub}`, type: 'reddit', count: recentCount, status: 'ok' });
+                    postCount = posts.filter((p: any) => p.data?.created_utc >= cutoffTime).length;
                 } else {
-                    allResults.push({ name: `r/${sub}`, type: 'reddit', count: 0, status: 'error', error: `HTTP ${resp.status}` });
+                    status = 'error';
+                    error = `HTTP ${resp.status}`;
                 }
             } catch (e: any) {
-                allResults.push({ name: `r/${sub}`, type: 'reddit', count: 0, status: 'error', error: e.message });
+                status = 'error';
+                error = e.message;
             }
+
+            // Fetch comments (separate endpoint)
+            if (status === 'ok') {
+                try {
+                    const resp = await fetch(`${BACKEND_URL}/api/reddit/comments?subreddit=${encodeURIComponent(sub)}&limit=100`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const comments = data?.data?.children || [];
+                        commentCount = comments.filter((c: any) => c.data?.created_utc >= cutoffTime).length;
+                    }
+                } catch {
+                    // Comments failed silently
+                }
+            }
+
+            allResults.push({ name: `r/${sub}`, type: 'reddit', posts: postCount, comments: commentCount, count: postCount + commentCount, status, error });
             setProgress({ current: i + 1, total });
             setResults([...allResults]);
-            // Small delay to avoid rate limiting
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 350));
         }
 
         // Check Twitter accounts
@@ -76,12 +100,12 @@ const SourcesCheck: React.FC = () => {
                             if (tweetDate >= oneHourAgo) recentCount++;
                         }
                     });
-                    allResults.push({ name: `@${acc.username}`, type: 'twitter', count: recentCount, status: 'ok' });
+                    allResults.push({ name: `@${acc.username}`, type: 'twitter', posts: recentCount, comments: 0, count: recentCount, status: 'ok' });
                 } else {
-                    allResults.push({ name: `@${acc.username}`, type: 'twitter', count: 0, status: 'error', error: `HTTP ${resp.status}` });
+                    allResults.push({ name: `@${acc.username}`, type: 'twitter', posts: 0, comments: 0, count: 0, status: 'error', error: `HTTP ${resp.status}` });
                 }
             } catch (e: any) {
-                allResults.push({ name: `@${acc.username}`, type: 'twitter', count: 0, status: 'error', error: e.message });
+                allResults.push({ name: `@${acc.username}`, type: 'twitter', posts: 0, comments: 0, count: 0, status: 'error', error: e.message });
             }
             setProgress({ current: topSubreddits.length + i + 1, total });
             setResults([...allResults]);
@@ -92,8 +116,8 @@ const SourcesCheck: React.FC = () => {
     };
 
     const exportCSV = () => {
-        const header = 'Тип,Источник,Сообщений за 1ч,Статус\n';
-        const rows = results.map(r => `${r.type === 'reddit' ? 'Reddit' : 'Twitter'},${r.name},${r.count},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`).join('\n');
+        const header = 'Тип,Источник,Постов за 1ч,Комментов за 1ч,Всего за 1ч,Статус\n';
+        const rows = results.map(r => `${r.type === 'reddit' ? 'Reddit' : 'Twitter'},${r.name},${r.posts || r.count},${r.comments || 0},${r.count},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`).join('\n');
         const csv = '\ufeff' + header + rows;
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -174,7 +198,9 @@ const SourcesCheck: React.FC = () => {
                                 <thead className="sticky top-0 bg-gray-900">
                                     <tr className="text-gray-500 border-b border-gray-800">
                                         <th className="py-2 px-2 text-left">Сабреддит</th>
-                                        <th className="py-2 px-2 text-right">Постов за 1ч</th>
+                                        <th className="py-2 px-2 text-right">Посты</th>
+                                        <th className="py-2 px-2 text-right">Комменты</th>
+                                        <th className="py-2 px-2 text-right">Всего</th>
                                         <th className="py-2 px-2 text-center">Статус</th>
                                     </tr>
                                 </thead>
@@ -182,6 +208,8 @@ const SourcesCheck: React.FC = () => {
                                     {redditResults.map((r, i) => (
                                         <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
                                             <td className="py-1.5 px-2 text-orange-400 font-mono">{r.name}</td>
+                                            <td className={`py-1.5 px-2 text-right ${(r.posts || 0) > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{r.posts || 0}</td>
+                                            <td className={`py-1.5 px-2 text-right ${(r.comments || 0) > 0 ? 'text-cyan-400' : 'text-gray-600'}`}>{r.comments || 0}</td>
                                             <td className={`py-1.5 px-2 text-right font-bold ${r.count > 5 ? 'text-emerald-400' : r.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{r.count}</td>
                                             <td className="py-1.5 px-2 text-center">{r.status === 'ok' ? '✅' : '❌'}</td>
                                         </tr>
