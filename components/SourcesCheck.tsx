@@ -23,8 +23,8 @@ const SourcesCheck: React.FC = () => {
         const allResults: SourceResult[] = [];
         const cutoffTime = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
 
-        // Select top subreddits (most relevant crypto ones)
-        const topSubreddits = TARGET_SUBREDDITS.slice(0, 50).map(s => s.name);
+        // Check all subreddits
+        const topSubreddits = TARGET_SUBREDDITS.map(s => s.name);
         const twitterAccounts = TWITTER_ACCOUNTS.map(a => ({ username: a.username, id: a.id }));
 
         const total = topSubreddits.length + twitterAccounts.length;
