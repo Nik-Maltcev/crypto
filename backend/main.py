@@ -23,6 +23,7 @@ from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
 from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking
+from hourly_hypothesis import run_hourly_hypothesis
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -104,11 +105,20 @@ async def lifespan(app: FastAPI):
             from apscheduler.triggers.cron import CronTrigger
             
             scheduler = AsyncIOScheduler()
+            # Daily analysis DISABLED — replaced by hourly hypothesis
+            # scheduler.add_job(
+            #     run_dual_analysis,
+            #     trigger=CronTrigger(hour=5, minute=0),
+            #     id="daily_analysis",
+            #     name="Daily 08:00 MSK Analysis (Reddit + Reddit+Twitter)",
+            #     kwargs={"trigger": "scheduled"},
+            #     replace_existing=True,
+            # )
             scheduler.add_job(
-                run_dual_analysis,
-                trigger=CronTrigger(hour=5, minute=0),  # 05:00 UTC = 08:00 MSK
-                id="daily_analysis",
-                name="Daily 08:00 MSK Analysis (Reddit + Reddit+Twitter)",
+                run_hourly_hypothesis,
+                trigger=CronTrigger(minute=50),  # Every hour at XX:50 (predict next hour)
+                id="hourly_hypothesis",
+                name="Hourly Hypothesis (predict next hour)",
                 kwargs={"trigger": "scheduled"},
                 replace_existing=True,
             )
@@ -696,6 +706,52 @@ async def trigger_analysis(mode: str = "reddit_only"):
     
     asyncio.create_task(run_scheduled_analysis(trigger="manual", mode=mode))
     return {"status": "started", "mode": mode, "message": "Analysis triggered. Check /api/analysis/history for results."}
+
+
+@app.post("/api/hypothesis/run")
+async def trigger_hourly_hypothesis():
+    """Manually trigger hourly hypothesis prediction."""
+    if not os.environ.get("CLAUDE_API_KEY"):
+        raise HTTPException(400, "CLAUDE_API_KEY not configured on server")
+    
+    asyncio.create_task(run_hourly_hypothesis(trigger="manual"))
+    return {"status": "started", "message": "Hourly hypothesis triggered. Check /api/hypothesis/history for results."}
+
+
+@app.get("/api/hypothesis/history")
+async def get_hypothesis_history(limit: int = 50):
+    """Get hourly hypothesis prediction history."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+        
+        items = []
+        for log in logs:
+            result_data = None
+            if log.result_json:
+                try:
+                    result_data = json.loads(log.result_json)
+                except:
+                    pass
+            items.append({
+                "id": log.id,
+                "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+                "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
+                "status": log.status,
+                "trigger": log.trigger,
+                "reddit_posts_count": log.reddit_posts_count,
+                "twitter_tweets_count": log.twitter_tweets_count,
+                "error_message": log.error_message,
+                "result": result_data,
+            })
+        
+        return {"success": True, "items": items}
 
 
 @app.post("/api/altcoin/run")
