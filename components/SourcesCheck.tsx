@@ -37,6 +37,7 @@ const SourcesCheck: React.FC = () => {
             let tweets6h = 0;
             let status: 'ok' | 'error' = 'ok';
             let error = '';
+            let displayName = `@${acc.username}`;
 
             try {
                 const targetUrl = `https://twitter241.p.rapidapi.com/user-tweets?user=${acc.id}&count=20`;
@@ -48,38 +49,32 @@ const SourcesCheck: React.FC = () => {
                 const resp = await fetch(proxyUrl);
                 if (resp.ok) {
                     const data = await resp.json();
-                    // Parse Twitter241 response structure
                     const instructions = data?.result?.timeline?.instructions || data?.data?.user?.result?.timeline_v2?.timeline?.instructions || [];
+                    let resolvedName = acc.username;
                     instructions.forEach((instr: any) => {
-                        if (instr.type === 'TimelineAddEntries' && instr.entries) {
-                            instr.entries.forEach((entry: any) => {
-                                const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
-                                if (tweet?.created_at) {
-                                    const tweetDate = new Date(tweet.created_at);
-                                    if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
-                                        tweets6h++;
-                                    }
+                        const entries = instr.type === 'TimelineAddEntries' ? instr.entries : (instr.entries && !instr.type ? instr.entries : []);
+                        if (!entries) return;
+                        entries.forEach((entry: any) => {
+                            const tweetResult = entry?.content?.itemContent?.tweet_results?.result;
+                            const tweet = tweetResult?.legacy;
+                            const screenName = tweetResult?.core?.user_results?.result?.legacy?.screen_name;
+                            if (screenName && resolvedName.startsWith('User_')) resolvedName = screenName;
+                            if (tweet?.created_at) {
+                                const tweetDate = new Date(tweet.created_at);
+                                if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
+                                    tweets6h++;
                                 }
-                            });
-                        }
-                        // Also check entries directly (some API versions)
-                        if (instr.entries && !instr.type) {
-                            instr.entries.forEach((entry: any) => {
-                                const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
-                                if (tweet?.created_at) {
-                                    const tweetDate = new Date(tweet.created_at);
-                                    if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
-                                        tweets6h++;
-                                    }
-                                }
-                            });
-                        }
+                            }
+                        });
                     });
-                    // Fallback: check top-level entries (older API format)
+                    // Fallback: top-level entries
                     if (tweets6h === 0) {
                         const entries = data?.result?.timeline?.instructions?.[0]?.entries || [];
                         entries.forEach((entry: any) => {
-                            const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
+                            const tweetResult = entry?.content?.itemContent?.tweet_results?.result;
+                            const tweet = tweetResult?.legacy;
+                            const screenName = tweetResult?.core?.user_results?.result?.legacy?.screen_name;
+                            if (screenName && resolvedName.startsWith('User_')) resolvedName = screenName;
                             if (tweet?.created_at) {
                                 const tweetDate = new Date(tweet.created_at);
                                 if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
@@ -88,6 +83,7 @@ const SourcesCheck: React.FC = () => {
                             }
                         });
                     }
+                    displayName = `@${resolvedName}`;
                 } else {
                     status = 'error';
                     error = `HTTP ${resp.status}`;
@@ -98,7 +94,7 @@ const SourcesCheck: React.FC = () => {
             }
 
             allResults.push({
-                name: `@${acc.username}`, type: 'twitter',
+                name: displayName, type: 'twitter',
                 posts1h: 0, comments1h: 0, total1h: 0,
                 posts6h: tweets6h, total6h: tweets6h,
                 status, error,
