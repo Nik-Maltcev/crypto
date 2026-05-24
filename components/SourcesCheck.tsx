@@ -5,6 +5,7 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 
 interface SourceResult {
     name: string;
+    id?: string;
     type: 'reddit' | 'twitter';
     posts1h: number;
     comments1h: number;
@@ -94,7 +95,7 @@ const SourcesCheck: React.FC = () => {
             }
 
             allResults.push({
-                name: displayName, type: 'twitter',
+                name: displayName, id: acc.id, type: 'twitter',
                 posts1h: 0, comments1h: 0, total1h: 0,
                 posts6h: tweets6h, total6h: tweets6h,
                 status, error,
@@ -108,9 +109,9 @@ const SourcesCheck: React.FC = () => {
     };
 
     const exportCSV = () => {
-        const header = 'Аккаунт,Твитов за 6ч,Статус\n';
+        const header = 'Аккаунт,ID,Твитов за 6ч,Статус\n';
         const rows = results.map(r =>
-            `${r.name},${r.total6h},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`
+            `${r.name},${r.id || ''},${r.total6h},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`
         ).join('\n');
         const csv = '\ufeff' + header + rows;
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
