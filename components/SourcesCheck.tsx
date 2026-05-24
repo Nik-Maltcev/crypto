@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TARGET_SUBREDDITS, TWITTER_ACCOUNTS } from '../constants';
+import { TWITTER_ACCOUNTS } from '../constants';
 
 const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
@@ -25,66 +25,10 @@ const SourcesCheck: React.FC = () => {
         setResults([]);
 
         const allResults: SourceResult[] = [];
-        const now = Math.floor(Date.now() / 1000);
-        const cutoff1h = now - 3600;
-
-        const topSubreddits = TARGET_SUBREDDITS.map(s => s.name);
         const twitterAccounts = TWITTER_ACCOUNTS.map(a => ({ username: a.username, id: a.id }));
 
-        const total = topSubreddits.length + twitterAccounts.length;
+        const total = twitterAccounts.length;
         setProgress({ current: 0, total });
-
-        // Reddit — only 1h (posts + comments)
-        for (let i = 0; i < topSubreddits.length; i++) {
-            const sub = topSubreddits[i];
-            let posts1h = 0, comments1h = 0;
-            let status: 'ok' | 'error' = 'ok';
-            let error = '';
-
-            try {
-                const resp = await fetch(`${BACKEND_URL}/api/reddit/posts?subreddit=${encodeURIComponent(sub)}&limit=100`);
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const posts = data?.data?.children || [];
-                    posts.forEach((p: any) => {
-                        const t = p.data?.created_utc || 0;
-                        if (t >= cutoff1h) posts1h++;
-                    });
-                } else {
-                    status = 'error';
-                    error = `HTTP ${resp.status}`;
-                }
-            } catch (e: any) {
-                status = 'error';
-                error = e.message;
-            }
-
-            if (status === 'ok') {
-                try {
-                    const resp = await fetch(`${BACKEND_URL}/api/reddit/comments?subreddit=${encodeURIComponent(sub)}&limit=100`);
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        const comments = data?.data?.children || [];
-                        comments.forEach((c: any) => {
-                            const t = c.data?.created_utc || 0;
-                            if (t >= cutoff1h) comments1h++;
-                        });
-                    }
-                } catch {
-                    // silent
-                }
-            }
-
-            allResults.push({
-                name: `r/${sub}`, type: 'reddit',
-                posts1h, comments1h, total1h: posts1h + comments1h,
-                posts6h: 0, total6h: 0,
-                status, error,
-            });
-            setProgress({ current: i + 1, total });
-            setResults([...allResults]);
-            await new Promise(r => setTimeout(r, 200));
-        }
 
         // Twitter — 6h
         const sixHoursAgo = new Date(Date.now() - 6 * 3600000);
@@ -104,14 +48,46 @@ const SourcesCheck: React.FC = () => {
                 const resp = await fetch(proxyUrl);
                 if (resp.ok) {
                     const data = await resp.json();
-                    const entries = data?.result?.timeline?.instructions?.[0]?.entries || [];
-                    entries.forEach((entry: any) => {
-                        const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
-                        if (tweet?.created_at) {
-                            const tweetDate = new Date(tweet.created_at);
-                            if (tweetDate >= sixHoursAgo) tweets6h++;
+                    // Parse Twitter241 response structure
+                    const instructions = data?.result?.timeline?.instructions || data?.data?.user?.result?.timeline_v2?.timeline?.instructions || [];
+                    instructions.forEach((instr: any) => {
+                        if (instr.type === 'TimelineAddEntries' && instr.entries) {
+                            instr.entries.forEach((entry: any) => {
+                                const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
+                                if (tweet?.created_at) {
+                                    const tweetDate = new Date(tweet.created_at);
+                                    if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
+                                        tweets6h++;
+                                    }
+                                }
+                            });
+                        }
+                        // Also check entries directly (some API versions)
+                        if (instr.entries && !instr.type) {
+                            instr.entries.forEach((entry: any) => {
+                                const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
+                                if (tweet?.created_at) {
+                                    const tweetDate = new Date(tweet.created_at);
+                                    if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
+                                        tweets6h++;
+                                    }
+                                }
+                            });
                         }
                     });
+                    // Fallback: check top-level entries (older API format)
+                    if (tweets6h === 0) {
+                        const entries = data?.result?.timeline?.instructions?.[0]?.entries || [];
+                        entries.forEach((entry: any) => {
+                            const tweet = entry?.content?.itemContent?.tweet_results?.result?.legacy;
+                            if (tweet?.created_at) {
+                                const tweetDate = new Date(tweet.created_at);
+                                if (!isNaN(tweetDate.getTime()) && tweetDate >= sixHoursAgo) {
+                                    tweets6h++;
+                                }
+                            }
+                        });
+                    }
                 } else {
                     status = 'error';
                     error = `HTTP ${resp.status}`;
@@ -127,7 +103,7 @@ const SourcesCheck: React.FC = () => {
                 posts6h: tweets6h, total6h: tweets6h,
                 status, error,
             });
-            setProgress({ current: topSubreddits.length + i + 1, total });
+            setProgress({ current: i + 1, total });
             setResults([...allResults]);
             await new Promise(r => setTimeout(r, 300));
         }
@@ -136,33 +112,30 @@ const SourcesCheck: React.FC = () => {
     };
 
     const exportCSV = () => {
-        const header = 'Тип,Источник,Посты 1ч,Комменты 1ч,Всего 1ч,Твиты 6ч,Статус\n';
+        const header = 'Аккаунт,Твитов за 6ч,Статус\n';
         const rows = results.map(r =>
-            `${r.type === 'reddit' ? 'Reddit' : 'Twitter'},${r.name},${r.posts1h},${r.comments1h},${r.total1h},${r.total6h},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`
+            `${r.name},${r.total6h},${r.status === 'ok' ? 'OK' : r.error || 'Ошибка'}`
         ).join('\n');
         const csv = '\ufeff' + header + rows;
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sources_check_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `twitter_check_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     };
 
-    const redditResults = results.filter(r => r.type === 'reddit').sort((a, b) => b.total1h - a.total1h);
     const twitterResults = results.filter(r => r.type === 'twitter').sort((a, b) => b.total6h - a.total6h);
-    const totalReddit1h = redditResults.reduce((s, r) => s + r.total1h, 0);
     const totalTwitter6h = twitterResults.reduce((s, r) => s + r.total6h, 0);
-    const activeReddit = redditResults.filter(r => r.total1h > 0).length;
     const activeTwitter = twitterResults.filter(r => r.total6h > 0).length;
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Проверка Reddit и Twitter</h2>
-                    <p className="text-gray-400 text-sm">Reddit: посты + комменты за 1 час | Twitter: твиты за 6 часов</p>
+                    <h2 className="text-2xl font-bold text-white mb-2">Проверка Twitter</h2>
+                    <p className="text-gray-400 text-sm">Твиты за последние 6 часов по каждому аккаунту</p>
                 </div>
                 <div className="flex gap-2 mt-4 sm:mt-0">
                     {results.length > 0 && (
@@ -181,7 +154,7 @@ const SourcesCheck: React.FC = () => {
             {isLoading && (
                 <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
                     <div className="flex justify-between text-sm text-gray-400 mb-2">
-                        <span>Проверка источников...</span>
+                        <span>Проверка Twitter аккаунтов...</span>
                         <span>{progress.current}/{progress.total}</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
@@ -193,58 +166,21 @@ const SourcesCheck: React.FC = () => {
             {results.length > 0 && (
                 <>
                     {/* Summary */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                            <div className="text-2xl font-bold text-orange-400">{totalReddit1h}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Reddit за 1ч</div>
-                        </div>
-                        <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                            <div className="text-2xl font-bold text-emerald-400">{activeReddit}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Активных сабов</div>
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
                             <div className="text-2xl font-bold text-blue-400">{totalTwitter6h}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Twitter за 6ч</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Твитов за 6ч</div>
                         </div>
                         <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                            <div className="text-2xl font-bold text-emerald-400">{activeTwitter}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Активных акк.</div>
-                        </div>
-                    </div>
-
-                    {/* Reddit Table */}
-                    <div className="bg-brand-card border border-orange-500/20 rounded-xl p-5">
-                        <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider mb-3">Reddit ({redditResults.length} сабреддитов) — за 1 час</h3>
-                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                            <table className="w-full text-xs">
-                                <thead className="sticky top-0 bg-gray-900">
-                                    <tr className="text-gray-500 border-b border-gray-800">
-                                        <th className="py-2 px-2 text-left">Сабреддит</th>
-                                        <th className="py-2 px-2 text-right">Посты</th>
-                                        <th className="py-2 px-2 text-right">Комменты</th>
-                                        <th className="py-2 px-2 text-right font-bold">Всего</th>
-                                        <th className="py-2 px-2 text-center">Статус</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {redditResults.map((r, i) => (
-                                        <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
-                                            <td className="py-1.5 px-2 text-orange-400 font-mono">{r.name}</td>
-                                            <td className={`py-1.5 px-2 text-right ${r.posts1h > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{r.posts1h}</td>
-                                            <td className={`py-1.5 px-2 text-right ${r.comments1h > 0 ? 'text-cyan-400' : 'text-gray-600'}`}>{r.comments1h >= 100 ? '100+' : r.comments1h}</td>
-                                            <td className={`py-1.5 px-2 text-right font-bold ${r.total1h > 5 ? 'text-emerald-400' : r.total1h > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{r.total1h >= 100 ? `${r.total1h}+` : r.total1h}</td>
-                                            <td className="py-1.5 px-2 text-center">{r.status === 'ok' ? '✅' : '❌'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                            <div className="text-2xl font-bold text-emerald-400">{activeTwitter}/{twitterResults.length}</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Активных аккаунтов</div>
                         </div>
                     </div>
 
                     {/* Twitter Table */}
                     <div className="bg-brand-card border border-blue-500/20 rounded-xl p-5">
                         <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-3">Twitter ({twitterResults.length} аккаунтов) — за 6 часов</h3>
-                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                             <table className="w-full text-xs">
                                 <thead className="sticky top-0 bg-gray-900">
                                     <tr className="text-gray-500 border-b border-gray-800">
@@ -270,7 +206,7 @@ const SourcesCheck: React.FC = () => {
 
             {!isLoading && results.length === 0 && (
                 <div className="text-center p-10 bg-gray-900/50 rounded-xl border border-dashed border-gray-700 text-gray-500">
-                    Нажмите «Проверить» чтобы получить активность источников.
+                    Нажмите «Проверить» чтобы получить активность Twitter аккаунтов за 6ч.
                 </div>
             )}
         </div>
