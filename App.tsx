@@ -14,6 +14,7 @@ import AnalysisHistory from './components/AnalysisHistory';
 import PolymarketTracker from './components/PolymarketTracker';
 import StatsTracker from './components/StatsTracker';
 import AltcoinWeekly from './components/AltcoinWeekly';
+import SourcesCheck from './components/SourcesCheck';
 
 // Icons
 const RefreshIcon = () => (
@@ -45,7 +46,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -521,6 +522,12 @@ const App: React.FC = () => {
               >
                 🔮 Альткоины
               </button>
+              <button
+                onClick={() => setActiveTab('sources')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🔌 Источники
+              </button>
             </div>
           </div>
 
@@ -574,6 +581,8 @@ const App: React.FC = () => {
           <StatsTracker />
         ) : activeTab === 'altcoins' ? (
           <AltcoinWeekly />
+        ) : activeTab === 'sources' ? (
+          <SourcesCheck />
         ) : (
           <>
             {/* Progress Display */}
