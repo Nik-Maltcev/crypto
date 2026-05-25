@@ -16,7 +16,6 @@ import StatsTracker from './components/StatsTracker';
 import AltcoinWeekly from './components/AltcoinWeekly';
 import SourcesCheck from './components/SourcesCheck';
 import HypothesisTracker from './components/HypothesisTracker';
-import HypothesisResults from './components/HypothesisResults';
 
 // Icons
 const RefreshIcon = () => (
@@ -48,7 +47,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis' | 'hyporesults'>('hypothesis');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis'>('hypothesis');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -536,12 +535,6 @@ const App: React.FC = () => {
               >
                 🧪 Гипотеза
               </button>
-              <button
-                onClick={() => setActiveTab('hyporesults')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hyporesults' ? 'bg-amber-700/50 text-amber-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📊 vs Гипотеза
-              </button>
             </div>
           </div>
 
@@ -599,8 +592,6 @@ const App: React.FC = () => {
           <SourcesCheck />
         ) : activeTab === 'hypothesis' ? (
           <HypothesisTracker />
-        ) : activeTab === 'hyporesults' ? (
-          <HypothesisResults />
         ) : (
           <>
             {/* Progress Display */}

@@ -155,85 +155,123 @@ const HypothesisTracker: React.FC = () => {
                     Нет данных. Нажмите «Запустить» или дождитесь автоматического запуска (каждый час в XX:50).
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {entries.map(entry => {
-                        const utcDate = new Date(entry.created_at);
-                        // Convert to MSK (UTC+3)
-                        const mskMs = utcDate.getTime() + 3 * 60 * 60 * 1000;
-                        const mskDate = new Date(mskMs);
-                        const dateStr = `${mskDate.getUTCDate().toString().padStart(2,'0')}.${(mskDate.getUTCMonth()+1).toString().padStart(2,'0')}`;
-                        const timeStr = `${mskDate.getUTCHours().toString().padStart(2,'0')}:${mskDate.getUTCMinutes().toString().padStart(2,'0')}`;
-                        // Predicted hour = next full hour in MSK
-                        const mskHours = mskDate.getUTCHours();
-                        const nextFullHour = (mskHours + 1) % 24;
-                        const endHour = (nextFullHour + 1) % 24;
-                        const nextHourStr = `${nextFullHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`;
+                <div className="space-y-6">
+                    {(() => {
+                        // Group entries by date (MSK)
+                        const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                        const monthNames = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+                        const byDate: Record<string, HypothesisEntry[]> = {};
+                        entries.forEach(e => {
+                            const utcDate = new Date(e.created_at);
+                            const mskMs = utcDate.getTime() + 3 * 60 * 60 * 1000;
+                            const mskDate = new Date(mskMs);
+                            const dateKey = `${mskDate.getUTCFullYear()}-${(mskDate.getUTCMonth()+1).toString().padStart(2,'0')}-${mskDate.getUTCDate().toString().padStart(2,'0')}`;
+                            if (!byDate[dateKey]) byDate[dateKey] = [];
+                            byDate[dateKey].push(e);
+                        });
+                        const sortedDays = Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
 
-                        return (
-                            <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
-                                {/* Header */}
-                                <div className="p-4 border-b border-gray-800/50 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs text-gray-500 font-mono">{dateStr} {timeStr}</span>
-                                        <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
-                                            → {nextHourStr} МСК
-                                        </span>
-                                        <span className={`text-xs px-2 py-0.5 rounded ${entry.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : entry.status === 'running' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
-                                            {entry.status === 'success' ? '✅' : entry.status === 'running' ? '⏳' : '❌'} {entry.status}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                                        <span>Reddit: {entry.reddit_posts_count}</span>
-                                        <span>Twitter: {entry.twitter_tweets_count}</span>
-                                    </div>
-                                </div>
+                        return sortedDays.map(([dateKey, dayEntries]) => {
+                            const dParts = dateKey.split('-');
+                            const refDate = new Date(Date.UTC(+dParts[0], +dParts[1]-1, +dParts[2]));
+                            const dateLabel = `${refDate.getUTCDate()} ${monthNames[refDate.getUTCMonth()]} ${refDate.getUTCFullYear()}`;
+                            const dayName = dayNames[refDate.getUTCDay()];
 
-                                {/* Predictions */}
-                                {entry.result?.predictions && (
-                                    <div className="p-4">
-                                        {entry.result.market_summary && (
-                                            <p className="text-xs text-gray-400 mb-3 italic">{entry.result.market_summary}</p>
+                            // Day winrate
+                            const dayPreds = dayEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
+                            const dayHits = dayPreds.filter(p => p.matched).length;
+                            const dayTotal = dayPreds.length;
+                            const dayWR = dayTotal > 0 ? Math.round((dayHits / dayTotal) * 100) : null;
+
+                            return (
+                                <div key={dateKey}>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{dateLabel} ({dayName})</h3>
+                                        <div className="flex-1 h-px bg-gray-800"></div>
+                                        {dayWR !== null && (
+                                            <span className={`text-xs font-bold ${dayWR >= 55 ? 'text-emerald-400' : dayWR >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{dayWR}% ({dayHits}/{dayTotal})</span>
                                         )}
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                                            {entry.result.predictions.map((p, i) => (
-                                                <div key={i} className={`rounded-lg p-3 text-center border ${
-                                                    p.matched === true ? 'bg-emerald-500/15 border-emerald-500/40' :
-                                                    p.matched === false ? 'bg-red-500/15 border-red-500/40' :
-                                                    p.direction === 'Up' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'
-                                                }`}>
-                                                    <div className="text-xs font-bold text-white mb-1">{p.symbol}</div>
-                                                    <div className={`text-lg font-bold ${p.direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                        {p.direction === 'Up' ? '↑' : '↓'} {p.direction}
+                                        <span className="text-xs text-gray-600">{dayEntries.length} часов</span>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {dayEntries.map(entry => {
+                                            const utcDate = new Date(entry.created_at);
+                                            const mskMs = utcDate.getTime() + 3 * 60 * 60 * 1000;
+                                            const mskDate = new Date(mskMs);
+                                            const timeStr = `${mskDate.getUTCHours().toString().padStart(2,'0')}:${mskDate.getUTCMinutes().toString().padStart(2,'0')}`;
+                                            const mskHours = mskDate.getUTCHours();
+                                            const nextFullHour = (mskHours + 1) % 24;
+                                            const endHour = (nextFullHour + 1) % 24;
+                                            const nextHourStr = `${nextFullHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`;
+
+                                            return (
+                                                <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
+                                                    <div className="p-4 border-b border-gray-800/50 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs text-gray-500 font-mono">{timeStr}</span>
+                                                            <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
+                                                                → {nextHourStr} МСК
+                                                            </span>
+                                                            <span className={`text-xs px-2 py-0.5 rounded ${entry.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : entry.status === 'running' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                {entry.status === 'success' ? '✅' : entry.status === 'running' ? '⏳' : '❌'} {entry.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                                            <span>Reddit: {entry.reddit_posts_count}</span>
+                                                            <span>Twitter: {entry.twitter_tweets_count}</span>
+                                                        </div>
                                                     </div>
-                                                    <div className={`text-sm font-bold ${p.confidence >= 70 ? 'text-white' : p.confidence >= 60 ? 'text-gray-300' : 'text-gray-500'}`}>
-                                                        {p.confidence}%
-                                                    </div>
-                                                    {p.matched !== undefined && (
-                                                        <div className={`text-xs mt-1 font-bold ${p.matched ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                            {p.matched ? '✅' : '❌'} Факт: {p.actual_direction}
+
+                                                    {entry.result?.predictions && (
+                                                        <div className="p-4">
+                                                            {entry.result.market_summary && (
+                                                                <p className="text-xs text-gray-400 mb-3 italic">{entry.result.market_summary}</p>
+                                                            )}
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                                {entry.result.predictions.map((p, i) => (
+                                                                    <div key={i} className={`rounded-lg p-3 text-center border ${
+                                                                        p.matched === true ? 'bg-emerald-500/15 border-emerald-500/40' :
+                                                                        p.matched === false ? 'bg-red-500/15 border-red-500/40' :
+                                                                        p.direction === 'Up' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'
+                                                                    }`}>
+                                                                        <div className="text-xs font-bold text-white mb-1">{p.symbol}</div>
+                                                                        <div className={`text-lg font-bold ${p.direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                            {p.direction === 'Up' ? '↑' : '↓'} {p.direction}
+                                                                        </div>
+                                                                        <div className={`text-sm font-bold ${p.confidence >= 70 ? 'text-white' : p.confidence >= 60 ? 'text-gray-300' : 'text-gray-500'}`}>
+                                                                            {p.confidence}%
+                                                                        </div>
+                                                                        {p.matched !== undefined && (
+                                                                            <div className={`text-xs mt-1 font-bold ${p.matched ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                                {p.matched ? '✅' : '❌'} Факт: {p.actual_direction}
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="text-[9px] text-gray-500 mt-1 leading-tight">{p.reasoning?.slice(0, 60)}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            {entry.result.verified && (
+                                                                <div className={`mt-3 text-xs font-bold text-center px-3 py-1.5 rounded ${
+                                                                    (entry.result.winrate || 0) >= 60 ? 'bg-emerald-500/10 text-emerald-400' :
+                                                                    (entry.result.winrate || 0) >= 50 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
+                                                                }`}>
+                                                                    Результат: {entry.result.hits}/{entry.result.total} ({entry.result.winrate}%)
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
-                                                    <div className="text-[9px] text-gray-500 mt-1 leading-tight">{p.reasoning?.slice(0, 60)}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {entry.result.verified && (
-                                            <div className={`mt-3 text-xs font-bold text-center px-3 py-1.5 rounded ${
-                                                (entry.result.winrate || 0) >= 60 ? 'bg-emerald-500/10 text-emerald-400' :
-                                                (entry.result.winrate || 0) >= 50 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
-                                            }`}>
-                                                Результат: {entry.result.hits}/{entry.result.total} ({entry.result.winrate}%)
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
 
-                                {entry.error_message && (
-                                    <div className="p-4 text-red-400 text-xs">❌ {entry.error_message}</div>
-                                )}
-                            </div>
-                        );
-                    })}
+                                                    {entry.error_message && (
+                                                        <div className="p-4 text-red-400 text-xs">❌ {entry.error_message}</div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()}
                 </div>
             )}
         </div>
