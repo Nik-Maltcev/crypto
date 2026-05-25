@@ -225,6 +225,11 @@ const HypothesisTracker: React.FC = () => {
                                             const nextFullHour = (mskHours + 1) % 24;
                                             const endHour = (nextFullHour + 1) % 24;
                                             const nextHourStr = `${nextFullHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`;
+                                            // ET = MSK - 7
+                                            const etStart = (nextFullHour - 7 + 24) % 24;
+                                            const etEnd = (etStart + 1) % 24;
+                                            const fmtET = (hr: number) => { const h12 = hr % 12 || 12; return `${h12}${hr < 12 ? 'AM' : 'PM'}`; };
+                                            const etLabel = `${fmtET(etStart)}-${fmtET(etEnd)} ET`;
 
                                             return (
                                                 <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
@@ -234,6 +239,7 @@ const HypothesisTracker: React.FC = () => {
                                                             <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
                                                                 → {nextHourStr} МСК
                                                             </span>
+                                                            <span className="text-xs text-blue-400 font-mono">{etLabel}</span>
                                                             <span className={`text-xs px-2 py-0.5 rounded ${entry.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : entry.status === 'running' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
                                                                 {entry.status === 'success' ? '✅' : entry.status === 'running' ? '⏳' : '❌'} {entry.status}
                                                             </span>
