@@ -761,6 +761,50 @@ async def get_hypothesis_history(limit: int = 50):
         return {"success": True, "items": items}
 
 
+@app.post("/api/hypothesis/reset_verification")
+async def reset_hypothesis_verification():
+    """Reset all verifications (in case they ran too early)."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .where(AnalysisLog.status == "success")
+        )
+        logs = result.scalars().all()
+        reset_count = 0
+        for log in logs:
+            if log.result_json:
+                try:
+                    data = json.loads(log.result_json)
+                    if data.get("verified"):
+                        # Remove verification data, keep predictions
+                        data.pop("verified", None)
+                        data.pop("verified_at", None)
+                        data.pop("hits", None)
+                        data.pop("total", None)
+                        data.pop("winrate", None)
+                        # Remove actual_direction from predictions
+                        for p in data.get("predictions", []):
+                            p.pop("actual_direction", None)
+                            p.pop("actual_open", None)
+                            p.pop("actual_close", None)
+                            p.pop("matched", None)
+                        log.result_json = json.dumps(data, ensure_ascii=False)
+                        reset_count += 1
+                except:
+                    pass
+        await session.commit()
+        return {"success": True, "reset": reset_count}
+
+
+@app.post("/api/hypothesis/verify_now")
+async def trigger_hypothesis_verification():
+    """Manually trigger hypothesis verification."""
+    asyncio.create_task(verify_hypothesis_results())
+    return {"status": "started", "message": "Verification triggered."}
+
+
 @app.post("/api/altcoin/run")
 async def trigger_altcoin_analysis():
     """Manually trigger weekly altcoin analysis."""

@@ -344,9 +344,10 @@ async def verify_hypothesis_results() -> None:
             if data.get("verified"):
                 continue
             
-            # Check if enough time has passed (at least 70 min since prediction)
+            # Check if enough time has passed (prediction at XX:50 for next hour, 
+            # so need to wait until that hour ENDS + 10 min = ~130 min after prediction)
             entry_time = entry.created_at
-            if (datetime.utcnow() - entry_time).total_seconds() < 70 * 60:
+            if (datetime.utcnow() - entry_time).total_seconds() < 130 * 60:
                 continue
             
             predictions = data.get("predictions", [])
@@ -367,12 +368,17 @@ async def verify_hypothesis_results() -> None:
                 if not binance_symbol:
                     continue
                 
-                # Get the last 3 closed candles and pick the right one
+                # Get the candle for the predicted hour
+                # Prediction made at XX:50 UTC, predicts the hour starting at XX+1:00 UTC
+                # So we need the candle that opened at (entry_time.hour + 1):00
+                # Using limit=3 gives us: [-3]=2h ago, [-2]=1h ago (the one we want), [-1]=current
                 candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
-                if len(candles) < 2:
+                if len(candles) < 3:
                     continue
                 
-                # The candle we want is data[-2] (last fully closed candle)
+                # candles[-2] is the last FULLY CLOSED candle
+                # But we need to verify it's the RIGHT candle (the predicted hour)
+                # The predicted hour started ~70-130 min ago
                 candle = candles[-2]
                 actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
                 matched = pred["direction"] == actual_direction
