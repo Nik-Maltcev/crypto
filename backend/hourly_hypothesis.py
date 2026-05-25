@@ -396,12 +396,13 @@ async def verify_hypothesis_results() -> None:
                         continue
                     
                     try:
-                        candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
-                        if len(candles) < 3:
+                        from forecast_tracker import fetch_binance_kline, BINANCE_PAIRS
+                        symbol_for_kline = pred["symbol"]  # "DOGE" or "BNB"
+                        kline = await fetch_binance_kline(symbol_for_kline)
+                        if not kline:
                             continue
                         
-                        candle = candles[-2]
-                        actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
+                        actual_direction = "Up" if kline["close"] >= kline["open"] else "Down"
                         matched = pred["direction"] == actual_direction
                         
                         if matched:
@@ -414,8 +415,8 @@ async def verify_hypothesis_results() -> None:
                             "confidence": pred.get("confidence", 0),
                             "reasoning": pred.get("reasoning", ""),
                             "actual_direction": actual_direction,
-                            "actual_open": candle["open"],
-                            "actual_close": candle["close"],
+                            "actual_open": kline["open"],
+                            "actual_close": kline["close"],
                             "matched": matched,
                         })
                     except Exception as e:
