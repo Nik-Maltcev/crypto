@@ -274,6 +274,11 @@ const HypothesisTracker: React.FC = () => {
                                                                                 {p.matched ? '✅' : '❌'} Факт: {p.actual_direction}
                                                                             </div>
                                                                         )}
+                                                                        {p.actual_open !== undefined && (
+                                                                            <div className="text-[9px] text-gray-500 mt-1 font-mono">
+                                                                                {p.actual_open < 1 ? p.actual_open.toFixed(5) : p.actual_open.toLocaleString('en-US', {maximumFractionDigits: 2})} → {p.actual_close !== undefined ? (p.actual_close < 1 ? p.actual_close.toFixed(5) : p.actual_close.toLocaleString('en-US', {maximumFractionDigits: 2})) : '—'}
+                                                                            </div>
+                                                                        )}
                                                                         <div className="text-[9px] text-gray-500 mt-1 leading-tight">{p.reasoning?.slice(0, 60)}</div>
                                                                     </div>
                                                                 ))}
