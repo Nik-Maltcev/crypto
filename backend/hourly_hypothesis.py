@@ -352,7 +352,7 @@ async def verify_hypothesis_results() -> None:
                 .where(AnalysisLog.status == "success")
                 .where(AnalysisLog.created_at >= cutoff)
                 .order_by(AnalysisLog.created_at.desc())
-                .limit(5)
+                .limit(50)
             )
             entries = result.scalars().all()
             
