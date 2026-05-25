@@ -234,6 +234,18 @@ async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
     
     async_session = get_async_session()
     async with async_session() as session:
+        # Guard: don't run if there's already a hypothesis from the last 50 minutes
+        from sqlalchemy import select
+        recent_cutoff = datetime.utcnow() - timedelta(minutes=50)
+        existing = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .where(AnalysisLog.created_at >= recent_cutoff)
+        )
+        if existing.scalars().first():
+            logger.info("[HYPOTHESIS] Skipping — already ran within last 50 min")
+            return
+
         log = AnalysisLog(mode="hourly_hypothesis", status="running", trigger=trigger)
         session.add(log)
         await session.commit()

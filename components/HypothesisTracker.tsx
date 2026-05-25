@@ -157,11 +157,14 @@ const HypothesisTracker: React.FC = () => {
             ) : (
                 <div className="space-y-4">
                     {entries.map(entry => {
-                        const mskDate = new Date(new Date(entry.created_at).getTime() + 3 * 60 * 60 * 1000);
+                        const mskDate = new Date(new Date(entry.created_at).getTime());
                         const dateStr = mskDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-                        const timeStr = mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                        const timeStr = mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
                         const nextHour = new Date(mskDate.getTime() + 60 * 60 * 1000);
-                        const nextHourStr = `${nextHour.getHours().toString().padStart(2, '0')}:00-${((nextHour.getHours() + 1) % 24).toString().padStart(2, '0')}:00`;
+                        const nextHourMsk = nextHour.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+                        const nextHourEnd = new Date(nextHour.getTime() + 60 * 60 * 1000);
+                        const nextHourEndMsk = nextHourEnd.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+                        const nextHourStr = `${nextHourMsk}-${nextHourEndMsk}`;
 
                         return (
                             <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
