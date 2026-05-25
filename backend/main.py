@@ -805,6 +805,39 @@ async def trigger_hypothesis_verification():
     return {"status": "started", "message": "Verification triggered."}
 
 
+@app.post("/api/hypothesis/fix_verified")
+async def fix_verified_flags():
+    """Fix: set verified=true for all entries that have matched predictions but no verified flag."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .where(AnalysisLog.status == "success")
+        )
+        logs = result.scalars().all()
+        fixed = 0
+        for log in logs:
+            if not log.result_json:
+                continue
+            try:
+                data = json.loads(log.result_json)
+                preds = data.get("predictions", [])
+                has_matched = any(p.get("matched") is not None for p in preds)
+                if has_matched and not data.get("verified"):
+                    data["verified"] = True
+                    hits = sum(1 for p in preds if p.get("matched") is True)
+                    data["hits"] = hits
+                    data["total"] = len([p for p in preds if p.get("matched") is not None])
+                    data["winrate"] = round((hits / data["total"]) * 100) if data["total"] > 0 else 0
+                    log.result_json = json.dumps(data, ensure_ascii=False)
+                    fixed += 1
+            except:
+                continue
+        await session.commit()
+        return {"success": True, "fixed": fixed}
+
+
 @app.post("/api/altcoin/run")
 async def trigger_altcoin_analysis():
     """Manually trigger weekly altcoin analysis."""
