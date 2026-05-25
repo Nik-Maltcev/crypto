@@ -374,9 +374,9 @@ async def verify_hypothesis_results() -> None:
                     continue
                 
                 # Check if enough time has passed (prediction at XX:50 for next hour,
-                # need to wait until that hour ENDS + 10 min = ~70 min after prediction)
+                # need to wait until that hour ENDS + 10 min = ~65 min after prediction)
                 entry_time = entry.created_at
-                if (datetime.utcnow() - entry_time).total_seconds() < 70 * 60:
+                if (datetime.utcnow() - entry_time).total_seconds() < 65 * 60:
                     continue
                 
                 predictions = data.get("predictions", [])
