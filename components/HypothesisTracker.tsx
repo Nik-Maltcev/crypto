@@ -7,6 +7,10 @@ interface Prediction {
     direction: string;
     confidence: number;
     reasoning: string;
+    actual_direction?: string;
+    actual_open?: number;
+    actual_close?: number;
+    matched?: boolean;
 }
 
 interface HypothesisEntry {
@@ -21,6 +25,10 @@ interface HypothesisEntry {
     result: {
         predictions: Prediction[];
         market_summary: string;
+        verified?: boolean;
+        hits?: number;
+        total?: number;
+        winrate?: number;
     } | null;
 }
 
@@ -83,6 +91,12 @@ const HypothesisTracker: React.FC = () => {
 
     if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>;
 
+    // Calculate overall winrate
+    const verifiedEntries = entries.filter(e => e.result?.verified);
+    const totalHits = verifiedEntries.reduce((s, e) => s + (e.result?.hits || 0), 0);
+    const totalChecked = verifiedEntries.reduce((s, e) => s + (e.result?.total || 0), 0);
+    const overallWinrate = totalChecked > 0 ? Math.round((totalHits / totalChecked) * 100) : 0;
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -107,6 +121,24 @@ const HypothesisTracker: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Winrate Summary */}
+            {totalChecked > 0 && (
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                        <div className={`text-3xl font-bold ${overallWinrate >= 55 ? 'text-emerald-400' : overallWinrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{overallWinrate}%</div>
+                        <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
+                    </div>
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                        <div className="text-3xl font-bold text-white">{totalHits}/{totalChecked}</div>
+                        <div className="text-[10px] text-gray-500 uppercase">Совпало</div>
+                    </div>
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                        <div className="text-3xl font-bold text-white">{verifiedEntries.length}</div>
+                        <div className="text-[10px] text-gray-500 uppercase">Проверено часов</div>
+                    </div>
+                </div>
+            )}
 
             {isRunning && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-400 text-sm animate-pulse">
@@ -154,7 +186,11 @@ const HypothesisTracker: React.FC = () => {
                                         )}
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                                             {entry.result.predictions.map((p, i) => (
-                                                <div key={i} className={`rounded-lg p-3 text-center border ${p.direction === 'Up' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                                                <div key={i} className={`rounded-lg p-3 text-center border ${
+                                                    p.matched === true ? 'bg-emerald-500/15 border-emerald-500/40' :
+                                                    p.matched === false ? 'bg-red-500/15 border-red-500/40' :
+                                                    p.direction === 'Up' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'
+                                                }`}>
                                                     <div className="text-xs font-bold text-white mb-1">{p.symbol}</div>
                                                     <div className={`text-lg font-bold ${p.direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
                                                         {p.direction === 'Up' ? '↑' : '↓'} {p.direction}
@@ -162,10 +198,23 @@ const HypothesisTracker: React.FC = () => {
                                                     <div className={`text-sm font-bold ${p.confidence >= 70 ? 'text-white' : p.confidence >= 60 ? 'text-gray-300' : 'text-gray-500'}`}>
                                                         {p.confidence}%
                                                     </div>
+                                                    {p.matched !== undefined && (
+                                                        <div className={`text-xs mt-1 font-bold ${p.matched ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                            {p.matched ? '✅' : '❌'} Факт: {p.actual_direction}
+                                                        </div>
+                                                    )}
                                                     <div className="text-[9px] text-gray-500 mt-1 leading-tight">{p.reasoning?.slice(0, 60)}</div>
                                                 </div>
                                             ))}
                                         </div>
+                                        {entry.result.verified && (
+                                            <div className={`mt-3 text-xs font-bold text-center px-3 py-1.5 rounded ${
+                                                (entry.result.winrate || 0) >= 60 ? 'bg-emerald-500/10 text-emerald-400' :
+                                                (entry.result.winrate || 0) >= 50 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
+                                            }`}>
+                                                Результат: {entry.result.hits}/{entry.result.total} ({entry.result.winrate}%)
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

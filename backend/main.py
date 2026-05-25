@@ -23,7 +23,7 @@ from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
 from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking
-from hourly_hypothesis import run_hourly_hypothesis
+from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -120,6 +120,13 @@ async def lifespan(app: FastAPI):
                 id="hourly_hypothesis",
                 name="Hourly Hypothesis (predict next hour)",
                 kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                verify_hypothesis_results,
+                trigger=CronTrigger(minute=10),  # Every hour at XX:10 (verify previous hour)
+                id="hourly_hypothesis_verify",
+                name="Hourly Hypothesis Verification",
                 replace_existing=True,
             )
             scheduler.add_job(
