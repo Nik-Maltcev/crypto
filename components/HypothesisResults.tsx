@@ -84,12 +84,14 @@ const HypothesisResults: React.FC = () => {
         return { coin, hits, total: preds.length, wr: preds.length > 0 ? Math.round((hits / preds.length) * 100) : 0 };
     });
 
-    // Group by date
+    // Group by date of PREDICTED hour (not creation time)
     const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
     const byDate: Record<string, HypothesisEntry[]> = {};
     entries.forEach(e => {
         const utcDate = new Date(e.created_at);
-        const dateKey = `${utcDate.getUTCFullYear()}-${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}-${utcDate.getUTCDate().toString().padStart(2,'0')}`;
+        // Predicted hour = creation hour + 1
+        const predictedHour = new Date(utcDate.getTime() + 60 * 60 * 1000);
+        const dateKey = `${predictedHour.getUTCFullYear()}-${(predictedHour.getUTCMonth()+1).toString().padStart(2,'0')}-${predictedHour.getUTCDate().toString().padStart(2,'0')}`;
         if (!byDate[dateKey]) byDate[dateKey] = [];
         byDate[dateKey].push(e);
     });
@@ -154,9 +156,10 @@ const HypothesisResults: React.FC = () => {
                     {/* Day-grouped entries (like Polymarket) */}
                     <div className="space-y-6">
                         {sortedDays.map(([dateKey, dayEntries]) => {
-                            const utcDate = new Date(dayEntries[0].created_at);
-                            const dateLabel = `${utcDate.getUTCDate()} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][utcDate.getUTCMonth()]} ${utcDate.getUTCFullYear()}`;
-                            const dayName = dayNames[utcDate.getUTCDay()];
+                            const dParts = dateKey.split('-');
+                            const refDate = new Date(Date.UTC(+dParts[0], +dParts[1]-1, +dParts[2]));
+                            const dateLabel = `${refDate.getUTCDate()} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][refDate.getUTCMonth()]} ${refDate.getUTCFullYear()}`;
+                            const dayName = dayNames[refDate.getUTCDay()];
                             const dayPreds = dayEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
                             const dayHits = dayPreds.filter(p => p.matched).length;
                             const dayTotal = dayPreds.length;
