@@ -157,11 +157,14 @@ const HypothesisTracker: React.FC = () => {
             ) : (
                 <div className="space-y-4">
                     {entries.map(entry => {
-                        const mskDate = new Date(new Date(entry.created_at).getTime());
-                        const dateStr = mskDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-                        const timeStr = mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
-                        // Predicted hour = next full hour after creation time
-                        const mskHours = parseInt(mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', hour12: false, timeZone: 'Europe/Moscow' }));
+                        const utcDate = new Date(entry.created_at);
+                        // Convert to MSK (UTC+3)
+                        const mskMs = utcDate.getTime() + 3 * 60 * 60 * 1000;
+                        const mskDate = new Date(mskMs);
+                        const dateStr = `${mskDate.getUTCDate().toString().padStart(2,'0')}.${(mskDate.getUTCMonth()+1).toString().padStart(2,'0')}`;
+                        const timeStr = `${mskDate.getUTCHours().toString().padStart(2,'0')}:${mskDate.getUTCMinutes().toString().padStart(2,'0')}`;
+                        // Predicted hour = next full hour in MSK
+                        const mskHours = mskDate.getUTCHours();
                         const nextFullHour = (mskHours + 1) % 24;
                         const endHour = (nextFullHour + 1) % 24;
                         const nextHourStr = `${nextFullHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`;
