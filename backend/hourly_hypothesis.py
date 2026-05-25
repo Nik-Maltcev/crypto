@@ -55,16 +55,16 @@ async def _fetch_binance_candles(symbol: str, interval: str = "1h", limit: int =
 
 
 async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
-    """Fetch Reddit posts from last 1 hour only."""
+    """Fetch ALL Reddit posts from last 1 hour."""
     cutoff = datetime.utcnow() - timedelta(hours=1)
     cutoff_ts = cutoff.timestamp()
     posts = []
     
     async with httpx.AsyncClient(timeout=15) as client:
-        for sub in subreddits[:30]:  # Top 30 active subs only
+        for sub in subreddits:
             try:
                 resp = await client.get(
-                    f"https://oauth.reddit.com/r/{sub}/new.json?limit=25",
+                    f"https://oauth.reddit.com/r/{sub}/new.json?limit=100",
                     headers={"Authorization": f"Bearer {token}", "User-Agent": "CryptoPulseAI/1.0"}
                 )
                 if resp.status_code == 200:
@@ -80,21 +80,21 @@ async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
                             })
             except Exception:
                 continue
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.15)
     
-    return sorted(posts, key=lambda x: x.get("score", 0), reverse=True)[:50]
+    return sorted(posts, key=lambda x: x.get("score", 0), reverse=True)
 
 
 async def _fetch_twitter_recent(accounts: list[str], api_key: str) -> list[dict]:
-    """Fetch tweets from last 1 hour."""
+    """Fetch ALL tweets from last 1 hour."""
     cutoff = datetime.utcnow() - timedelta(hours=1)
     tweets = []
     
     async with httpx.AsyncClient(timeout=15) as client:
-        for acc_id in accounts[:20]:  # Top 20 active accounts
+        for acc_id in accounts:
             try:
                 resp = await client.get(
-                    f"https://twitter241.p.rapidapi.com/user-tweets?user={acc_id}&count=10",
+                    f"https://twitter241.p.rapidapi.com/user-tweets?user={acc_id}&count=20",
                     headers={
                         "X-RapidAPI-Key": api_key,
                         "X-RapidAPI-Host": "twitter241.p.rapidapi.com"
@@ -117,9 +117,9 @@ async def _fetch_twitter_recent(accounts: list[str], api_key: str) -> list[dict]
                                         })
             except Exception:
                 continue
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.2)
     
-    return tweets[:30]
+    return tweets
 
 
 async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_posts: list, claude_key: str) -> dict:
@@ -259,31 +259,51 @@ async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
                 candles_data[symbol] = await _fetch_binance_candles(symbol, "1h", 6)
             logger.info(f"[HYPOTHESIS] Got candles for {len(candles_data)} symbols")
             
-            # 2. Reddit (last 1h)
+            # 2. Reddit (last 1h) — ALL active subreddits
             reddit_posts = []
             if reddit_id and reddit_secret:
-                logger.info("[HYPOTHESIS] Fetching Reddit (1h)...")
+                logger.info("[HYPOTHESIS] Fetching Reddit (1h, all active subs)...")
                 from auto_analysis import _get_reddit_token
                 token = await _get_reddit_token(reddit_id, reddit_secret)
-                # Use active subreddits
+                # All active subreddits from constants
                 active_subs = [
-                    "CryptoCurrency", "Bitcoin", "ethereum", "solana", "btc", "CryptoMarkets",
-                    "binance", "defi", "ethtrader", "Daytrading", "investing", "IndianStreetBets",
-                    "Trading", "pennystocks", "options", "algotrading", "XRP", "cardano",
-                    "dogecoin", "CryptoScams", "BitcoinBeginners", "litecoin", "memecoins",
-                    "SolanaMemeCoins", "CryptoMoonShots", "Forex", "swingtrading"
+                    "phinvest", "investing", "IndianStreetBets", "Trading", "Bitcoin", "coins", "Daytrading",
+                    "TheTowerGame", "coincollecting", "conspiracy", "geometrydash", "hardwareswap", "CallOfDutyMobile",
+                    "FUTMobile", "Pmsforsale", "PokemonGoTrade", "AdoptMeTrading", "AdoptMeRBX", "btc", "CryptoCurrency",
+                    "Anarcho_Capitalism", "TradingViewSignals", "options", "BloxFruitsTradingHub", "trading212",
+                    "giftcardexchange", "Forexstrategy", "pennystocks", "CryptoMarkets", "algotrading", "pokemontrades",
+                    "ASX_Bets", "coinerrors", "RoyaleHigh_Roblox", "Cryptozoology", "RatchetAndClank", "PiNetwork",
+                    "defi", "AncientCoins", "ethtrader", "binance", "toshicoin", "RobloxGAGTrading", "BitcoinBeginners",
+                    "XRP", "CoinBase", "solana", "northcounty", "Forex", "CryptoIndia", "CryptoScams", "memecoins",
+                    "StocksAndTrading", "FuturesTrading", "cardano", "RoyaleHigh_Trading", "MaddenMobileForums",
+                    "RobloxTrading", "ethereum", "MarioKartTour", "AirdropCryptoAlpha", "litecoin", "dogecoin",
+                    "BitcoinMining", "TradingView", "thewallstreet", "SHIBArmy", "Slothana", "MaddenUltimateTeam",
+                    "AvakinOfficial", "Buttcoin", "Tradingcards", "Hedera", "swingtrading", "ledgerwallet",
+                    "AnimalCrossingTrading", "solanadev", "Monero", "lastofuspart2", "CryptoMoonShots", "Memecoinhub",
+                    "GlobalOffensiveTrade", "SolanaMemeCoins", "tradingcardcommunity", "CryptoCurrencyTrading",
+                    "BitcoinMarkets", "GoldandBlack", "cryptomining", "Malaysia_Crypto", "ethmemecoins",
+                    "CryptoTechnology", "CrossTrading_inRoblox", "Tronix", "Yield_Farming", "gpumining",
+                    "CoinMarketCap", "daytrade", "CryptoNewsandTalk", "Polkadot", "CoinMasterGame", "CryptoExchange",
+                    "RoyaleHighTrading", "TradingEdge", "Trading_es", "UKcoins", "RocketLeagueExchange", "AMPToken",
+                    "TsumTsum", "NFT", "Stellar", "nanocurrency", "Avax", "ExodusWallet", "cro", "BitcoinBrasil",
+                    "Chainlink", "cryptography", "CryptoInvesting", "BlockchainStartups", "Jobs4Bitcoins",
+                    "BinanceCrypto", "Solana_Memes", "StockTradingIdeas", "TokenFinders", "TransformersTrading"
                 ]
                 reddit_posts = await _fetch_reddit_recent(active_subs, token)
             logger.info(f"[HYPOTHESIS] Reddit: {len(reddit_posts)} posts")
             
-            # 3. Twitter (last 1h)
-            logger.info("[HYPOTHESIS] Fetching Twitter (1h)...")
+            # 3. Twitter (last 1h) — ALL active accounts
+            logger.info("[HYPOTHESIS] Fetching Twitter (1h, all active)...")
             active_twitter_ids = [
                 "782946231551131648", "1203496290589405185", "18469669", "893111826254356481",
                 "1323762343302615040", "2207129125", "906230721513181184", "3109476390",
                 "1297503202464718850", "398148139", "982719351244472320", "51073409",
                 "4473212565", "972970759416111104", "618539620", "2260491445",
-                "978732571738755072", "935742315389444096", "34097500", "37794688"
+                "1384549926080860166", "731402158512476161", "2650025562", "1448939883423207452",
+                "978732571738755072", "935742315389444096", "1223056821037957120", "911716127365042177",
+                "146345384", "34097500", "37794688", "1360636645989441539", "993962483332329472",
+                "1301215504686694400", "33149981", "1453592537567006720", "949685739935158272",
+                "1433401849349132292", "634075747"
             ]
             twitter_posts = await _fetch_twitter_recent(active_twitter_ids, rapidapi_key)
             logger.info(f"[HYPOTHESIS] Twitter: {len(twitter_posts)} tweets")
