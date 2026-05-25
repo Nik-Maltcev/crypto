@@ -838,11 +838,12 @@ async def revalidate_all_hypothesis():
                 if not predictions:
                     continue
                 
-                # Predicted hour: entry created at XX:50, predicts XX+1:00 to XX+2:00
-                # The candle we need: startTime = (created_at rounded up to next hour)
+                # Predicted hour: entry created at XX:50, predicts the NEXT hour
                 entry_time = log.created_at
-                # Round up to next hour
-                predicted_hour_start = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                # The predicted hour starts at the next full hour from creation
+                predicted_hour_start = entry_time.replace(minute=0, second=0, microsecond=0)
+                if entry_time.minute >= 1:
+                    predicted_hour_start = predicted_hour_start + timedelta(hours=1)
                 start_ms = int(predicted_hour_start.timestamp() * 1000)
                 
                 updated_preds = []
