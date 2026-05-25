@@ -185,6 +185,11 @@ const HypothesisResults: React.FC = () => {
                                             const nextH = (h + 1) % 24;
                                             const endH = (nextH + 1) % 24;
                                             const hourLabel = `${nextH.toString().padStart(2,'0')}:00-${endH.toString().padStart(2,'0')}:00 МСК`;
+                                            // ET = MSK - 7
+                                            const etStart = (nextH - 7 + 24) % 24;
+                                            const etEnd = (etStart + 1) % 24;
+                                            const fmtET = (hr: number) => { const h12 = hr % 12 || 12; return `${h12}${hr < 12 ? 'AM' : 'PM'}`; };
+                                            const etLabel = `${fmtET(etStart)}-${fmtET(etEnd)} ET`;
 
                                             return (
                                                 <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden hover:border-purple-500/30 transition-colors">
@@ -192,6 +197,7 @@ const HypothesisResults: React.FC = () => {
                                                         onClick={() => setExpandedId(isExpanded ? null : entry.id)}>
                                                         <div className="flex items-center gap-4">
                                                             <div className="text-sm font-bold text-white">{hourLabel}</div>
+                                                            <div className="text-xs text-blue-400 font-mono">{etLabel}</div>
                                                             <span className={`text-xs px-2 py-0.5 rounded ${acc >= 60 ? 'bg-emerald-500/20 text-emerald-400' : acc >= 40 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
                                                                 {acc}%
                                                             </span>
