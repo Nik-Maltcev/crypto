@@ -805,6 +805,106 @@ async def trigger_hypothesis_verification():
     return {"status": "started", "message": "Verification triggered."}
 
 
+@app.post("/api/hypothesis/revalidate_all")
+async def revalidate_all_hypothesis():
+    """Re-fetch correct historical candles for all hypothesis entries and update prices."""
+    import httpx
+    
+    BINANCE_PAIRS_MAP = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", 
+                         "XRP": "XRPUSDT", "DOGE": "DOGEUSDT", "BNB": "BNBUSDT"}
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .where(AnalysisLog.status == "success")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(100)
+        )
+        logs = result.scalars().all()
+        fixed = 0
+        
+        async with httpx.AsyncClient(timeout=15) as client:
+            for log in logs:
+                if not log.result_json:
+                    continue
+                try:
+                    data = json.loads(log.result_json)
+                except:
+                    continue
+                
+                predictions = data.get("predictions", [])
+                if not predictions:
+                    continue
+                
+                # Predicted hour: entry created at XX:50, predicts XX+1:00 to XX+2:00
+                # The candle we need: startTime = (created_at rounded up to next hour)
+                entry_time = log.created_at
+                # Round up to next hour
+                predicted_hour_start = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                start_ms = int(predicted_hour_start.timestamp() * 1000)
+                
+                updated_preds = []
+                hits = 0
+                total = 0
+                
+                for pred in predictions:
+                    pair = BINANCE_PAIRS_MAP.get(pred.get("symbol"))
+                    if not pair:
+                        updated_preds.append(pred)
+                        continue
+                    
+                    try:
+                        resp = await client.get(
+                            "https://api.binance.com/api/v3/klines",
+                            params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
+                        )
+                        if resp.status_code == 200:
+                            klines = resp.json()
+                            if klines:
+                                candle = klines[0]
+                                actual_open = float(candle[1])
+                                actual_close = float(candle[4])
+                                actual_direction = "Up" if actual_close >= actual_open else "Down"
+                                matched = pred.get("direction") == actual_direction
+                                
+                                if matched:
+                                    hits += 1
+                                total += 1
+                                
+                                updated_preds.append({
+                                    "symbol": pred["symbol"],
+                                    "direction": pred.get("direction", ""),
+                                    "confidence": pred.get("confidence", 0),
+                                    "reasoning": pred.get("reasoning", ""),
+                                    "actual_direction": actual_direction,
+                                    "actual_open": actual_open,
+                                    "actual_close": actual_close,
+                                    "matched": matched,
+                                })
+                            else:
+                                updated_preds.append(pred)
+                        else:
+                            updated_preds.append(pred)
+                    except:
+                        updated_preds.append(pred)
+                
+                if total > 0:
+                    data["predictions"] = updated_preds
+                    data["verified"] = True
+                    data["hits"] = hits
+                    data["total"] = total
+                    data["winrate"] = round((hits / total) * 100)
+                    log.result_json = json.dumps(data, ensure_ascii=False)
+                    fixed += 1
+                
+                await asyncio.sleep(0.2)  # Rate limit
+        
+        await session.commit()
+        return {"success": True, "revalidated": fixed}
+
+
 @app.post("/api/hypothesis/fix_verified")
 async def fix_verified_flags():
     """Fix: set verified=true for all entries that have matched predictions but no verified flag."""
