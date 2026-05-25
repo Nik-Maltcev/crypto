@@ -343,99 +343,96 @@ async def verify_hypothesis_results() -> None:
     try:
         async_session = get_async_session()
         async with async_session() as session:
-        # Find recent hypothesis entries (last 24h) that haven't been verified yet
-        from sqlalchemy import select
-        cutoff = datetime.utcnow() - timedelta(hours=25)
-        result = await session.execute(
-            select(AnalysisLog)
-            .where(AnalysisLog.mode == "hourly_hypothesis")
-            .where(AnalysisLog.status == "success")
-            .where(AnalysisLog.created_at >= cutoff)
-            .order_by(AnalysisLog.created_at.desc())
-            .limit(5)
-        )
-        entries = result.scalars().all()
-        
-        if not entries:
-            logger.info("[HYPOTHESIS] No entries to verify")
-            return
-        
-        for entry in entries:
-            if not entry.result_json:
-                continue
+            # Find recent hypothesis entries (last 24h) that haven't been verified yet
+            from sqlalchemy import select
+            cutoff = datetime.utcnow() - timedelta(hours=25)
+            result = await session.execute(
+                select(AnalysisLog)
+                .where(AnalysisLog.mode == "hourly_hypothesis")
+                .where(AnalysisLog.status == "success")
+                .where(AnalysisLog.created_at >= cutoff)
+                .order_by(AnalysisLog.created_at.desc())
+                .limit(5)
+            )
+            entries = result.scalars().all()
             
-            try:
-                data = json.loads(entry.result_json)
-            except:
-                continue
+            if not entries:
+                logger.info("[HYPOTHESIS] No entries to verify")
+                return
             
-            # Skip if already verified
-            if data.get("verified"):
-                continue
-            
-            # Check if enough time has passed (prediction at XX:50 for next hour, 
-            # so need to wait until that hour ENDS + 10 min = ~130 min after prediction)
-            entry_time = entry.created_at
-            if (datetime.utcnow() - entry_time).total_seconds() < 130 * 60:
-                continue
-            
-            predictions = data.get("predictions", [])
-            if not predictions:
-                continue
-            
-            # Fetch the candle that corresponds to the predicted hour
-            # Prediction made at XX:50, predicts XX+1:00 to XX+2:00
-            # The candle we need closed at XX+2:00 (i.e., ~70 min after prediction)
-            verified_predictions = []
-            hits = 0
-            total = 0
-            
-            for pred in predictions:
-                symbol_map_rev = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", 
-                                  "XRP": "XRPUSDT", "DOGE": "DOGEUSDT", "BNB": "BNBUSDT"}
-                binance_symbol = symbol_map_rev.get(pred["symbol"])
-                if not binance_symbol:
+            for entry in entries:
+                if not entry.result_json:
                     continue
                 
                 try:
-                    candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
-                    if len(candles) < 3:
+                    data = json.loads(entry.result_json)
+                except:
+                    continue
+                
+                # Skip if already verified
+                if data.get("verified"):
+                    continue
+                
+                # Check if enough time has passed (prediction at XX:50 for next hour, 
+                # so need to wait until that hour ENDS + 10 min = ~130 min after prediction)
+                entry_time = entry.created_at
+                if (datetime.utcnow() - entry_time).total_seconds() < 130 * 60:
+                    continue
+                
+                predictions = data.get("predictions", [])
+                if not predictions:
+                    continue
+                
+                verified_predictions = []
+                hits = 0
+                total = 0
+                
+                for pred in predictions:
+                    symbol_map_rev = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", 
+                                      "XRP": "XRPUSDT", "DOGE": "DOGEUSDT", "BNB": "BNBUSDT"}
+                    binance_symbol = symbol_map_rev.get(pred["symbol"])
+                    if not binance_symbol:
                         continue
                     
-                    candle = candles[-2]
-                    actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
-                    matched = pred["direction"] == actual_direction
-                    
-                    if matched:
-                        hits += 1
-                    total += 1
-                    
-                    verified_predictions.append({
-                        "symbol": pred["symbol"],
-                        "direction": pred["direction"],
-                        "confidence": pred.get("confidence", 0),
-                        "reasoning": pred.get("reasoning", ""),
-                        "actual_direction": actual_direction,
-                        "actual_open": candle["open"],
-                        "actual_close": candle["close"],
-                        "matched": matched,
-                    })
-                except Exception as e:
-                    logger.warning(f"[HYPOTHESIS] Failed to verify {pred['symbol']}: {e}")
-                    continue
-            
-            if total > 0:
-                data["verified"] = True
-                data["verified_at"] = datetime.utcnow().isoformat()
-                data["predictions"] = verified_predictions
-                data["hits"] = hits
-                data["total"] = total
-                data["winrate"] = round((hits / total) * 100)
+                    try:
+                        candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
+                        if len(candles) < 3:
+                            continue
+                        
+                        candle = candles[-2]
+                        actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
+                        matched = pred["direction"] == actual_direction
+                        
+                        if matched:
+                            hits += 1
+                        total += 1
+                        
+                        verified_predictions.append({
+                            "symbol": pred["symbol"],
+                            "direction": pred["direction"],
+                            "confidence": pred.get("confidence", 0),
+                            "reasoning": pred.get("reasoning", ""),
+                            "actual_direction": actual_direction,
+                            "actual_open": candle["open"],
+                            "actual_close": candle["close"],
+                            "matched": matched,
+                        })
+                    except Exception as e:
+                        logger.warning(f"[HYPOTHESIS] Failed to verify {pred['symbol']}: {e}")
+                        continue
                 
-                entry.result_json = json.dumps(data, ensure_ascii=False)
-                logger.info(f"[HYPOTHESIS] Verified ID={entry.id}: {hits}/{total} ({data['winrate']}%)")
-        
-        await session.commit()
+                if total > 0:
+                    data["verified"] = True
+                    data["verified_at"] = datetime.utcnow().isoformat()
+                    data["predictions"] = verified_predictions
+                    data["hits"] = hits
+                    data["total"] = total
+                    data["winrate"] = round((hits / total) * 100)
+                    
+                    entry.result_json = json.dumps(data, ensure_ascii=False)
+                    logger.info(f"[HYPOTHESIS] Verified ID={entry.id}: {hits}/{total} ({data['winrate']}%)")
+            
+            await session.commit()
     except Exception as e:
         import traceback
         logger.error(f"[HYPOTHESIS] Verification error: {type(e).__name__}: {e}")
