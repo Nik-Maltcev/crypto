@@ -139,6 +139,51 @@ const HypothesisResults: React.FC = () => {
                         ))}
                     </div>
 
+                    {/* By day */}
+                    {(() => {
+                        const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                        const byDate: Record<string, { date: string; day: string; predictions: Prediction[] }> = {};
+                        entries.forEach(e => {
+                            if (!e.result?.predictions) return;
+                            const utcDate = new Date(e.created_at);
+                            const dateKey = `${utcDate.getUTCFullYear()}-${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}-${utcDate.getUTCDate().toString().padStart(2,'0')}`;
+                            const dateStr = `${utcDate.getUTCDate().toString().padStart(2,'0')}.${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}`;
+                            const day = dayNames[utcDate.getUTCDay()];
+                            if (!byDate[dateKey]) byDate[dateKey] = { date: dateStr, day, predictions: [] };
+                            byDate[dateKey].predictions.push(...e.result.predictions.filter(p => p.matched !== undefined));
+                        });
+                        const days = Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
+
+                        return (
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
+                                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">📅 По дням</h3>
+                                <div className="space-y-2">
+                                    {days.map(([key, d]) => {
+                                        const hits = d.predictions.filter(p => p.matched).length;
+                                        const total = d.predictions.length;
+                                        const wr = total > 0 ? Math.round((hits / total) * 100) : 0;
+                                        return (
+                                            <div key={key} className="flex items-center gap-3">
+                                                <span className="text-xs font-mono text-gray-400 w-14">{d.date}</span>
+                                                <span className="text-xs font-bold text-white bg-gray-800 px-2 py-0.5 rounded w-8 text-center">{d.day}</span>
+                                                <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                                    <div className={`h-full rounded-full ${wr >= 55 ? 'bg-emerald-500' : wr >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${wr}%` }}></div>
+                                                </div>
+                                                <span className={`text-sm font-bold w-12 text-right ${wr >= 55 ? 'text-emerald-400' : wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
+                                                <span className="text-[10px] text-gray-500 w-10">{hits}/{total}</span>
+                                                <div className="flex gap-[2px]">
+                                                    {d.predictions.slice(-12).map((p, i) => (
+                                                        <div key={i} className={`w-2.5 h-2.5 rounded-sm ${p.matched ? 'bg-emerald-500' : 'bg-red-500'}`} title={`${p.symbol}: ${p.direction} → ${p.actual_direction}`}></div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Table */}
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Детальная таблица</h3>
