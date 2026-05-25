@@ -29,10 +29,11 @@ interface HypothesisEntry {
 const HypothesisResults: React.FC = () => {
     const [entries, setEntries] = useState<HypothesisEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
 
     const fetchHistory = async () => {
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/hypothesis/history?limit=100`);
+            const resp = await fetch(`${BACKEND_URL}/api/hypothesis/history?limit=200`);
             if (resp.ok) {
                 const data = await resp.json();
                 if (data.success) setEntries(data.items.filter((e: HypothesisEntry) => e.result?.verified));
@@ -83,12 +84,23 @@ const HypothesisResults: React.FC = () => {
         return { coin, hits, total: preds.length, wr: preds.length > 0 ? Math.round((hits / preds.length) * 100) : 0 };
     });
 
+    // Group by date
+    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const byDate: Record<string, HypothesisEntry[]> = {};
+    entries.forEach(e => {
+        const utcDate = new Date(e.created_at);
+        const dateKey = `${utcDate.getUTCFullYear()}-${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}-${utcDate.getUTCDate().toString().padStart(2,'0')}`;
+        if (!byDate[dateKey]) byDate[dateKey] = [];
+        byDate[dateKey].push(e);
+    });
+    const sortedDays = Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-2">📊 Прогноз vs Гипотеза</h2>
-                    <p className="text-gray-400 text-sm">Результаты почасовых прогнозов: совпало ли направление с реальной свечой Binance</p>
+                    <p className="text-gray-400 text-sm">Совпало ли направление прогноза с реальной 1ч свечой Binance. Логика: close ≥ open = Up.</p>
                 </div>
                 <div className="flex gap-2 mt-4 sm:mt-0">
                     <button onClick={exportCSV}
@@ -96,7 +108,7 @@ const HypothesisResults: React.FC = () => {
                         📥 CSV
                     </button>
                     <button onClick={() => { setIsLoading(true); fetchHistory(); }}
-                        className="px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-sm font-medium transition">
+                        className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition">
                         🔄
                     </button>
                 </div>
@@ -123,8 +135,8 @@ const HypothesisResults: React.FC = () => {
                             <div className="text-[10px] text-gray-500 uppercase">Часов проверено</div>
                         </div>
                         <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                            <div className="text-3xl font-bold text-white">{coins.length}</div>
-                            <div className="text-[10px] text-gray-500 uppercase">Монет</div>
+                            <div className="text-3xl font-bold text-white">{sortedDays.length}</div>
+                            <div className="text-[10px] text-gray-500 uppercase">Дней</div>
                         </div>
                     </div>
 
@@ -139,105 +151,134 @@ const HypothesisResults: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* By day */}
-                    {(() => {
-                        const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-                        const byDate: Record<string, { date: string; day: string; predictions: Prediction[] }> = {};
-                        entries.forEach(e => {
-                            if (!e.result?.predictions) return;
-                            const utcDate = new Date(e.created_at);
-                            const dateKey = `${utcDate.getUTCFullYear()}-${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}-${utcDate.getUTCDate().toString().padStart(2,'0')}`;
-                            const dateStr = `${utcDate.getUTCDate().toString().padStart(2,'0')}.${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}`;
-                            const day = dayNames[utcDate.getUTCDay()];
-                            if (!byDate[dateKey]) byDate[dateKey] = { date: dateStr, day, predictions: [] };
-                            byDate[dateKey].predictions.push(...e.result.predictions.filter(p => p.matched !== undefined));
-                        });
-                        const days = Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
+                    {/* Day-grouped entries (like Polymarket) */}
+                    <div className="space-y-6">
+                        {sortedDays.map(([dateKey, dayEntries]) => {
+                            const utcDate = new Date(dayEntries[0].created_at);
+                            const dateLabel = `${utcDate.getUTCDate()} ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][utcDate.getUTCMonth()]} ${utcDate.getUTCFullYear()}`;
+                            const dayName = dayNames[utcDate.getUTCDay()];
+                            const dayPreds = dayEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
+                            const dayHits = dayPreds.filter(p => p.matched).length;
+                            const dayTotal = dayPreds.length;
+                            const dayWR = dayTotal > 0 ? Math.round((dayHits / dayTotal) * 100) : 0;
 
-                        return (
-                            <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
-                                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">📅 По дням</h3>
-                                <div className="space-y-2">
-                                    {days.map(([key, d]) => {
-                                        const hits = d.predictions.filter(p => p.matched).length;
-                                        const total = d.predictions.length;
-                                        const wr = total > 0 ? Math.round((hits / total) * 100) : 0;
-                                        return (
-                                            <div key={key} className="flex items-center gap-3">
-                                                <span className="text-xs font-mono text-gray-400 w-14">{d.date}</span>
-                                                <span className="text-xs font-bold text-white bg-gray-800 px-2 py-0.5 rounded w-8 text-center">{d.day}</span>
-                                                <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
-                                                    <div className={`h-full rounded-full ${wr >= 55 ? 'bg-emerald-500' : wr >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${wr}%` }}></div>
+                            return (
+                                <div key={dateKey}>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{dateLabel} ({dayName})</h3>
+                                        <div className="flex-1 h-px bg-gray-800"></div>
+                                        <span className={`text-xs font-bold ${dayWR >= 55 ? 'text-emerald-400' : dayWR >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{dayWR}% ({dayHits}/{dayTotal})</span>
+                                        <span className="text-xs text-gray-600">{dayEntries.length} часов</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {dayEntries.map(entry => {
+                                            const preds = entry.result?.predictions?.filter(p => p.matched !== undefined) || [];
+                                            const hits = preds.filter(p => p.matched).length;
+                                            const misses = preds.filter(p => !p.matched).length;
+                                            const acc = preds.length > 0 ? Math.round((hits / preds.length) * 100) : 0;
+                                            const isExpanded = expandedId === entry.id;
+                                            const eDate = new Date(entry.created_at);
+                                            const h = eDate.getUTCHours();
+                                            const nextH = (h + 1) % 24;
+                                            const endH = (nextH + 1) % 24;
+                                            const hourLabel = `${nextH.toString().padStart(2,'0')}:00-${endH.toString().padStart(2,'0')}:00 МСК`;
+
+                                            return (
+                                                <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden hover:border-purple-500/30 transition-colors">
+                                                    <div className="p-4 flex items-center justify-between cursor-pointer"
+                                                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}>
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="text-sm font-bold text-white">{hourLabel}</div>
+                                                            <span className={`text-xs px-2 py-0.5 rounded ${acc >= 60 ? 'bg-emerald-500/20 text-emerald-400' : acc >= 40 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                {acc}%
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-6">
+                                                            <div className="text-right">
+                                                                <div className="text-[10px] text-gray-500 uppercase font-bold">Счёт</div>
+                                                                <div className="text-sm font-mono text-white">{hits}✅ / {misses}❌</div>
+                                                            </div>
+                                                            <div className="flex gap-0.5">
+                                                                {preds.map((p, i) => (
+                                                                    <div key={i}
+                                                                        title={`${p.symbol}: ${p.direction} → ${p.actual_direction}`}
+                                                                        className={`w-2.5 h-2.5 rounded-sm ${p.matched ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                                ))}
+                                                            </div>
+                                                            <svg className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+
+                                                    {isExpanded && (
+                                                        <div className="px-4 pb-4 border-t border-gray-800/50">
+                                                            <div className="mt-3 mb-2 text-[10px] text-gray-500 uppercase font-bold">
+                                                                Логика: close ≥ open = UP | close &lt; open = DOWN
+                                                            </div>
+                                                            <div className="overflow-x-auto">
+                                                                <table className="w-full text-xs">
+                                                                    <thead>
+                                                                        <tr className="text-gray-500 border-b border-gray-800">
+                                                                            <th className="py-2 px-2 text-left">Монета</th>
+                                                                            <th className="py-2 px-2 text-center">Прогноз</th>
+                                                                            <th className="py-2 px-2 text-center">Conf</th>
+                                                                            <th className="py-2 px-2 text-right">Open</th>
+                                                                            <th className="py-2 px-2 text-right">Close</th>
+                                                                            <th className="py-2 px-2 text-center">Факт</th>
+                                                                            <th className="py-2 px-2 text-center">Результат</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {preds.map((p, i) => (
+                                                                            <tr key={i} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                                                                                <td className="py-1.5 px-2 font-bold text-white">{p.symbol}</td>
+                                                                                <td className={`py-1.5 px-2 text-center font-bold ${p.direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                                    {p.direction === 'Up' ? '↑ UP' : '↓ DOWN'}
+                                                                                </td>
+                                                                                <td className="py-1.5 px-2 text-center text-gray-300">{p.confidence}%</td>
+                                                                                <td className="py-1.5 px-2 text-right text-gray-300 font-mono">
+                                                                                    {p.actual_open ? (p.actual_open < 1 ? p.actual_open.toFixed(4) : p.actual_open.toLocaleString('en-US', {maximumFractionDigits: 2})) : '—'}
+                                                                                </td>
+                                                                                <td className="py-1.5 px-2 text-right text-gray-300 font-mono">
+                                                                                    {p.actual_close ? (p.actual_close < 1 ? p.actual_close.toFixed(4) : p.actual_close.toLocaleString('en-US', {maximumFractionDigits: 2})) : '—'}
+                                                                                </td>
+                                                                                <td className={`py-1.5 px-2 text-center font-bold ${p.actual_direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${p.actual_direction === 'Up' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                                        {p.actual_direction === 'Up' ? '↑ UP' : '↓ DOWN'}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="py-1.5 px-2 text-center text-lg">
+                                                                                    {p.matched ? '✅' : '❌'}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                            {/* Summary bar */}
+                                                            <div className="mt-3">
+                                                                <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 text-center tracking-wider">
+                                                                    Совпадение ({hits}✅ / {misses}❌)
+                                                                </div>
+                                                                <div className="flex gap-[2px] justify-center">
+                                                                    {preds.map((p, i) => (
+                                                                        <div key={i}
+                                                                            title={`${p.symbol}: ${p.direction} → ${p.actual_direction} ${p.matched ? '✅' : '❌'}`}
+                                                                            className={`w-3 h-3 rounded-sm ${p.matched ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className={`text-sm font-bold w-12 text-right ${wr >= 55 ? 'text-emerald-400' : wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
-                                                <span className="text-[10px] text-gray-500 w-10">{hits}/{total}</span>
-                                                <div className="flex gap-[2px]">
-                                                    {d.predictions.slice(-12).map((p, i) => (
-                                                        <div key={i} className={`w-2.5 h-2.5 rounded-sm ${p.matched ? 'bg-emerald-500' : 'bg-red-500'}`} title={`${p.symbol}: ${p.direction} → ${p.actual_direction}`}></div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })()}
-
-                    {/* Table */}
-                    <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Детальная таблица</h3>
-                        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                            <table className="w-full text-xs">
-                                <thead className="sticky top-0 bg-gray-900">
-                                    <tr className="text-gray-500 border-b border-gray-800">
-                                        <th className="py-2 px-2 text-left">Дата</th>
-                                        <th className="py-2 px-2 text-left">Час МСК</th>
-                                        <th className="py-2 px-2 text-left">Монета</th>
-                                        <th className="py-2 px-2 text-center">Прогноз</th>
-                                        <th className="py-2 px-2 text-center">Conf</th>
-                                        <th className="py-2 px-2 text-right">Open</th>
-                                        <th className="py-2 px-2 text-right">Close</th>
-                                        <th className="py-2 px-2 text-center">Факт</th>
-                                        <th className="py-2 px-2 text-center">Результат</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {entries.map(entry => {
-                                        const utcDate = new Date(entry.created_at);
-                                        const dateStr = `${utcDate.getUTCDate().toString().padStart(2,'0')}.${(utcDate.getUTCMonth()+1).toString().padStart(2,'0')}`;
-                                        const h = utcDate.getUTCHours();
-                                        const nextH = (h + 1) % 24;
-                                        const endH = (nextH + 1) % 24;
-                                        const hourStr = `${nextH.toString().padStart(2,'0')}:00-${endH.toString().padStart(2,'0')}:00`;
-
-                                        return (entry.result?.predictions || []).filter(p => p.matched !== undefined).map((p, i) => (
-                                            <tr key={`${entry.id}-${i}`} className={`border-b border-gray-800/30 ${p.matched ? 'hover:bg-emerald-500/5' : 'hover:bg-red-500/5'}`}>
-                                                <td className="py-1.5 px-2 text-gray-400 font-mono">{dateStr}</td>
-                                                <td className="py-1.5 px-2 text-blue-400 font-mono">{hourStr}</td>
-                                                <td className="py-1.5 px-2 font-bold text-white">{p.symbol}</td>
-                                                <td className={`py-1.5 px-2 text-center font-bold ${p.direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {p.direction === 'Up' ? '↑' : '↓'} {p.direction}
-                                                </td>
-                                                <td className="py-1.5 px-2 text-center text-gray-300">{p.confidence}%</td>
-                                                <td className="py-1.5 px-2 text-right font-mono text-gray-400">
-                                                    {p.actual_open ? (p.actual_open < 1 ? p.actual_open.toFixed(4) : p.actual_open.toLocaleString('en-US', {maximumFractionDigits: 2})) : '—'}
-                                                </td>
-                                                <td className="py-1.5 px-2 text-right font-mono text-gray-300">
-                                                    {p.actual_close ? (p.actual_close < 1 ? p.actual_close.toFixed(4) : p.actual_close.toLocaleString('en-US', {maximumFractionDigits: 2})) : '—'}
-                                                </td>
-                                                <td className={`py-1.5 px-2 text-center font-bold ${p.actual_direction === 'Up' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {p.actual_direction === 'Up' ? '↑' : '↓'} {p.actual_direction}
-                                                </td>
-                                                <td className="py-1.5 px-2 text-center text-lg">
-                                                    {p.matched ? '✅' : '❌'}
-                                                </td>
-                                            </tr>
-                                        ));
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                            );
+                        })}
                     </div>
                 </>
             )}
