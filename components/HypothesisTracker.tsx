@@ -146,7 +146,7 @@ const HypothesisTracker: React.FC = () => {
 
             {/* Per coin winrate */}
             {totalChecked > 0 && (() => {
-                const coins = ['DOGE', 'BNB'];
+                const coins = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB'];
                 const allPreds = verifiedEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
                 return (
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
