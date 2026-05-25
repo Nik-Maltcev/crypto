@@ -373,10 +373,14 @@ async def verify_hypothesis_results() -> None:
                 if data.get("verified"):
                     continue
                 
-                # Check if enough time has passed (prediction at XX:50 for next hour,
-                # need to wait until that hour ENDS + 10 min = ~65 min after prediction)
+                # Skip if the predicted hour hasn't ended yet
+                # Prediction at XX:50 predicts hour XX+1. That hour ends at XX+2:00.
+                # So we need current time > entry_time + 70 min (hour ends 10 min after entry+60min)
+                # Use server time directly
                 entry_time = entry.created_at
-                if (datetime.utcnow() - entry_time).total_seconds() < 65 * 60:
+                elapsed_minutes = (datetime.utcnow() - entry_time).total_seconds() / 60
+                if elapsed_minutes < 15:
+                    # Too fresh — predicted hour hasn't even started
                     continue
                 
                 predictions = data.get("predictions", [])
