@@ -337,15 +337,12 @@ async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
 
 
 async def verify_hypothesis_results() -> None:
-    """Check previous hour's hypothesis predictions against actual Binance candles.
-    
-    Runs at XX:10 (10 min after hour close to ensure candle is settled).
-    Finds the most recent unverified hypothesis and checks if predictions were correct.
-    """
+    """Check previous hour's hypothesis predictions against actual Binance candles."""
     logger.info("[HYPOTHESIS] Verifying previous predictions...")
     
-    async_session = get_async_session()
-    async with async_session() as session:
+    try:
+        async_session = get_async_session()
+        async with async_session() as session:
         # Find recent hypothesis entries (last 24h) that haven't been verified yet
         from sqlalchemy import select
         cutoff = datetime.utcnow() - timedelta(hours=25)
@@ -400,32 +397,32 @@ async def verify_hypothesis_results() -> None:
                 if not binance_symbol:
                     continue
                 
-                # Get the candle for the predicted hour
-                # Prediction made at XX:50 UTC, predicts the hour starting at XX+1:00 UTC
-                # So we need the candle that opened at (entry_time.hour + 1):00
-                # Using limit=3 gives us: [-3]=2h ago, [-2]=1h ago (the one we want), [-1]=current
-                candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
-                if len(candles) < 3:
+                try:
+                    candles = await _fetch_binance_candles(binance_symbol, "1h", 3)
+                    if len(candles) < 3:
+                        continue
+                    
+                    candle = candles[-2]
+                    actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
+                    matched = pred["direction"] == actual_direction
+                    
+                    if matched:
+                        hits += 1
+                    total += 1
+                    
+                    verified_predictions.append({
+                        "symbol": pred["symbol"],
+                        "direction": pred["direction"],
+                        "confidence": pred.get("confidence", 0),
+                        "reasoning": pred.get("reasoning", ""),
+                        "actual_direction": actual_direction,
+                        "actual_open": candle["open"],
+                        "actual_close": candle["close"],
+                        "matched": matched,
+                    })
+                except Exception as e:
+                    logger.warning(f"[HYPOTHESIS] Failed to verify {pred['symbol']}: {e}")
                     continue
-                
-                # candles[-2] is the last FULLY CLOSED candle
-                # But we need to verify it's the RIGHT candle (the predicted hour)
-                # The predicted hour started ~70-130 min ago
-                candle = candles[-2]
-                actual_direction = "Up" if candle["close"] >= candle["open"] else "Down"
-                matched = pred["direction"] == actual_direction
-                
-                if matched:
-                    hits += 1
-                total += 1
-                
-                verified_predictions.append({
-                    **pred,
-                    "actual_direction": actual_direction,
-                    "actual_open": candle["open"],
-                    "actual_close": candle["close"],
-                    "matched": matched,
-                })
             
             if total > 0:
                 data["verified"] = True
@@ -439,4 +436,8 @@ async def verify_hypothesis_results() -> None:
                 logger.info(f"[HYPOTHESIS] Verified ID={entry.id}: {hits}/{total} ({data['winrate']}%)")
         
         await session.commit()
+    except Exception as e:
+        import traceback
+        logger.error(f"[HYPOTHESIS] Verification error: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
     logger.info("[HYPOTHESIS] Verification complete")
