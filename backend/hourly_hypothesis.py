@@ -23,7 +23,7 @@ from core.models import AnalysisLog
 logger = logging.getLogger(__name__)
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+CLAUDE_API_URL = "https://api.deepseek.com/chat/completions"
 
 SYMBOLS = ["DOGEUSDT", "BNBUSDT"]
 SYMBOL_MAP = {"DOGEUSDT": "DOGE", "BNBUSDT": "BNB"}
@@ -192,27 +192,24 @@ TWITTER (твиты за последний час):
         resp = await client.post(
             CLAUDE_API_URL,
             headers={
-                "x-api-key": claude_key,
-                "anthropic-version": "2023-06-01",
+                "Authorization": f"Bearer {claude_key}",
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-opus-4-20250514",
+                "model": "deepseek-v4-pro",
                 "max_tokens": 2048,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
             },
         )
         
         if resp.status_code != 200:
-            raise RuntimeError(f"Claude API error: {resp.status_code} - {resp.text[:300]}")
+            raise RuntimeError(f"DeepSeek API error: {resp.status_code} - {resp.text[:300]}")
         
         data = resp.json()
-        text = ""
-        for block in data.get("content", []):
-            if block.get("type") == "text":
-                text = block.get("text", "")
-                break
+        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         
         # Parse JSON from response
         text = text.replace("```json", "").replace("```", "").strip()
@@ -223,7 +220,7 @@ async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
     """Main entry: collect data and predict next hour."""
     logger.info(f"=== HOURLY HYPOTHESIS: Starting (trigger: {trigger}) ===")
     
-    claude_key = os.environ.get("CLAUDE_API_KEY", "")
+    claude_key = os.environ.get("DEEPSEEK_API_KEY", "") or os.environ.get("CLAUDE_API_KEY", "")
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "")
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
     rapidapi_key = os.environ.get("RAPIDAPI_KEY", "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058")
