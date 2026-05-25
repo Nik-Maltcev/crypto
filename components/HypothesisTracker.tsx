@@ -115,6 +115,10 @@ const HypothesisTracker: React.FC = () => {
                         className="px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-sm font-medium transition">
                         🔄
                     </button>
+                    <button onClick={async () => { await fetch(`${BACKEND_URL}/api/hypothesis/reset_verification`, {method:'POST'}); fetchHistory(); }}
+                        className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-medium transition">
+                        🗑️ Сброс
+                    </button>
                     <button onClick={runManual} disabled={isRunning}
                         className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50">
                         {isRunning ? '⏳ Анализ...' : '🚀 Запустить'}
