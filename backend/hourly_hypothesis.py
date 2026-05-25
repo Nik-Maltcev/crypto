@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"]
-SYMBOL_MAP = {"BTCUSDT": "BTC", "ETHUSDT": "ETH", "SOLUSDT": "SOL", "XRPUSDT": "XRP", "DOGEUSDT": "DOGE", "BNBUSDT": "BNB"}
+SYMBOLS = ["DOGEUSDT", "BNBUSDT"]
+SYMBOL_MAP = {"DOGEUSDT": "DOGE", "BNBUSDT": "BNB"}
 
 
 async def _fetch_binance_candles(symbol: str, interval: str = "1h", limit: int = 6) -> list[dict]:
