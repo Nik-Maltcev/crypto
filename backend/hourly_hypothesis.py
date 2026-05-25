@@ -374,13 +374,13 @@ async def verify_hypothesis_results() -> None:
                     continue
                 
                 # Skip if the predicted hour hasn't ended yet
-                # Prediction at XX:50 predicts hour XX+1. That hour ends at XX+2:00.
-                # So we need current time > entry_time + 70 min (hour ends 10 min after entry+60min)
-                # Use server time directly
+                # At XX:07 the last closed candle is XX-1:00 to XX:00
+                # Prediction made at (XX-2):50 predicts hour (XX-1):00 to XX:00
+                # So at XX:07 we can verify predictions made at (XX-2):50 or earlier
                 entry_time = entry.created_at
                 elapsed_minutes = (datetime.utcnow() - entry_time).total_seconds() / 60
-                if elapsed_minutes < 15:
-                    # Too fresh — predicted hour hasn't even started
+                if elapsed_minutes < 10:
+                    # Created less than 10 min ago — predicted hour hasn't started yet
                     continue
                 
                 predictions = data.get("predictions", [])

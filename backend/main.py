@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
             )
             scheduler.add_job(
                 verify_hypothesis_results,
-                trigger=CronTrigger(minute=10),  # Every hour at XX:10 (verify previous hour)
+                trigger=CronTrigger(minute=7),  # Same time as Polymarket tracker — right after candle closes
                 id="hourly_hypothesis_verify",
                 name="Hourly Hypothesis Verification",
                 replace_existing=True,
