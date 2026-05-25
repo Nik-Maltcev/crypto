@@ -36,7 +36,11 @@ const HypothesisResults: React.FC = () => {
             const resp = await fetch(`${BACKEND_URL}/api/hypothesis/history?limit=200`);
             if (resp.ok) {
                 const data = await resp.json();
-                if (data.success) setEntries(data.items.filter((e: HypothesisEntry) => e.result?.verified));
+                if (data.success) setEntries(data.items.filter((e: HypothesisEntry) => {
+                    // Show entries that have any verified predictions (matched field exists)
+                    const preds = e.result?.predictions || [];
+                    return preds.some((p: any) => p.matched !== undefined);
+                }));
             }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
