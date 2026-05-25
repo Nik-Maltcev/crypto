@@ -144,6 +144,28 @@ const HypothesisTracker: React.FC = () => {
                 </div>
             )}
 
+            {/* Per coin winrate */}
+            {totalChecked > 0 && (() => {
+                const coins = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB'];
+                const allPreds = verifiedEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
+                return (
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                        {coins.map(coin => {
+                            const preds = allPreds.filter(p => p.symbol === coin);
+                            const hits = preds.filter(p => p.matched).length;
+                            const wr = preds.length > 0 ? Math.round((hits / preds.length) * 100) : 0;
+                            return (
+                                <div key={coin} className={`bg-brand-card border rounded-xl p-3 text-center ${wr >= 55 ? 'border-emerald-500/30' : wr >= 50 ? 'border-yellow-500/30' : 'border-red-500/30'}`}>
+                                    <div className="text-sm font-bold text-white">{coin}</div>
+                                    <div className={`text-xl font-bold ${wr >= 55 ? 'text-emerald-400' : wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</div>
+                                    <div className="text-[9px] text-gray-500">{hits}/{preds.length}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            })()}
+
             {isRunning && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-400 text-sm animate-pulse">
                     ⏳ Сбор данных и анализ... (~20-30 сек). Обновится автоматически.
