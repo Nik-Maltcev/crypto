@@ -160,11 +160,11 @@ const HypothesisTracker: React.FC = () => {
                         const mskDate = new Date(new Date(entry.created_at).getTime());
                         const dateStr = mskDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
                         const timeStr = mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
-                        const nextHour = new Date(mskDate.getTime() + 60 * 60 * 1000);
-                        const nextHourMsk = nextHour.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
-                        const nextHourEnd = new Date(nextHour.getTime() + 60 * 60 * 1000);
-                        const nextHourEndMsk = nextHourEnd.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
-                        const nextHourStr = `${nextHourMsk}-${nextHourEndMsk}`;
+                        // Predicted hour = next full hour after creation time
+                        const mskHours = parseInt(mskDate.toLocaleTimeString('ru-RU', { hour: '2-digit', hour12: false, timeZone: 'Europe/Moscow' }));
+                        const nextFullHour = (mskHours + 1) % 24;
+                        const endHour = (nextFullHour + 1) % 24;
+                        const nextHourStr = `${nextFullHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`;
 
                         return (
                             <div key={entry.id} className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
