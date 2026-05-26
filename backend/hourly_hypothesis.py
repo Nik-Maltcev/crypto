@@ -416,18 +416,25 @@ async def verify_hypothesis_results() -> None:
                     continue
                 
                 # Skip if the predicted hour hasn't ended yet
-                # At XX:07 the last closed candle is XX-1:00 to XX:00
-                # Prediction made at (XX-2):50 predicts hour (XX-1):00 to XX:00
-                # So at XX:07 we can verify predictions made at (XX-2):50 or earlier
+                # Entry created at XX:50 MSK predicts XX+1:00 to XX+2:00 MSK
+                # The predicted candle closes at XX+2:00 MSK = entry_time + 70 minutes
+                # Add 5 min buffer for Binance to finalize = 75 min total
                 entry_time = entry.created_at
                 elapsed_minutes = (datetime.utcnow() - entry_time).total_seconds() / 60
-                if elapsed_minutes < 10:
-                    # Created less than 10 min ago — predicted hour hasn't started yet
+                if elapsed_minutes < 75:
+                    # Predicted candle hasn't closed yet
                     continue
                 
                 predictions = data.get("predictions", [])
                 if not predictions:
                     continue
+                
+                # Calculate the exact predicted candle start time
+                # Entry created at XX:50 MSK, predicts next full hour
+                # Server time is MSK, Binance uses UTC → subtract 3h
+                predicted_hour_msk = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                predicted_hour_utc = predicted_hour_msk - timedelta(hours=3)
+                start_ms = int(predicted_hour_utc.timestamp() * 1000)
                 
                 verified_predictions = []
                 hits = 0
@@ -441,13 +448,22 @@ async def verify_hypothesis_results() -> None:
                         continue
                     
                     try:
-                        from forecast_tracker import fetch_binance_kline, BINANCE_PAIRS
-                        symbol_for_kline = pred["symbol"]  # "DOGE" or "BNB"
-                        kline = await fetch_binance_kline(symbol_for_kline)
-                        if not kline:
+                        # Fetch the exact predicted candle by startTime
+                        async with httpx.AsyncClient(timeout=15) as http_client:
+                            resp = await http_client.get(
+                                "https://api.binance.com/api/v3/klines",
+                                params={"symbol": binance_symbol, "interval": "1h", "startTime": start_ms, "limit": 1}
+                            )
+                        if resp.status_code != 200:
+                            continue
+                        klines = resp.json()
+                        if not klines:
                             continue
                         
-                        actual_direction = "Up" if kline["close"] >= kline["open"] else "Down"
+                        candle = klines[0]
+                        actual_open = float(candle[1])
+                        actual_close = float(candle[4])
+                        actual_direction = "Up" if actual_close >= actual_open else "Down"
                         matched = pred["direction"] == actual_direction
                         
                         if matched:
@@ -460,8 +476,8 @@ async def verify_hypothesis_results() -> None:
                             "confidence": pred.get("confidence", 0),
                             "reasoning": pred.get("reasoning", ""),
                             "actual_direction": actual_direction,
-                            "actual_open": kline["open"],
-                            "actual_close": kline["close"],
+                            "actual_open": actual_open,
+                            "actual_close": actual_close,
                             "matched": matched,
                         })
                     except Exception as e:
