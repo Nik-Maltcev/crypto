@@ -838,21 +838,17 @@ async def revalidate_all_hypothesis():
                 if not predictions:
                     continue
                 
-                # Predicted hour: entry created at XX:50 (server time = MSK)
-                # The predicted candle is the one that STARTS at the next full hour
-                # Since server is MSK and Binance uses UTC, we need to subtract 3h
+                # Predicted hour: entry created at XX:50 (server time = UTC with Z suffix)
+                # The predicted candle is the one that STARTS at the next full hour UTC
                 entry_time = log.created_at
-                # Next full hour in server time (MSK)
-                predicted_hour_msk = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-                # Convert MSK to UTC for Binance API
-                predicted_hour_utc = predicted_hour_msk - timedelta(hours=3)
+                # Next full hour in UTC
+                predicted_hour_utc = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
                 start_ms = int(predicted_hour_utc.timestamp() * 1000)
                 
                 # Skip if predicted candle hasn't closed yet (need +2h from entry time)
-                candle_close_time = predicted_hour_msk + timedelta(hours=1)  # candle closes 1h after start
-                # Current MSK time
-                now_msk = datetime.utcnow() + timedelta(hours=3)
-                if now_msk < candle_close_time + timedelta(minutes=2):
+                candle_close_time = predicted_hour_utc + timedelta(hours=1)  # candle closes 1h after start
+                now_utc = datetime.utcnow()
+                if now_utc < candle_close_time + timedelta(minutes=2):
                     # Candle not closed yet — if it was incorrectly verified, reset it
                     if data.get("verified"):
                         data.pop("verified", None)

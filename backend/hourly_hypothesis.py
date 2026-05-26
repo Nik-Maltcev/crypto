@@ -416,8 +416,8 @@ async def verify_hypothesis_results() -> None:
                     continue
                 
                 # Skip if the predicted hour hasn't ended yet
-                # Entry created at XX:50 MSK predicts XX+1:00 to XX+2:00 MSK
-                # The predicted candle closes at XX+2:00 MSK = entry_time + 70 minutes
+                # Entry created at XX:50 UTC predicts XX+1:00 to XX+2:00 UTC
+                # The predicted candle closes at XX+2:00 UTC = entry_time + 70 minutes
                 # Add 5 min buffer for Binance to finalize = 75 min total
                 entry_time = entry.created_at
                 elapsed_minutes = (datetime.utcnow() - entry_time).total_seconds() / 60
@@ -429,11 +429,9 @@ async def verify_hypothesis_results() -> None:
                 if not predictions:
                     continue
                 
-                # Calculate the exact predicted candle start time
-                # Entry created at XX:50 MSK, predicts next full hour
-                # Server time is MSK, Binance uses UTC → subtract 3h
-                predicted_hour_msk = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-                predicted_hour_utc = predicted_hour_msk - timedelta(hours=3)
+                # Calculate the exact predicted candle start time (UTC)
+                # Entry created at XX:50 UTC, predicts next full hour UTC
+                predicted_hour_utc = entry_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
                 start_ms = int(predicted_hour_utc.timestamp() * 1000)
                 
                 verified_predictions = []
