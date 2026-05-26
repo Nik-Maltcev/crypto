@@ -284,9 +284,23 @@ async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
             .where(AnalysisLog.mode == "hourly_hypothesis")
             .where(AnalysisLog.created_at >= recent_cutoff)
         )
-        if existing.scalars().first():
-            logger.info("[HYPOTHESIS] Skipping — already ran within last 50 min")
-            return
+        recent_entry = existing.scalars().first()
+        if recent_entry:
+            # If it's stuck in "running" for more than 5 min, mark it failed and continue
+            if recent_entry.status == "running":
+                elapsed = (datetime.utcnow() - recent_entry.created_at).total_seconds() / 60
+                if elapsed > 5:
+                    logger.warning(f"[HYPOTHESIS] Marking stuck entry ID={recent_entry.id} as failed")
+                    recent_entry.status = "failed"
+                    recent_entry.error_message = "Stuck in running state (server restart during execution)"
+                    recent_entry.finished_at = datetime.utcnow()
+                    await session.commit()
+                else:
+                    logger.info("[HYPOTHESIS] Skipping — already running")
+                    return
+            else:
+                logger.info("[HYPOTHESIS] Skipping — already ran within last 50 min")
+                return
 
         log = AnalysisLog(mode="hourly_hypothesis", status="running", trigger=trigger)
         session.add(log)
