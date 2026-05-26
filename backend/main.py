@@ -848,6 +848,27 @@ async def revalidate_all_hypothesis():
                 predicted_hour_utc = predicted_hour_msk - timedelta(hours=3)
                 start_ms = int(predicted_hour_utc.timestamp() * 1000)
                 
+                # Skip if predicted candle hasn't closed yet (need +2h from entry time)
+                candle_close_time = predicted_hour_msk + timedelta(hours=1)  # candle closes 1h after start
+                # Current MSK time
+                now_msk = datetime.utcnow() + timedelta(hours=3)
+                if now_msk < candle_close_time + timedelta(minutes=2):
+                    # Candle not closed yet — if it was incorrectly verified, reset it
+                    if data.get("verified"):
+                        data.pop("verified", None)
+                        data.pop("verified_at", None)
+                        data.pop("hits", None)
+                        data.pop("total", None)
+                        data.pop("winrate", None)
+                        for p in data.get("predictions", []):
+                            p.pop("actual_direction", None)
+                            p.pop("actual_open", None)
+                            p.pop("actual_close", None)
+                            p.pop("matched", None)
+                        log.result_json = json.dumps(data, ensure_ascii=False)
+                        fixed += 1
+                    continue
+                
                 updated_preds = []
                 hits = 0
                 total = 0
