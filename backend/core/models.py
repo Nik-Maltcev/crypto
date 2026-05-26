@@ -128,6 +128,9 @@ class AltcoinTracking(Base):
     actual_change_7d: Mapped[float | None] = mapped_column(Float, nullable=True)
     hit_target: Mapped[bool | None] = mapped_column(Integer, nullable=True)  # 1 = hit 10%+, 0 = miss
 
+    # Daily price snapshots (JSON: [{"day": 1, "date": "2026-05-26", "price": 1.23, "change_from_start": -5.2}])
+    daily_prices_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Status
     status: Mapped[str] = mapped_column(String(20), default="active")  # active, completed
     created_at: Mapped[datetime] = mapped_column(

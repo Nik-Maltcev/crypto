@@ -492,3 +492,93 @@ async def update_altcoin_tracking() -> None:
         
         await session.commit()
         logger.info(f"=== Updated {updated} altcoin trackings ===")
+
+
+async def update_altcoin_daily_prices() -> None:
+    """Daily job: snapshot current prices for all active altcoin trackings.
+    
+    Runs every day at 05:00 UTC (08:00 MSK). Records price + change from start.
+    After 7 days, marks tracking as completed.
+    """
+    logger.info("=== Altcoin daily price snapshot ===")
+    
+    cmc_key = os.environ.get("CMC_API_KEY", "")
+    if not cmc_key:
+        logger.warning("CMC_API_KEY not set, skipping daily altcoin snapshot")
+        return
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AltcoinTracking)
+            .where(AltcoinTracking.status == "active")
+        )
+        active_trackings = result.scalars().all()
+        
+        if not active_trackings:
+            logger.info("No active altcoin trackings")
+            return
+        
+        # Get unique symbols
+        symbols = list(set(t.symbol for t in active_trackings))
+        logger.info(f"[ALTCOIN DAILY] Fetching prices for {len(symbols)} symbols")
+        
+        # Fetch current prices
+        prices = await _fetch_cmc_prices(symbols, cmc_key)
+        logger.info(f"[ALTCOIN DAILY] Got prices for {len(prices)} symbols")
+        
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        updated = 0
+        
+        for tracking in active_trackings:
+            current_price = prices.get(tracking.symbol.upper())
+            if not current_price or tracking.start_price <= 0:
+                continue
+            
+            # Load existing daily prices
+            daily_prices = []
+            if tracking.daily_prices_json:
+                try:
+                    daily_prices = json.loads(tracking.daily_prices_json)
+                except:
+                    daily_prices = []
+            
+            # Skip if already recorded today
+            if any(d.get("date") == today_str for d in daily_prices):
+                continue
+            
+            day_num = len(daily_prices) + 1
+            change_from_start = ((current_price - tracking.start_price) / tracking.start_price) * 100
+            
+            daily_prices.append({
+                "day": day_num,
+                "date": today_str,
+                "price": current_price,
+                "change_from_start": round(change_from_start, 2),
+            })
+            
+            tracking.daily_prices_json = json.dumps(daily_prices)
+            tracking.end_price = current_price
+            tracking.actual_change_7d = round(change_from_start, 2)
+            
+            # After 7 days, mark as completed
+            days_active = (datetime.utcnow() - tracking.created_at).days
+            if days_active >= 7:
+                tracking.status = "completed"
+                tracking.completed_at = datetime.utcnow()
+                logger.info(f"  {tracking.symbol}: COMPLETED after {day_num} days. Final: {change_from_start:+.1f}%")
+            else:
+                logger.info(f"  {tracking.symbol}: Day {day_num}, ${current_price:.6f} ({change_from_start:+.1f}%)")
+            
+            updated += 1
+        
+        await session.commit()
+        logger.info(f"=== Altcoin daily snapshot done: {updated} updated ===")
+
+
+async def update_altcoin_tracking() -> None:
+    """Update active altcoin trackings — now just calls daily prices.
+    
+    Kept for backward compatibility with scheduler.
+    """
+    await update_altcoin_daily_prices()

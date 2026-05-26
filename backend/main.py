@@ -22,7 +22,7 @@ from core.models import ParseLog, AnalysisLog, ForecastTracking, AltcoinTracking
 from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
-from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking
+from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking, update_altcoin_daily_prices
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
@@ -159,14 +159,14 @@ async def lifespan(app: FastAPI):
                 replace_existing=True,
             )
             scheduler.add_job(
-                update_altcoin_tracking,
-                trigger=CronTrigger(day_of_week="mon", hour=4, minute=55),  # Monday 04:55 UTC (before new analysis)
-                id="weekly_altcoin_tracking_update",
-                name="Weekly Altcoin Tracking Update (Monday 07:55 MSK)",
+                update_altcoin_daily_prices,
+                trigger=CronTrigger(hour=5, minute=0),  # Every day at 05:00 UTC = 08:00 MSK
+                id="daily_altcoin_price_snapshot",
+                name="Daily Altcoin Price Snapshot (08:00 MSK)",
                 replace_existing=True,
             )
             scheduler.start()
-            logger.info("APScheduler started — daily analysis at 08:00 MSK, weekly altcoin on Monday 08:00 MSK")
+            logger.info("APScheduler started — hourly hypothesis, daily altcoin tracking")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
@@ -1083,6 +1083,7 @@ async def get_altcoin_tracking(limit: int = 50):
                 "target_price_7d": t.target_price_7d,
                 "end_price": t.end_price,
                 "actual_change_7d": t.actual_change_7d,
+                "daily_prices": json.loads(t.daily_prices_json) if t.daily_prices_json else [],
                 "status": t.status,
                 "created_at": (t.created_at.isoformat() + "Z") if t.created_at else None,
                 "completed_at": (t.completed_at.isoformat() + "Z") if t.completed_at else None,
@@ -1113,9 +1114,9 @@ async def get_altcoin_tracking(limit: int = 50):
 
 @app.post("/api/altcoin/tracking/update")
 async def trigger_altcoin_tracking_update():
-    """Manually trigger altcoin tracking update (fetch current prices for active picks)."""
-    asyncio.create_task(update_altcoin_tracking())
-    return {"status": "started", "message": "Altcoin tracking update triggered."}
+    """Manually trigger altcoin daily price snapshot."""
+    asyncio.create_task(update_altcoin_daily_prices())
+    return {"status": "started", "message": "Altcoin daily price snapshot triggered."}
 
 
 @app.get("/api/forecast/daily-performance")
