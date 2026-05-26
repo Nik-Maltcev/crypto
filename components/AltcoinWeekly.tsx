@@ -72,6 +72,7 @@ interface TrackingItem {
     target_price_7d: number;
     end_price: number | null;
     actual_change_7d: number | null;
+    daily_prices: { day: number; date: string; price: number; change_from_start: number }[];
     status: string;
     created_at: string;
     completed_at: string | null;
@@ -406,37 +407,53 @@ const AltcoinWeekly: React.FC = () => {
                     {/* Active picks */}
                     {tracking.filter(t => t.status === 'active').length > 0 && (
                         <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5">
-                            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">⏳ Активные пики (ждём результатов)</h3>
+                            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">⏳ Активные пики (отслеживание)</h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
                                             <th className="text-left py-2 px-2">Монета</th>
                                             <th className="text-right py-2 px-2">Старт</th>
+                                            <th className="text-right py-2 px-2">Сейчас</th>
+                                            <th className="text-right py-2 px-2">Изменение</th>
                                             <th className="text-right py-2 px-2">Цель</th>
-                                            <th className="text-right py-2 px-2">Прогноз</th>
                                             <th className="text-center py-2 px-2">Риск</th>
-                                            <th className="text-left py-2 px-2">Дата</th>
+                                            <th className="text-center py-2 px-2">Дни</th>
+                                            <th className="text-left py-2 px-2">По дням</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {tracking.filter(t => t.status === 'active').map(t => (
-                                            <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                                <td className="py-2 px-2">
-                                                    <span className="font-bold text-white">{t.symbol}</span>
-                                                    <span className="text-gray-500 text-xs ml-1">{t.name}</span>
-                                                </td>
-                                                <td className="text-right py-2 px-2 font-mono text-gray-300">{formatPrice(t.start_price)}</td>
-                                                <td className="text-right py-2 px-2 font-mono text-purple-400">{formatPrice(t.target_price_7d || 0)}</td>
-                                                <td className="text-right py-2 px-2 font-mono text-emerald-400">+{t.target_change_7d.toFixed(1)}%</td>
-                                                <td className="text-center py-2 px-2">
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
-                                                </td>
-                                                <td className="py-2 px-2 text-gray-500 text-xs">
-                                                    {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {tracking.filter(t => t.status === 'active').map(t => {
+                                            const change = t.actual_change_7d || 0;
+                                            const isNeg = change < 0;
+                                            return (
+                                                <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                                                    <td className="py-2 px-2">
+                                                        <span className="font-bold text-white">{t.symbol}</span>
+                                                        <span className="text-gray-500 text-xs ml-1">{t.name}</span>
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 font-mono text-gray-300">{formatPrice(t.start_price)}</td>
+                                                    <td className="text-right py-2 px-2 font-mono text-white">{t.end_price ? formatPrice(t.end_price) : '—'}</td>
+                                                    <td className={`text-right py-2 px-2 font-mono font-bold ${isNeg ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                        {change !== 0 ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : '—'}
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 font-mono text-red-400">{t.target_change_7d.toFixed(1)}%</td>
+                                                    <td className="text-center py-2 px-2">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
+                                                    </td>
+                                                    <td className="text-center py-2 px-2 text-gray-400">{t.daily_prices?.length || 0}/7</td>
+                                                    <td className="py-2 px-2">
+                                                        <div className="flex items-center gap-1">
+                                                            {t.daily_prices?.map((dp, i) => (
+                                                                <span key={i} className={`text-[9px] font-mono px-1 py-0.5 rounded ${dp.change_from_start < 0 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                                                    {dp.change_from_start >= 0 ? '+' : ''}{dp.change_from_start.toFixed(1)}%
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
