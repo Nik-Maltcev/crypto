@@ -213,7 +213,52 @@ TWITTER (твиты за последний час):
         
         # Parse JSON from response
         text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"[HYPOTHESIS] JSON parse failed: {e}. Attempting fix...")
+            # Try to fix common issues: unterminated strings, trailing commas
+            import re
+            # Remove trailing commas before } or ]
+            fixed = re.sub(r',\s*([}\]])', r'\1', text)
+            # Try to close unterminated JSON by adding missing brackets
+            open_braces = fixed.count('{') - fixed.count('}')
+            open_brackets = fixed.count('[') - fixed.count(']')
+            if open_braces > 0 or open_brackets > 0:
+                # Try to find last complete prediction and truncate
+                last_brace = fixed.rfind('}')
+                if last_brace > 0:
+                    fixed = fixed[:last_brace + 1]
+                    fixed += ']' * open_brackets + '}' * open_braces
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+            
+            # Retry once with the API
+            logger.info("[HYPOTHESIS] Retrying DeepSeek API call...")
+            resp2 = await client.post(
+                CLAUDE_API_URL,
+                headers={
+                    "Authorization": f"Bearer {claude_key}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "deepseek-v4-pro",
+                    "max_tokens": 2048,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                },
+            )
+            if resp2.status_code == 200:
+                data2 = resp2.json()
+                text2 = data2.get("choices", [{}])[0].get("message", {}).get("content", "")
+                text2 = text2.replace("```json", "").replace("```", "").strip()
+                return json.loads(text2)
+            
+            raise RuntimeError(f"DeepSeek returned invalid JSON after retry: {text[:200]}")
 
 
 async def run_hourly_hypothesis(trigger: str = "scheduled") -> None:
