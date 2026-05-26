@@ -941,6 +941,57 @@ async def fix_verified_flags():
         return {"success": True, "fixed": fixed}
 
 
+@app.post("/api/hypothesis/cleanup_old")
+async def cleanup_old_hypothesis():
+    """Delete all hypothesis entries made with Claude (before DeepSeek switch).
+    
+    Cutoff: entries created at 20:50 MSK on May 25, 2026 or earlier.
+    Server stores created_at in MSK. So we delete where created_at <= '2026-05-25 21:00:00'.
+    This removes all 2PM-3PM ET entries and earlier (Claude era).
+    """
+    async_session = get_async_session()
+    async with async_session() as session:
+        # Server time is MSK. Cutoff = 21:00 MSK May 25 (includes 2PM-3PM ET = 21:00-22:00 MSK)
+        cutoff = datetime(2026, 5, 25, 22, 0, 0)  # 22:00 MSK = 3PM ET end
+        
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+            .where(AnalysisLog.created_at <= cutoff)
+        )
+        logs = result.scalars().all()
+        count = len(logs)
+        
+        for log in logs:
+            await session.delete(log)
+        
+        await session.commit()
+        return {"success": True, "deleted": count, "cutoff_msk": "2026-05-25 22:00:00"}
+
+
+@app.post("/api/altcoin/fix_stuck")
+async def fix_stuck_altcoin():
+    """Mark stuck altcoin analyses as failed (status='running' for more than 1 hour)."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        cutoff = datetime.utcnow() - timedelta(hours=1)
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "altcoin_weekly")
+            .where(AnalysisLog.status == "running")
+            .where(AnalysisLog.created_at <= cutoff)
+        )
+        logs = result.scalars().all()
+        fixed = 0
+        for log in logs:
+            log.status = "failed"
+            log.error_message = "Marked as failed: stuck in running state after server restart"
+            log.finished_at = datetime.utcnow()
+            fixed += 1
+        await session.commit()
+        return {"success": True, "fixed": fixed, "ids": [log.id for log in logs]}
+
+
 @app.post("/api/altcoin/run")
 async def trigger_altcoin_analysis():
     """Manually trigger weekly altcoin analysis."""
