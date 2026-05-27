@@ -1119,6 +1119,103 @@ async def trigger_altcoin_tracking_update():
     return {"status": "started", "message": "Altcoin daily price snapshot triggered."}
 
 
+@app.post("/api/altcoin/tracking/backfill")
+async def backfill_altcoin_tracking():
+    """Backfill missing daily prices from Binance historical klines.
+    
+    Fetches daily candle close prices at 05:00 UTC (08:00 MSK) for each missed day.
+    """
+    import httpx
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        from core.models import AltcoinTracking
+        result = await session.execute(
+            select(AltcoinTracking).where(AltcoinTracking.status == "active")
+        )
+        active = result.scalars().all()
+        
+        if not active:
+            return {"success": True, "message": "No active trackings"}
+        
+        filled = 0
+        errors = []
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            for tracking in active:
+                symbol = tracking.symbol.upper()
+                pair = f"{symbol}USDT"
+                
+                # Load existing daily prices
+                daily_prices = []
+                if tracking.daily_prices_json:
+                    try:
+                        daily_prices = json.loads(tracking.daily_prices_json)
+                    except:
+                        daily_prices = []
+                
+                # Calculate which days are missing
+                # Day 1 = day after analysis (next 08:00 MSK = 05:00 UTC)
+                analysis_date = tracking.created_at
+                # First snapshot should be at 05:00 UTC the day after analysis
+                first_snapshot = analysis_date.replace(hour=5, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                
+                now = datetime.utcnow()
+                days_since = (now - first_snapshot).days + 1  # How many days should have snapshots
+                existing_dates = {d.get("date") for d in daily_prices}
+                
+                for day_offset in range(days_since):
+                    snapshot_time = first_snapshot + timedelta(days=day_offset)
+                    if snapshot_time > now:
+                        break
+                    
+                    date_str = snapshot_time.strftime("%Y-%m-%d")
+                    if date_str in existing_dates:
+                        continue  # Already have this day
+                    
+                    # Fetch 1h candle at 05:00 UTC for this day from Binance
+                    start_ms = int(snapshot_time.timestamp() * 1000)
+                    try:
+                        resp = await client.get(
+                            "https://api.binance.com/api/v3/klines",
+                            params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
+                        )
+                        if resp.status_code == 200:
+                            klines = resp.json()
+                            if klines:
+                                close_price = float(klines[0][4])
+                                change_from_start = ((close_price - tracking.start_price) / tracking.start_price) * 100
+                                
+                                daily_prices.append({
+                                    "day": len(daily_prices) + 1,
+                                    "date": date_str,
+                                    "price": close_price,
+                                    "change_from_start": round(change_from_start, 2),
+                                })
+                                filled += 1
+                            else:
+                                errors.append(f"{symbol}: no kline for {date_str}")
+                        else:
+                            errors.append(f"{symbol}: Binance {resp.status_code} for {date_str}")
+                    except Exception as e:
+                        errors.append(f"{symbol}: {str(e)}")
+                    
+                    await asyncio.sleep(0.1)
+                
+                # Sort by day number and save
+                daily_prices.sort(key=lambda x: x.get("date", ""))
+                for i, dp in enumerate(daily_prices):
+                    dp["day"] = i + 1
+                
+                tracking.daily_prices_json = json.dumps(daily_prices)
+                if daily_prices:
+                    tracking.end_price = daily_prices[-1]["price"]
+                    tracking.actual_change_7d = daily_prices[-1]["change_from_start"]
+        
+        await session.commit()
+        return {"success": True, "filled": filled, "errors": errors[:10]}
+
+
 @app.get("/api/forecast/daily-performance")
 async def get_daily_performance():
     """Get daily forecast performance: prediction vs actual 24h result.
