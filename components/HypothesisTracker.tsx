@@ -166,6 +166,75 @@ const HypothesisTracker: React.FC = () => {
                 );
             })()}
 
+            {/* Daily winrate by coin */}
+            {totalChecked > 0 && (() => {
+                const coins = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB'];
+                const monthNames = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+                // Group verified entries by date (MSK)
+                const byDate: Record<string, typeof verifiedEntries> = {};
+                verifiedEntries.forEach(e => {
+                    const utcDate = new Date(e.created_at);
+                    const mskMs = utcDate.getTime() + 3 * 60 * 60 * 1000;
+                    const mskDate = new Date(mskMs);
+                    const dateKey = `${mskDate.getUTCFullYear()}-${(mskDate.getUTCMonth()+1).toString().padStart(2,'0')}-${mskDate.getUTCDate().toString().padStart(2,'0')}`;
+                    if (!byDate[dateKey]) byDate[dateKey] = [];
+                    byDate[dateKey].push(e);
+                });
+                const sortedDays = Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a));
+
+                return (
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4 overflow-x-auto">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Винрейт по дням и монетам</h3>
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="text-gray-500 border-b border-gray-800">
+                                    <th className="text-left py-1.5 px-2">Дата</th>
+                                    <th className="text-center py-1.5 px-2 font-bold">Общий</th>
+                                    {coins.map(c => <th key={c} className="text-center py-1.5 px-2">{c}</th>)}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sortedDays.map(([dateKey, dayEntries]) => {
+                                    const dParts = dateKey.split('-');
+                                    const dateLabel = `${+dParts[2]} ${monthNames[+dParts[1]-1]}`;
+                                    const dayPreds = dayEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
+                                    const dayHits = dayPreds.filter(p => p.matched).length;
+                                    const dayTotal = dayPreds.length;
+                                    const dayWR = dayTotal > 0 ? Math.round((dayHits / dayTotal) * 100) : null;
+
+                                    return (
+                                        <tr key={dateKey} className="border-b border-gray-800/30">
+                                            <td className="py-1.5 px-2 text-gray-400 font-mono">{dateLabel}</td>
+                                            <td className="text-center py-1.5 px-2">
+                                                {dayWR !== null && (
+                                                    <span className={`font-bold ${dayWR >= 55 ? 'text-emerald-400' : dayWR >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                                        {dayWR}% <span className="text-gray-600 font-normal">({dayHits}/{dayTotal})</span>
+                                                    </span>
+                                                )}
+                                            </td>
+                                            {coins.map(coin => {
+                                                const coinPreds = dayPreds.filter(p => p.symbol === coin);
+                                                const coinHits = coinPreds.filter(p => p.matched).length;
+                                                const coinWR = coinPreds.length > 0 ? Math.round((coinHits / coinPreds.length) * 100) : null;
+                                                return (
+                                                    <td key={coin} className="text-center py-1.5 px-2">
+                                                        {coinWR !== null ? (
+                                                            <span className={`${coinWR >= 55 ? 'text-emerald-400' : coinWR >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                                                {coinHits}/{coinPreds.length}
+                                                            </span>
+                                                        ) : <span className="text-gray-700">—</span>}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            })()}
+
             {isRunning && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-400 text-sm animate-pulse">
                     ⏳ Сбор данных и анализ... (~20-30 сек). Обновится автоматически.
