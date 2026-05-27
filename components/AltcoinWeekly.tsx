@@ -72,7 +72,7 @@ interface TrackingItem {
     target_price_7d: number;
     end_price: number | null;
     actual_change_7d: number | null;
-    daily_prices: { day: number; date: string; price: number; change_from_start: number }[];
+    daily_prices: { day: number; date: string; price: number; change_from_start: number; change_from_prev?: number }[];
     status: string;
     created_at: string;
     completed_at: string | null;
@@ -454,8 +454,8 @@ const AltcoinWeekly: React.FC = () => {
                                                     <td className="py-2 px-2">
                                                         <div className="flex items-center gap-1">
                                                             {t.daily_prices?.map((dp, i) => (
-                                                                <span key={i} className={`text-[9px] font-mono px-1 py-0.5 rounded ${dp.change_from_start < 0 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                                                    {dp.change_from_start >= 0 ? '+' : ''}{dp.change_from_start.toFixed(1)}%
+                                                                <span key={i} className={`text-[9px] font-mono px-1 py-0.5 rounded ${(dp.change_from_prev ?? dp.change_from_start) < 0 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`} title={`День ${dp.day}: ${dp.date}`}>
+                                                                    {(dp.change_from_prev ?? dp.change_from_start) >= 0 ? '+' : ''}{(dp.change_from_prev ?? dp.change_from_start).toFixed(1)}%
                                                                 </span>
                                                             ))}
                                                         </div>

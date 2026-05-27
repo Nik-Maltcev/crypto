@@ -1186,11 +1186,19 @@ async def backfill_altcoin_tracking():
                                 close_price = float(klines[0][4])
                                 change_from_start = ((close_price - tracking.start_price) / tracking.start_price) * 100
                                 
+                                # Change from previous day
+                                if daily_prices:
+                                    prev_price = daily_prices[-1]["price"]
+                                else:
+                                    prev_price = tracking.start_price
+                                change_from_prev = ((close_price - prev_price) / prev_price) * 100
+                                
                                 daily_prices.append({
                                     "day": len(daily_prices) + 1,
                                     "date": date_str,
                                     "price": close_price,
                                     "change_from_start": round(change_from_start, 2),
+                                    "change_from_prev": round(change_from_prev, 2),
                                 })
                                 filled += 1
                             else:

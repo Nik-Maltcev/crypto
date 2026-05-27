@@ -550,11 +550,19 @@ async def update_altcoin_daily_prices() -> None:
             day_num = len(daily_prices) + 1
             change_from_start = ((current_price - tracking.start_price) / tracking.start_price) * 100
             
+            # Change from previous day (or from start if day 1)
+            if daily_prices:
+                prev_price = daily_prices[-1]["price"]
+            else:
+                prev_price = tracking.start_price
+            change_from_prev = ((current_price - prev_price) / prev_price) * 100
+            
             daily_prices.append({
                 "day": day_num,
                 "date": today_str,
                 "price": current_price,
                 "change_from_start": round(change_from_start, 2),
+                "change_from_prev": round(change_from_prev, 2),
             })
             
             tracking.daily_prices_json = json.dumps(daily_prices)
