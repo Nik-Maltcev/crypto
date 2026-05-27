@@ -427,48 +427,76 @@ const AltcoinWeekly: React.FC = () => {
                                 const accuracy = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
                                 return (
-                                    <div key={t.id} className="bg-brand-card border border-gray-800 rounded-xl p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xl font-bold text-white">{t.symbol}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-bold bg-red-500/20 text-red-400 border border-red-500/30`}>
-                                                    Short ({t.target_change_7d.toFixed(0)}%)
-                                                </span>
-                                                <span className={`text-xs px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
-                                                <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">⏳ Активный</span>
+                                    <details key={t.id} className="group">
+                                        <summary className="bg-brand-card border border-gray-800 rounded-xl p-4 cursor-pointer list-none hover:border-gray-700 transition">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xl font-bold text-white">{t.symbol}</span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded font-bold bg-red-500/20 text-red-400 border border-red-500/30`}>
+                                                        Short ({t.target_change_7d.toFixed(0)}%)
+                                                    </span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
+                                                    <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">⏳ Активный</span>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-gray-500 uppercase">Изменение</div>
+                                                        <div className={`text-lg font-bold ${change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                            {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-gray-500 uppercase">Дни</div>
+                                                        <div className="text-sm text-gray-300">
+                                                            <span className="text-emerald-400">{wins}✅</span> / <span className="text-red-400">{losses}❌</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-0.5">
+                                                        {Array.from({length: daysTotal}).map((_, i) => {
+                                                            if (i === 0) {
+                                                                return <div key={i} className="w-4 h-4 rounded-sm bg-gray-600" title="День 1 (старт)"></div>;
+                                                            }
+                                                            const dp = dailyData[i];
+                                                            if (!dp) {
+                                                                return <div key={i} className="w-4 h-4 rounded-sm bg-gray-800 border border-gray-700"></div>;
+                                                            }
+                                                            const dayChange = dp.change_from_prev ?? dp.change_from_start;
+                                                            const isWin = dayChange < 0;
+                                                            return <div key={i} className={`w-4 h-4 rounded-sm ${isWin ? 'bg-emerald-500' : 'bg-red-500'}`}></div>;
+                                                        })}
+                                                    </div>
+                                                    <span className="text-gray-500 text-xs group-open:rotate-180 transition-transform">▼</span>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-6">
-                                                <div className="text-right">
-                                                    <div className="text-[10px] text-gray-500 uppercase">Изменение</div>
-                                                    <div className={`text-lg font-bold ${change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                        {change >= 0 ? '+' : ''}{change.toFixed(1)}%
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-[10px] text-gray-500 uppercase">Дни</div>
-                                                    <div className="text-sm text-gray-300">
-                                                        <span className="text-emerald-400">{wins}✅</span> / <span className="text-red-400">{losses}❌</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-0.5">
-                                                    {Array.from({length: daysTotal}).map((_, i) => {
-                                                        if (i === 0) {
-                                                            // Day 1 = start, neutral
-                                                            return <div key={i} className="w-4 h-4 rounded-sm bg-gray-600" title="День 1 (старт)"></div>;
-                                                        }
-                                                        const dp = dailyData[i];
-                                                        if (!dp) {
-                                                            return <div key={i} className="w-4 h-4 rounded-sm bg-gray-800 border border-gray-700"></div>;
-                                                        }
-                                                        const dayChange = dp.change_from_prev ?? dp.change_from_start;
-                                                        // For shorts: drop = green, rise = red
-                                                        const isWin = dayChange < 0;
-                                                        return <div key={i} className={`w-4 h-4 rounded-sm ${isWin ? 'bg-emerald-500' : 'bg-red-500'}`} title={`День ${i+1}: ${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(1)}%`}></div>;
-                                                    })}
-                                                </div>
+                                        </summary>
+                                        <div className="bg-brand-card border border-gray-800 border-t-0 rounded-b-xl px-4 pb-4 -mt-2 pt-3">
+                                            <div className="grid grid-cols-7 gap-2">
+                                                {Array.from({length: daysTotal}).map((_, i) => {
+                                                    const dp = dailyData[i];
+                                                    const dayLabel = i === 0 ? 'Старт' : `День ${i + 1}`;
+                                                    if (!dp) {
+                                                        return (
+                                                            <div key={i} className="text-center p-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                                                                <div className="text-[10px] text-gray-600">{dayLabel}</div>
+                                                                <div className="text-xs text-gray-700">—</div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    const dayChange = i === 0 ? 0 : (dp.change_from_prev ?? dp.change_from_start);
+                                                    const isWin = dayChange < 0;
+                                                    return (
+                                                        <div key={i} className={`text-center p-2 rounded-lg border ${i === 0 ? 'bg-gray-800/50 border-gray-700' : isWin ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                                                            <div className="text-[10px] text-gray-500">{dayLabel}</div>
+                                                            <div className={`text-sm font-bold font-mono ${i === 0 ? 'text-gray-400' : isWin ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                {i === 0 ? formatPrice(dp.price) : `${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(1)}%`}
+                                                            </div>
+                                                            {i > 0 && <div className="text-[9px] text-gray-500 font-mono">{formatPrice(dp.price)}</div>}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
-                                    </div>
+                                    </details>
                                 );
                             })}
                         </div>
