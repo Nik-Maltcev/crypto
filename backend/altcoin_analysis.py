@@ -543,8 +543,21 @@ async def update_altcoin_daily_prices() -> None:
                 except:
                     daily_prices = []
             
+            # Ensure day 1 (start price) exists
+            analysis_date_str = tracking.created_at.strftime("%Y-%m-%d")
+            existing_dates = {d.get("date") for d in daily_prices}
+            if analysis_date_str not in existing_dates:
+                daily_prices.insert(0, {
+                    "day": 1,
+                    "date": analysis_date_str,
+                    "price": tracking.start_price,
+                    "change_from_start": 0.0,
+                    "change_from_prev": 0.0,
+                })
+                existing_dates.add(analysis_date_str)
+            
             # Skip if already recorded today
-            if any(d.get("date") == today_str for d in daily_prices):
+            if today_str in existing_dates:
                 continue
             
             day_num = len(daily_prices) + 1

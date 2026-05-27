@@ -1155,14 +1155,29 @@ async def backfill_altcoin_tracking():
                         daily_prices = []
                 
                 # Calculate which days are missing
-                # Day 1 = day after analysis (next 08:00 MSK = 05:00 UTC)
+                # Day 1 = analysis day (start price)
+                # Day 2+ = subsequent days at 05:00 UTC (08:00 MSK)
                 analysis_date = tracking.created_at
-                # First snapshot should be at 05:00 UTC the day after analysis
+                analysis_date_str = analysis_date.strftime("%Y-%m-%d")
+                
+                # Add day 1 (start price) if missing
+                existing_dates = {d.get("date") for d in daily_prices}
+                if analysis_date_str not in existing_dates:
+                    daily_prices.insert(0, {
+                        "day": 1,
+                        "date": analysis_date_str,
+                        "price": tracking.start_price,
+                        "change_from_start": 0.0,
+                        "change_from_prev": 0.0,
+                    })
+                    filled += 1
+                    existing_dates.add(analysis_date_str)
+                
+                # Day 2+ snapshots at 05:00 UTC each day after analysis
                 first_snapshot = analysis_date.replace(hour=5, minute=0, second=0, microsecond=0) + timedelta(days=1)
                 
                 now = datetime.utcnow()
-                days_since = (now - first_snapshot).days + 1  # How many days should have snapshots
-                existing_dates = {d.get("date") for d in daily_prices}
+                days_since = (now - first_snapshot).days + 1
                 
                 for day_offset in range(days_since):
                     snapshot_time = first_snapshot + timedelta(days=day_offset)
