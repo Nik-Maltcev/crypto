@@ -494,10 +494,10 @@ const App: React.FC = () => {
             {/* Navigation Tabs */}
             <div className="hidden md:flex items-center space-x-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1">
               <button
-                onClick={() => setActiveTab('main')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'main' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setActiveTab('hypothesis')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis' ? 'bg-amber-700/50 text-amber-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                Анализ рынка
+                🧪 Гипотеза
               </button>
               <button
                 onClick={() => setActiveTab('history')}
@@ -522,18 +522,6 @@ const App: React.FC = () => {
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'altcoins' ? 'bg-purple-700/50 text-purple-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
                 🔮 Альткоины
-              </button>
-              <button
-                onClick={() => setActiveTab('sources')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🔌 Источники
-              </button>
-              <button
-                onClick={() => setActiveTab('hypothesis')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis' ? 'bg-amber-700/50 text-amber-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🧪 Гипотеза
               </button>
             </div>
           </div>
