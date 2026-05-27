@@ -380,29 +380,38 @@ const AltcoinWeekly: React.FC = () => {
             {/* HISTORY TAB */}
             {activeTab === 'history' && (
                 <div className="space-y-6">
-                    {/* Stats summary */}
-                    {trackingStats && trackingStats.completed > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                                <div className="text-2xl font-bold text-white">{trackingStats.completed}</div>
-                                <div className="text-xs text-gray-500 uppercase">Завершено</div>
-                            </div>
-                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                                <div className="text-2xl font-bold text-emerald-400">{trackingStats.positive_rate.toFixed(0)}%</div>
-                                <div className="text-xs text-gray-500 uppercase">Выросло</div>
-                            </div>
-                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                                <div className="text-2xl font-bold text-purple-400">{trackingStats.win_rate_10pct.toFixed(0)}%</div>
-                                <div className="text-xs text-gray-500 uppercase">+10% и выше</div>
-                            </div>
-                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                                <div className={`text-2xl font-bold ${trackingStats.avg_change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {trackingStats.avg_change >= 0 ? '+' : ''}{trackingStats.avg_change.toFixed(1)}%
+                    {/* Stats summary — shorts only */}
+                    {(() => {
+                        const shorts = tracking.filter(t => t.target_change_7d < 0);
+                        const completedShorts = shorts.filter(t => t.status === 'completed' && t.actual_change_7d !== null);
+                        const activeShorts = shorts.filter(t => t.status === 'active');
+                        const winners = completedShorts.filter(t => (t.actual_change_7d || 0) <= -10);
+                        const dropped = completedShorts.filter(t => (t.actual_change_7d || 0) < 0);
+                        const avgChange = completedShorts.length > 0 ? completedShorts.reduce((s, t) => s + (t.actual_change_7d || 0), 0) / completedShorts.length : 0;
+
+                        return completedShorts.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                    <div className="text-2xl font-bold text-white">{completedShorts.length}</div>
+                                    <div className="text-xs text-gray-500 uppercase">Завершено</div>
                                 </div>
-                                <div className="text-xs text-gray-500 uppercase">Средний рост</div>
+                                <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                    <div className="text-2xl font-bold text-red-400">{completedShorts.length > 0 ? Math.round((dropped.length / completedShorts.length) * 100) : 0}%</div>
+                                    <div className="text-xs text-gray-500 uppercase">Упало</div>
+                                </div>
+                                <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                    <div className="text-2xl font-bold text-purple-400">{completedShorts.length > 0 ? Math.round((winners.length / completedShorts.length) * 100) : 0}%</div>
+                                    <div className="text-xs text-gray-500 uppercase">-10% и ниже</div>
+                                </div>
+                                <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                    <div className={`text-2xl font-bold ${avgChange < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                        {avgChange >= 0 ? '+' : ''}{avgChange.toFixed(1)}%
+                                    </div>
+                                    <div className="text-xs text-gray-500 uppercase">Среднее падение</div>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        ) : null;
+                    })()}
 
                     {/* Active picks */}
                     {tracking.filter(t => t.status === 'active').length > 0 && (
@@ -460,10 +469,10 @@ const AltcoinWeekly: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Completed picks */}
-                    {tracking.filter(t => t.status === 'completed').length > 0 && (
+                    {/* Completed shorts */}
+                    {tracking.filter(t => t.status === 'completed' && t.target_change_7d < 0).length > 0 && (
                         <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
-                            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">📊 Завершённые пики</h3>
+                            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">📊 Завершённые шорты</h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
@@ -471,29 +480,29 @@ const AltcoinWeekly: React.FC = () => {
                                             <th className="text-left py-2 px-2">Монета</th>
                                             <th className="text-right py-2 px-2">Старт</th>
                                             <th className="text-right py-2 px-2">Финиш</th>
-                                            <th className="text-right py-2 px-2">Прогноз</th>
+                                            <th className="text-right py-2 px-2">Цель</th>
                                             <th className="text-right py-2 px-2">Факт</th>
                                             <th className="text-center py-2 px-2">Риск</th>
                                             <th className="text-left py-2 px-2">Период</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {tracking.filter(t => t.status === 'completed').map(t => {
+                                        {tracking.filter(t => t.status === 'completed' && t.target_change_7d < 0).map(t => {
                                             const actualChange = t.actual_change_7d || 0;
-                                            const isPositive = actualChange > 0;
-                                            const isWinner = actualChange >= 10;
+                                            const isWin = actualChange <= -10;  // Short wins when price drops 10%+
+                                            const dropped = actualChange < 0;
                                             return (
-                                                <tr key={t.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${isWinner ? 'bg-emerald-500/5' : ''}`}>
+                                                <tr key={t.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${isWin ? 'bg-red-500/5' : ''}`}>
                                                     <td className="py-2 px-2">
                                                         <span className="font-bold text-white">{t.symbol}</span>
                                                         <span className="text-gray-500 text-xs ml-1">{t.name}</span>
                                                     </td>
                                                     <td className="text-right py-2 px-2 font-mono text-gray-400">{formatPrice(t.start_price)}</td>
                                                     <td className="text-right py-2 px-2 font-mono text-gray-300">{t.end_price ? formatPrice(t.end_price) : '—'}</td>
-                                                    <td className="text-right py-2 px-2 font-mono text-purple-400">+{t.target_change_7d.toFixed(1)}%</td>
-                                                    <td className={`text-right py-2 px-2 font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                        {isPositive ? '+' : ''}{actualChange.toFixed(1)}%
-                                                        {isWinner && <span className="ml-1">🎯</span>}
+                                                    <td className="text-right py-2 px-2 font-mono text-red-400">{t.target_change_7d.toFixed(1)}%</td>
+                                                    <td className={`text-right py-2 px-2 font-mono font-bold ${dropped ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                        {actualChange >= 0 ? '+' : ''}{actualChange.toFixed(1)}%
+                                                        {isWin && <span className="ml-1">🎯</span>}
                                                     </td>
                                                     <td className="text-center py-2 px-2">
                                                         <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
