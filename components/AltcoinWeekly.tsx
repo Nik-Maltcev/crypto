@@ -413,59 +413,64 @@ const AltcoinWeekly: React.FC = () => {
                         ) : null;
                     })()}
 
-                    {/* Active picks */}
+                    {/* Active picks — Polymarket style cards */}
                     {tracking.filter(t => t.status === 'active').length > 0 && (
-                        <div className="bg-brand-card border border-yellow-500/20 rounded-xl p-5">
-                            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider mb-4">⏳ Активные пики (отслеживание)</h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
-                                            <th className="text-left py-2 px-2">Монета</th>
-                                            <th className="text-right py-2 px-2">Старт</th>
-                                            <th className="text-right py-2 px-2">Сейчас</th>
-                                            <th className="text-right py-2 px-2">Изменение</th>
-                                            <th className="text-right py-2 px-2">Цель</th>
-                                            <th className="text-center py-2 px-2">Риск</th>
-                                            <th className="text-center py-2 px-2">Дни</th>
-                                            <th className="text-left py-2 px-2">По дням</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {tracking.filter(t => t.status === 'active').map(t => {
-                                            const change = t.actual_change_7d || 0;
-                                            const isNeg = change < 0;
-                                            return (
-                                                <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                                    <td className="py-2 px-2">
-                                                        <span className="font-bold text-white">{t.symbol}</span>
-                                                        <span className="text-gray-500 text-xs ml-1">{t.name}</span>
-                                                    </td>
-                                                    <td className="text-right py-2 px-2 font-mono text-gray-300">{formatPrice(t.start_price)}</td>
-                                                    <td className="text-right py-2 px-2 font-mono text-white">{t.end_price ? formatPrice(t.end_price) : '—'}</td>
-                                                    <td className={`text-right py-2 px-2 font-mono font-bold ${isNeg ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                        {change !== 0 ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : '—'}
-                                                    </td>
-                                                    <td className="text-right py-2 px-2 font-mono text-red-400">{t.target_change_7d.toFixed(1)}%</td>
-                                                    <td className="text-center py-2 px-2">
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
-                                                    </td>
-                                                    <td className="text-center py-2 px-2 text-gray-400">{t.daily_prices?.length || 0}/7</td>
-                                                    <td className="py-2 px-2">
-                                                        <div className="flex items-center gap-1">
-                                                            {t.daily_prices?.map((dp, i) => (
-                                                                <span key={i} className={`text-[9px] font-mono px-1 py-0.5 rounded ${(dp.change_from_prev ?? dp.change_from_start) < 0 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`} title={`День ${dp.day}: ${dp.date}`}>
-                                                                    {(dp.change_from_prev ?? dp.change_from_start) >= 0 ? '+' : ''}{(dp.change_from_prev ?? dp.change_from_start).toFixed(1)}%
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">⏳ Активные шорты (отслеживание)</h3>
+                            {tracking.filter(t => t.status === 'active').map(t => {
+                                const change = t.actual_change_7d || 0;
+                                const daysTotal = 7;
+                                const dailyData = t.daily_prices || [];
+                                // For shorts: price dropped = win (green), price rose = loss (red)
+                                const wins = dailyData.filter((d, i) => i > 0 && (d.change_from_prev ?? d.change_from_start) < 0).length;
+                                const losses = dailyData.filter((d, i) => i > 0 && (d.change_from_prev ?? d.change_from_start) >= 0).length;
+                                const accuracy = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
+
+                                return (
+                                    <div key={t.id} className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xl font-bold text-white">{t.symbol}</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded font-bold bg-red-500/20 text-red-400 border border-red-500/30`}>
+                                                    Short ({t.target_change_7d.toFixed(0)}%)
+                                                </span>
+                                                <span className={`text-xs px-2 py-0.5 rounded border font-bold ${getRiskColor(t.risk)}`}>{t.risk}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">⏳ Активный</span>
+                                            </div>
+                                            <div className="flex items-center gap-6">
+                                                <div className="text-right">
+                                                    <div className="text-[10px] text-gray-500 uppercase">Изменение</div>
+                                                    <div className={`text-lg font-bold ${change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                        {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[10px] text-gray-500 uppercase">Дни</div>
+                                                    <div className="text-sm text-gray-300">
+                                                        <span className="text-emerald-400">{wins}✅</span> / <span className="text-red-400">{losses}❌</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-0.5">
+                                                    {Array.from({length: daysTotal}).map((_, i) => {
+                                                        if (i === 0) {
+                                                            // Day 1 = start, neutral
+                                                            return <div key={i} className="w-4 h-4 rounded-sm bg-gray-600" title="День 1 (старт)"></div>;
+                                                        }
+                                                        const dp = dailyData[i];
+                                                        if (!dp) {
+                                                            return <div key={i} className="w-4 h-4 rounded-sm bg-gray-800 border border-gray-700"></div>;
+                                                        }
+                                                        const dayChange = dp.change_from_prev ?? dp.change_from_start;
+                                                        // For shorts: drop = green, rise = red
+                                                        const isWin = dayChange < 0;
+                                                        return <div key={i} className={`w-4 h-4 rounded-sm ${isWin ? 'bg-emerald-500' : 'bg-red-500'}`} title={`День ${i+1}: ${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(1)}%`}></div>;
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
