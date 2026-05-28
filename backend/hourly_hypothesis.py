@@ -198,11 +198,11 @@ async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_pos
 
 {chunk_text}"""
             
-            async with httpx.AsyncClient(timeout=120) as batch_client:
+            async with httpx.AsyncClient(timeout=600) as batch_client:
                 resp = await batch_client.post(
                     CLAUDE_API_URL,
                     headers={"Authorization": f"Bearer {claude_key}", "content-type": "application/json"},
-                    json={"model": "deepseek-v4-pro", "max_tokens": 1024, "messages": [{"role": "user", "content": summary_prompt}]},
+                    json={"model": "deepseek-v4-pro", "max_tokens": 8192, "messages": [{"role": "user", "content": summary_prompt}]},
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -246,7 +246,7 @@ TWITTER (твиты за последний час):
 
 Дай прогноз на следующий час для каждой монеты."""
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=600) as client:
         resp = await client.post(
             CLAUDE_API_URL,
             headers={
@@ -255,7 +255,7 @@ TWITTER (твиты за последний час):
             },
             json={
                 "model": "deepseek-v4-pro",
-                "max_tokens": 2048,
+                "max_tokens": 8192,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -303,7 +303,7 @@ TWITTER (твиты за последний час):
                 },
                 json={
                     "model": "deepseek-v4-pro",
-                    "max_tokens": 2048,
+                    "max_tokens": 8192,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
