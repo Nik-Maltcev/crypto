@@ -4,9 +4,12 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 
 interface MentionEntry {
     symbol: string;
-    total: number;
-    reddit: number;
-    twitter: number;
+    mentions: number;
+    sentiment?: string;
+    context?: string;
+    total?: number;
+    reddit?: number;
+    twitter?: number;
 }
 
 interface ScanResult {
@@ -43,10 +46,21 @@ const MentionsTracker: React.FC = () => {
     };
 
     const maxMentions = result ? Math.max(
-        ...result.main_coins.map(c => c.total),
-        ...result.altcoins.slice(0, 20).map(c => c.total),
+        ...result.main_coins.map(c => c.mentions || c.total || 0),
+        ...result.altcoins.slice(0, 20).map(c => c.mentions || c.total || 0),
         1
     ) : 1;
+
+    const getSentimentColor = (s?: string) => {
+        if (s === 'bullish') return 'text-emerald-400';
+        if (s === 'bearish') return 'text-red-400';
+        return 'text-gray-400';
+    };
+    const getSentimentLabel = (s?: string) => {
+        if (s === 'bullish') return '🟢';
+        if (s === 'bearish') return '🔴';
+        return '⚪';
+    };
 
     return (
         <div className="space-y-6">
@@ -95,27 +109,26 @@ const MentionsTracker: React.FC = () => {
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
                         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Основные монеты</h3>
                         <div className="space-y-3">
-                            {result.main_coins.map(coin => (
-                                <div key={coin.symbol} className="flex items-center gap-3">
-                                    <span className="text-sm font-bold text-white w-12">{coin.symbol}</span>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-1 bg-gray-800 rounded-full h-5 overflow-hidden">
+                            {result.main_coins.map(coin => {
+                                const count = coin.mentions || coin.total || 0;
+                                return (
+                                    <div key={coin.symbol} className="flex items-center gap-3">
+                                        <span className="text-sm font-bold text-white w-12">{coin.symbol}</span>
+                                        <span className="text-sm">{getSentimentLabel(coin.sentiment)}</span>
+                                        <div className="flex-1">
+                                            <div className="bg-gray-800 rounded-full h-5 overflow-hidden">
                                                 <div
                                                     className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full flex items-center justify-end pr-2"
-                                                    style={{ width: `${(coin.total / maxMentions) * 100}%`, minWidth: '30px' }}
+                                                    style={{ width: `${(count / maxMentions) * 100}%`, minWidth: '30px' }}
                                                 >
-                                                    <span className="text-[10px] font-bold text-white">{coin.total}</span>
+                                                    <span className="text-[10px] font-bold text-white">{count}</span>
                                                 </div>
                                             </div>
+                                            {coin.context && <p className="text-[10px] text-gray-500 mt-1 truncate">{coin.context}</p>}
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 text-[10px]">
-                                        <span className="text-orange-400">R:{coin.reddit}</span>
-                                        <span className="text-blue-400">T:{coin.twitter}</span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -126,26 +139,27 @@ const MentionsTracker: React.FC = () => {
                                 Альткоины ({result.altcoins.length} найдено)
                             </h3>
                             <div className="space-y-2">
-                                {result.altcoins.map((coin, idx) => (
-                                    <div key={coin.symbol} className="flex items-center gap-3">
-                                        <span className="text-xs text-gray-500 w-5">{idx + 1}</span>
-                                        <span className="text-sm font-bold text-white w-14">{coin.symbol}</span>
-                                        <div className="flex-1">
-                                            <div className="bg-gray-800 rounded-full h-4 overflow-hidden">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full flex items-center justify-end pr-2"
-                                                    style={{ width: `${(coin.total / maxMentions) * 100}%`, minWidth: '24px' }}
-                                                >
-                                                    <span className="text-[9px] font-bold text-white">{coin.total}</span>
+                                {result.altcoins.map((coin, idx) => {
+                                    const count = coin.mentions || coin.total || 0;
+                                    return (
+                                        <div key={coin.symbol} className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-500 w-5">{idx + 1}</span>
+                                            <span className="text-sm font-bold text-white w-14">{coin.symbol}</span>
+                                            <span className="text-sm">{getSentimentLabel(coin.sentiment)}</span>
+                                            <div className="flex-1">
+                                                <div className="bg-gray-800 rounded-full h-4 overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full flex items-center justify-end pr-2"
+                                                        style={{ width: `${(count / maxMentions) * 100}%`, minWidth: '24px' }}
+                                                    >
+                                                        <span className="text-[9px] font-bold text-white">{count}</span>
+                                                    </div>
                                                 </div>
+                                                {coin.context && <p className="text-[10px] text-gray-500 mt-0.5 truncate">{coin.context}</p>}
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 text-[10px]">
-                                            <span className="text-orange-400">R:{coin.reddit}</span>
-                                            <span className="text-blue-400">T:{coin.twitter}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
