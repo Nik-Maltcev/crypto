@@ -55,7 +55,7 @@ async def _fetch_binance_candles(symbol: str, interval: str = "1h", limit: int =
 
 
 async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
-    """Fetch ALL Reddit posts from last 1 hour."""
+    """Fetch ALL Reddit posts + comments from last 1 hour."""
     cutoff = datetime.utcnow() - timedelta(hours=1)
     cutoff_ts = cutoff.timestamp()
     posts = []
@@ -63,6 +63,7 @@ async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
     async with httpx.AsyncClient(timeout=15) as client:
         for sub in subreddits:
             try:
+                # Posts
                 resp = await client.get(
                     f"https://oauth.reddit.com/r/{sub}/new.json?limit=100",
                     headers={"Authorization": f"Bearer {token}", "User-Agent": "CryptoPulseAI/1.0"}
@@ -78,6 +79,25 @@ async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
                                 "sub": p.get("subreddit", ""),
                                 "score": p.get("score", 0),
                             })
+                
+                # Comments
+                resp2 = await client.get(
+                    f"https://oauth.reddit.com/r/{sub}/comments.json?limit=100",
+                    headers={"Authorization": f"Bearer {token}", "User-Agent": "CryptoPulseAI/1.0"}
+                )
+                if resp2.status_code == 200:
+                    children2 = resp2.json().get("data", {}).get("children", [])
+                    for child in children2:
+                        c = child.get("data", {})
+                        if c.get("created_utc", 0) >= cutoff_ts:
+                            body = (c.get("body", "") or "")[:200].replace("\n", " ").strip()
+                            if body and len(body) > 10:
+                                posts.append({
+                                    "title": body,
+                                    "text": "",
+                                    "sub": c.get("subreddit", sub),
+                                    "score": c.get("score", 0),
+                                })
             except Exception:
                 continue
             await asyncio.sleep(0.15)
@@ -149,9 +169,9 @@ async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_pos
     
     price_context = "\n".join(price_lines)
     
-    # Social context
-    reddit_text = json.dumps(reddit_posts[:20], ensure_ascii=False) if reddit_posts else "Нет свежих постов за последний час."
-    twitter_text = json.dumps(twitter_posts[:15], ensure_ascii=False) if twitter_posts else "Нет свежих твитов за последний час."
+    # Social context — send more data, DeepSeek has 128K context
+    reddit_text = json.dumps(reddit_posts[:200], ensure_ascii=False) if reddit_posts else "Нет свежих постов за последний час."
+    twitter_text = json.dumps(twitter_posts[:100], ensure_ascii=False) if twitter_posts else "Нет свежих твитов за последний час."
     
     now_msk = datetime.utcnow() + timedelta(hours=3)
     next_hour_start = now_msk.replace(minute=0, second=0) + timedelta(hours=1)

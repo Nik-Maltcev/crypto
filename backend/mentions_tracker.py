@@ -50,6 +50,7 @@ async def _fetch_reddit_6h(token: str) -> list[str]:
     async with httpx.AsyncClient(timeout=15) as client:
         for sub in active_subs:
             try:
+                # Posts
                 resp = await client.get(
                     f"https://oauth.reddit.com/r/{sub}/new.json?limit=100",
                     headers={"Authorization": f"Bearer {token}", "User-Agent": "CryptoPulseAI/1.0"}
@@ -61,6 +62,20 @@ async def _fetch_reddit_6h(token: str) -> list[str]:
                         if p.get("created_utc", 0) >= cutoff_ts:
                             title = p.get("title", "")
                             texts.append(f"[r/{sub}] {title}")
+                
+                # Comments
+                resp2 = await client.get(
+                    f"https://oauth.reddit.com/r/{sub}/comments.json?limit=100",
+                    headers={"Authorization": f"Bearer {token}", "User-Agent": "CryptoPulseAI/1.0"}
+                )
+                if resp2.status_code == 200:
+                    children2 = resp2.json().get("data", {}).get("children", [])
+                    for child in children2:
+                        c = child.get("data", {})
+                        if c.get("created_utc", 0) >= cutoff_ts:
+                            body = (c.get("body", "") or "")[:200]
+                            if body:
+                                texts.append(f"[r/{sub} comment] {body}")
             except Exception:
                 continue
             await asyncio.sleep(0.12)
@@ -120,9 +135,9 @@ async def _fetch_twitter_6h(rapidapi_key: str) -> list[str]:
 async def _analyze_with_gemini(reddit_texts: list[str], twitter_texts: list[str], gemini_key: str) -> dict:
     """Send all texts to Gemini and ask it to rank coin mentions."""
     
-    # Combine texts (titles only, compact)
-    reddit_block = "\n".join(reddit_texts[:1500])
-    twitter_block = "\n".join(twitter_texts[:500])
+    # Combine texts — Gemini has 1M context, send everything
+    reddit_block = "\n".join(reddit_texts)
+    twitter_block = "\n".join(twitter_texts)
     
     prompt = f"""Проанализируй следующие посты из Reddit и Twitter за последние 6 часов.
 Задача: определи какие криптовалюты упоминаются и обсуждаются.

@@ -972,6 +972,23 @@ async def trigger_mentions_scan():
         raise HTTPException(500, str(e))
 
 
+@app.post("/api/hypothesis/cleanup_all")
+async def cleanup_all_hypothesis():
+    """Delete ALL hypothesis entries. Fresh start."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hourly_hypothesis")
+        )
+        logs = result.scalars().all()
+        count = len(logs)
+        for log in logs:
+            await session.delete(log)
+        await session.commit()
+        return {"success": True, "deleted": count}
+
+
 @app.post("/api/hypothesis/cleanup_old")
 async def cleanup_old_hypothesis():
     """Delete all hypothesis entries made with Claude (before DeepSeek switch).
