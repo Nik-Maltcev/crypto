@@ -23,6 +23,7 @@ from reddit_parser import fetch_multiple_subreddits
 from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
 from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking, update_altcoin_daily_prices
+from mentions_tracker import run_mentions_scan
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
@@ -956,6 +957,19 @@ async def fix_verified_flags():
                 continue
         await session.commit()
         return {"success": True, "fixed": fixed}
+
+
+@app.post("/api/mentions/scan")
+async def trigger_mentions_scan():
+    """Scan Reddit + Twitter for coin mentions (24h). Returns ranking."""
+    try:
+        result = await run_mentions_scan()
+        return {"success": True, **result}
+    except Exception as e:
+        import traceback
+        logger.error(f"Mentions scan error: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/hypothesis/cleanup_old")

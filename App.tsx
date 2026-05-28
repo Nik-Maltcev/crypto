@@ -15,6 +15,7 @@ import PolymarketTracker from './components/PolymarketTracker';
 import StatsTracker from './components/StatsTracker';
 import AltcoinWeekly from './components/AltcoinWeekly';
 import SourcesCheck from './components/SourcesCheck';
+import MentionsTracker from './components/MentionsTracker';
 import HypothesisTracker from './components/HypothesisTracker';
 
 // Icons
@@ -523,6 +524,12 @@ const App: React.FC = () => {
               >
                 🔮 Альткоины
               </button>
+              <button
+                onClick={() => setActiveTab('sources')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📡 Упоминания
+              </button>
             </div>
           </div>
 
@@ -577,7 +584,7 @@ const App: React.FC = () => {
         ) : activeTab === 'altcoins' ? (
           <AltcoinWeekly />
         ) : activeTab === 'sources' ? (
-          <SourcesCheck />
+          <MentionsTracker />
         ) : activeTab === 'hypothesis' ? (
           <HypothesisTracker />
         ) : (
