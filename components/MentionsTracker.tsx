@@ -38,7 +38,7 @@ const MentionsTracker: React.FC = () => {
             
             // Poll for result
             const startTime = Date.now();
-            const TIMEOUT = 5 * 60 * 1000; // 5 min max
+            const TIMEOUT = 60 * 60 * 1000; // 1 hour max
             
             while (Date.now() - startTime < TIMEOUT) {
                 await new Promise(r => setTimeout(r, 3000)); // poll every 3s
