@@ -60,8 +60,7 @@ async def _fetch_reddit_6h(token: str) -> list[str]:
                         p = child.get("data", {})
                         if p.get("created_utc", 0) >= cutoff_ts:
                             title = p.get("title", "")
-                            body = (p.get("selftext", "") or "")[:300]
-                            texts.append(f"[r/{sub}] {title} {body}".strip())
+                            texts.append(f"[r/{sub}] {title}")
             except Exception:
                 continue
             await asyncio.sleep(0.12)
@@ -121,9 +120,9 @@ async def _fetch_twitter_6h(rapidapi_key: str) -> list[str]:
 async def _analyze_with_gemini(reddit_texts: list[str], twitter_texts: list[str], gemini_key: str) -> dict:
     """Send all texts to Gemini and ask it to rank coin mentions."""
     
-    # Combine texts (limit to avoid exceeding context)
-    reddit_block = "\n".join(reddit_texts[:500])
-    twitter_block = "\n".join(twitter_texts[:300])
+    # Combine texts (titles only, compact)
+    reddit_block = "\n".join(reddit_texts[:1500])
+    twitter_block = "\n".join(twitter_texts[:500])
     
     prompt = f"""Проанализируй следующие посты из Reddit и Twitter за последние 6 часов.
 Задача: определи какие криптовалюты упоминаются и обсуждаются.
@@ -188,7 +187,7 @@ async def run_mentions_scan() -> dict:
     
     reddit_id = os.environ.get("REDDIT_CLIENT_ID", "")
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
-    rapidapi_key = os.environ.get("RAPIDAPI_KEY", "")
+    rapidapi_key = os.environ.get("RAPIDAPI_KEY", "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058")
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
     
     if not gemini_key:
