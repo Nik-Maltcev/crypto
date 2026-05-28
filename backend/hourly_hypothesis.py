@@ -75,7 +75,7 @@ async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
                         if p.get("created_utc", 0) >= cutoff_ts:
                             posts.append({
                                 "title": p.get("title", ""),
-                                "text": (p.get("selftext", "") or "")[:200],
+                                "text": (p.get("selftext", "") or ""),
                                 "sub": p.get("subreddit", ""),
                                 "score": p.get("score", 0),
                             })
@@ -90,7 +90,7 @@ async def _fetch_reddit_recent(subreddits: list[str], token: str) -> list[dict]:
                     for child in children2:
                         c = child.get("data", {})
                         if c.get("created_utc", 0) >= cutoff_ts:
-                            body = (c.get("body", "") or "")[:200].replace("\n", " ").strip()
+                            body = (c.get("body", "") or "").replace("\n", " ").strip()
                             if body and len(body) > 10:
                                 posts.append({
                                     "title": body,
@@ -132,7 +132,7 @@ async def _fetch_twitter_recent(accounts: list[str], api_key: str) -> list[dict]
                                     if tweet_date >= cutoff:
                                         user = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {}).get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {}).get("screen_name", "")
                                         tweets.append({
-                                            "text": tweet.get("full_text", "")[:200],
+                                            "text": tweet.get("full_text", ""),
                                             "user": user,
                                         })
             except Exception:
@@ -169,12 +169,50 @@ async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_pos
     
     price_context = "\n".join(price_lines)
     
-    # Social context — send more data, DeepSeek has 128K context
-    reddit_text = json.dumps(reddit_posts[:200], ensure_ascii=False) if reddit_posts else "Нет свежих постов за последний час."
-    twitter_text = json.dumps(twitter_posts[:100], ensure_ascii=False) if twitter_posts else "Нет свежих твитов за последний час."
+    # Social context — send ALL data, no limits
+    reddit_text = json.dumps(reddit_posts, ensure_ascii=False) if reddit_posts else "Нет свежих постов за последний час."
+    twitter_text = json.dumps(twitter_posts, ensure_ascii=False) if twitter_posts else "Нет свежих твитов за последний час."
     
     now_msk = datetime.utcnow() + timedelta(hours=3)
     next_hour_start = now_msk.replace(minute=0, second=0) + timedelta(hours=1)
+    
+    # Check if we need batching (rough estimate: 4 chars ≈ 1 token)
+    total_chars = len(reddit_text) + len(twitter_text) + len(price_context) + 2000  # 2000 for prompts
+    estimated_tokens = total_chars // 4
+    
+    if estimated_tokens > 100000:
+        # Too big for single request — batch Reddit data
+        logger.info(f"[HYPOTHESIS] Data too large ({estimated_tokens} est. tokens), using batched approach...")
+        
+        # Split reddit into chunks that fit ~80K tokens each
+        chunk_size = max(len(reddit_posts) // 3, 50)
+        reddit_chunks = [reddit_posts[i:i+chunk_size] for i in range(0, len(reddit_posts), chunk_size)]
+        
+        # First pass: summarize each chunk
+        summaries = []
+        for i, chunk in enumerate(reddit_chunks):
+            chunk_text = json.dumps(chunk, ensure_ascii=False)
+            summary_prompt = f"""Кратко суммаризируй ключевые крипто-новости и настроения из этих постов/комментов.
+Фокус на: BTC, ETH, SOL, XRP, DOGE, BNB. Что обсуждают? Какой sentiment?
+Ответь 5-10 пунктами на русском.
+
+{chunk_text}"""
+            
+            async with httpx.AsyncClient(timeout=120) as batch_client:
+                resp = await batch_client.post(
+                    CLAUDE_API_URL,
+                    headers={"Authorization": f"Bearer {claude_key}", "content-type": "application/json"},
+                    json={"model": "deepseek-v4-pro", "max_tokens": 1024, "messages": [{"role": "user", "content": summary_prompt}]},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    summary = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    summaries.append(f"[Batch {i+1}/{len(reddit_chunks)}]: {summary}")
+            await asyncio.sleep(1)
+        
+        # Replace reddit_text with summaries
+        reddit_text = "\n\n".join(summaries)
+        logger.info(f"[HYPOTHESIS] Batched {len(reddit_chunks)} chunks into {len(summaries)} summaries")
     
     system_prompt = """Ты трейдер-аналитик. Тебе дают текущие цены, momentum последних свечей, объём, и свежие новости.
 Задача: для каждой монеты предсказать направление СЛЕДУЮЩЕЙ 1-часовой свечи (Up или Down).
