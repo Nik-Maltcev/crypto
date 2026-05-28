@@ -180,25 +180,25 @@ async def _analyze_altcoins_claude(cmc_data: dict, reddit_posts: list, twitter_p
                 all_coins[sym] = coin
 
     market_lines = ["ALTCOIN MARKET DATA (from CoinMarketCap):"]
-    for sym, coin in list(all_coins.items())[:50]:
+    for sym, coin in list(all_coins.items()):
         market_lines.append(
             f"{sym} ({coin['name']}): ${coin['price']:.6f} | 24h: {coin['change_24h']:.1f}% | 7d: {coin['change_7d']:.1f}% | Vol: ${coin['volume_24h']:,.0f} | MCap: ${coin['market_cap']:,.0f}"
         )
     market_context = "\n".join(market_lines)
 
-    # Build social data (top posts by score, compressed)
-    top_reddit = sorted(reddit_posts, key=lambda x: x.get("score", 0), reverse=True)[:300]
+    # Build social data (all posts, no truncation — Claude has 200K context)
+    top_reddit = sorted(reddit_posts, key=lambda x: x.get("score", 0), reverse=True)
     reddit_payload = json.dumps([{
         "title": p["title"],
-        "text": p.get("selftext", "")[:150],
+        "text": p.get("selftext", ""),
         "sub": p.get("subreddit", ""),
         "score": p.get("score", 0),
     } for p in top_reddit], ensure_ascii=False)
 
     twitter_payload = json.dumps([{
-        "text": t.get("text", "")[:200],
+        "text": t.get("text", ""),
         "user": t.get("user", ""),
-    } for t in twitter_posts[:150]], ensure_ascii=False) if twitter_posts else "No Twitter data."
+    } for t in twitter_posts], ensure_ascii=False) if twitter_posts else "No Twitter data."
 
     system_prompt = """You are CryptoPulse AI Altcoin Analyst. Your task: identify altcoins likely to DROP 20%+ this week (short candidates).
 

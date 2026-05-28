@@ -29,14 +29,36 @@ const MentionsTracker: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/mentions/scan`, { method: 'POST' });
-            if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.error || err.detail || 'Scan failed');
+            // Start scan
+            const startResp = await fetch(`${BACKEND_URL}/api/mentions/scan`, { method: 'POST' });
+            if (!startResp.ok) {
+                const err = await startResp.json();
+                throw new Error(err.error || err.detail || 'Scan failed to start');
             }
-            const data = await resp.json();
-            if (data.success) {
-                setResult(data);
+            
+            // Poll for result
+            const startTime = Date.now();
+            const TIMEOUT = 5 * 60 * 1000; // 5 min max
+            
+            while (Date.now() - startTime < TIMEOUT) {
+                await new Promise(r => setTimeout(r, 3000)); // poll every 3s
+                
+                const pollResp = await fetch(`${BACKEND_URL}/api/mentions/result`);
+                if (!pollResp.ok) continue;
+                
+                const data = await pollResp.json();
+                if (data.status === 'running') continue;
+                if (data.status === 'done' && data.success) {
+                    setResult(data);
+                    break;
+                }
+                if (!data.success && data.error) {
+                    throw new Error(data.error);
+                }
+            }
+            
+            if (Date.now() - startTime >= TIMEOUT) {
+                throw new Error('Таймаут — сканирование заняло больше 5 минут');
             }
         } catch (e: any) {
             setError(e.message);

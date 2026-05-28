@@ -961,15 +961,40 @@ async def fix_verified_flags():
 
 @app.post("/api/mentions/scan")
 async def trigger_mentions_scan():
-    """Scan Reddit + Twitter for coin mentions (24h). Returns ranking."""
+    """Start mentions scan in background. Poll /api/mentions/result for results."""
+    asyncio.create_task(_run_mentions_scan_bg())
+    return {"success": True, "status": "started", "message": "Scanning... Poll /api/mentions/result for results."}
+
+
+_mentions_result: dict | None = None
+_mentions_running: bool = False
+
+
+async def _run_mentions_scan_bg():
+    global _mentions_result, _mentions_running
+    _mentions_running = True
     try:
         result = await run_mentions_scan()
-        return {"success": True, **result}
+        _mentions_result = result
     except Exception as e:
         import traceback
         logger.error(f"Mentions scan error: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(500, str(e))
+        _mentions_result = {"error": str(e)}
+    finally:
+        _mentions_running = False
+
+
+@app.get("/api/mentions/result")
+async def get_mentions_result():
+    """Get the latest mentions scan result."""
+    if _mentions_running:
+        return {"success": True, "status": "running"}
+    if _mentions_result is None:
+        return {"success": True, "status": "no_data"}
+    if "error" in _mentions_result:
+        return {"success": False, "error": _mentions_result["error"]}
+    return {"success": True, "status": "done", **_mentions_result}
 
 
 @app.post("/api/hypothesis/cleanup_all")

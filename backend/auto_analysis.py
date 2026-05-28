@@ -160,13 +160,14 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 
 
 async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback_hours: int = 16) -> list[dict]:
-    """Fetch recent posts from Reddit using OAuth token."""
+    """Fetch recent posts + comments from Reddit using OAuth token."""
     all_posts = []
     cutoff_time = time.time() - (lookback_hours * 3600)
 
     async with httpx.AsyncClient(timeout=30) as client:
         for sub in subreddits:
             try:
+                # Posts
                 resp = await client.get(
                     f"https://oauth.reddit.com/r/{sub}/new.json?limit=100",
                     headers={
@@ -174,26 +175,51 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
                         "User-Agent": "CryptoPulseAI/1.0",
                     },
                 )
-                if resp.status_code != 200:
+                if resp.status_code == 200:
+                    data = resp.json()
+                    children = data.get("data", {}).get("children", [])
+                    for child in children:
+                        p = child.get("data", {})
+                        created = p.get("created_utc", 0)
+                        if created < cutoff_time:
+                            continue
+                        if "Daily Discussion" in (p.get("title") or ""):
+                            continue
+                        all_posts.append({
+                            "title": p.get("title", ""),
+                            "selftext": (p.get("selftext") or "")[:500],
+                            "subreddit": p.get("subreddit", sub),
+                            "score": p.get("score", 0),
+                            "source": "Reddit"
+                        })
+                else:
                     logger.warning(f"Reddit r/{sub}: {resp.status_code}")
-                    continue
-
-                data = resp.json()
-                children = data.get("data", {}).get("children", [])
-                for child in children:
-                    p = child.get("data", {})
-                    created = p.get("created_utc", 0)
-                    if created < cutoff_time:
-                        continue
-                    if "Daily Discussion" in (p.get("title") or ""):
-                        continue
-                    all_posts.append({
-                        "title": p.get("title", ""),
-                        "selftext": (p.get("selftext") or "")[:500],
-                        "subreddit": p.get("subreddit", sub),
-                        "score": p.get("score", 0),
-                        "source": "Reddit"
-                    })
+                
+                # Comments
+                resp2 = await client.get(
+                    f"https://oauth.reddit.com/r/{sub}/comments.json?limit=100",
+                    headers={
+                        "Authorization": f"Bearer {reddit_token}",
+                        "User-Agent": "CryptoPulseAI/1.0",
+                    },
+                )
+                if resp2.status_code == 200:
+                    data2 = resp2.json()
+                    children2 = data2.get("data", {}).get("children", [])
+                    for child in children2:
+                        c = child.get("data", {})
+                        created = c.get("created_utc", 0)
+                        if created < cutoff_time:
+                            continue
+                        body = (c.get("body", "") or "")[:300].replace("\n", " ").strip()
+                        if body and len(body) > 10:
+                            all_posts.append({
+                                "title": body,
+                                "selftext": "",
+                                "subreddit": c.get("subreddit", sub),
+                                "score": c.get("score", 0),
+                                "source": "Reddit_comment"
+                            })
             except Exception as e:
                 logger.warning(f"Reddit r/{sub} error: {e}")
 
