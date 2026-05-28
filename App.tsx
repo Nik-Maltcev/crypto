@@ -524,12 +524,6 @@ const App: React.FC = () => {
               >
                 🔮 Альткоины
               </button>
-              <button
-                onClick={() => setActiveTab('sources')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📡 Упоминания
-              </button>
             </div>
           </div>
 
