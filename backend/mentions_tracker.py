@@ -24,13 +24,27 @@ async def _fetch_reddit_6h(token: str) -> list[str]:
     texts = []
     
     active_subs = [
-        "CryptoCurrency", "Bitcoin", "ethereum", "solana", "dogecoin",
-        "CryptoMarkets", "altcoin", "defi", "binance", "XRP",
-        "CoinBase", "ethtrader", "BitcoinMarkets", "CryptoMoonShots",
-        "SolanaMemeCoins", "memecoins", "Daytrading", "Trading",
-        "pennystocks", "investing", "SHIBArmy", "cardano",
-        "Monero", "Polkadot", "Chainlink", "Avax", "Hedera",
-        "CryptoIndia", "CryptoScams", "FuturesTrading", "swingtrading",
+        "phinvest", "investing", "IndianStreetBets", "Trading", "Bitcoin", "coins", "Daytrading",
+        "TheTowerGame", "coincollecting", "conspiracy", "geometrydash", "hardwareswap", "CallOfDutyMobile",
+        "FUTMobile", "Pmsforsale", "PokemonGoTrade", "AdoptMeTrading", "AdoptMeRBX", "btc", "CryptoCurrency",
+        "Anarcho_Capitalism", "TradingViewSignals", "options", "BloxFruitsTradingHub", "trading212",
+        "giftcardexchange", "Forexstrategy", "pennystocks", "CryptoMarkets", "algotrading", "pokemontrades",
+        "ASX_Bets", "coinerrors", "RoyaleHigh_Roblox", "Cryptozoology", "RatchetAndClank", "PiNetwork",
+        "defi", "AncientCoins", "ethtrader", "binance", "toshicoin", "RobloxGAGTrading", "BitcoinBeginners",
+        "XRP", "CoinBase", "solana", "northcounty", "Forex", "CryptoIndia", "CryptoScams", "memecoins",
+        "StocksAndTrading", "FuturesTrading", "cardano", "RoyaleHigh_Trading", "MaddenMobileForums",
+        "RobloxTrading", "ethereum", "MarioKartTour", "AirdropCryptoAlpha", "litecoin", "dogecoin",
+        "BitcoinMining", "TradingView", "thewallstreet", "SHIBArmy", "Slothana", "MaddenUltimateTeam",
+        "AvakinOfficial", "Buttcoin", "Tradingcards", "Hedera", "swingtrading", "ledgerwallet",
+        "AnimalCrossingTrading", "solanadev", "Monero", "lastofuspart2", "CryptoMoonShots", "Memecoinhub",
+        "GlobalOffensiveTrade", "SolanaMemeCoins", "tradingcardcommunity", "CryptoCurrencyTrading",
+        "BitcoinMarkets", "GoldandBlack", "cryptomining", "Malaysia_Crypto", "ethmemecoins",
+        "CryptoTechnology", "CrossTrading_inRoblox", "Tronix", "Yield_Farming", "gpumining",
+        "CoinMarketCap", "daytrade", "CryptoNewsandTalk", "Polkadot", "CoinMasterGame", "CryptoExchange",
+        "RoyaleHighTrading", "TradingEdge", "Trading_es", "UKcoins", "RocketLeagueExchange", "AMPToken",
+        "TsumTsum", "NFT", "Stellar", "nanocurrency", "Avax", "ExodusWallet", "cro", "BitcoinBrasil",
+        "Chainlink", "cryptography", "CryptoInvesting", "BlockchainStartups", "Jobs4Bitcoins",
+        "BinanceCrypto", "Solana_Memes", "StockTradingIdeas", "TokenFinders", "TransformersTrading"
     ]
     
     async with httpx.AsyncClient(timeout=15) as client:
@@ -68,6 +82,8 @@ async def _fetch_twitter_6h(rapidapi_key: str) -> list[str]:
         "1384549926080860166", "731402158512476161", "2650025562", "1448939883423207452",
         "978732571738755072", "935742315389444096", "1223056821037957120", "911716127365042177",
         "146345384", "34097500", "37794688", "1360636645989441539", "993962483332329472",
+        "1301215504686694400", "33149981", "1453592537567006720", "949685739935158272",
+        "1433401849349132292", "634075747"
     ]
     
     async with httpx.AsyncClient(timeout=15) as client:
