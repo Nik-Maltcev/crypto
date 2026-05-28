@@ -173,7 +173,7 @@ async def _analyze_with_gemini(reddit_texts: list[str], twitter_texts: list[str]
 === TWITTER ({len(twitter_texts)} твитов) ===
 {twitter_block}"""
 
-    async with httpx.AsyncClient(timeout=600) as client:
+    async with httpx.AsyncClient(timeout=1800) as client:
         resp = await client.post(
             f"{GEMINI_API_URL}?key={gemini_key}",
             json={
