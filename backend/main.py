@@ -997,6 +997,22 @@ async def get_mentions_result():
     return {"success": True, "status": "done", **_mentions_result}
 
 
+@app.delete("/api/hypothesis/{entry_id}")
+async def delete_hypothesis_entry(entry_id: int):
+    """Delete a specific hypothesis entry by ID."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog).where(AnalysisLog.id == entry_id).where(AnalysisLog.mode == "hourly_hypothesis")
+        )
+        log = result.scalar_one_or_none()
+        if not log:
+            raise HTTPException(404, "Entry not found")
+        await session.delete(log)
+        await session.commit()
+        return {"success": True, "deleted_id": entry_id}
+
+
 @app.post("/api/hypothesis/cleanup_all")
 async def cleanup_all_hypothesis():
     """Delete ALL hypothesis entries. Fresh start."""
