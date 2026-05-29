@@ -24,6 +24,7 @@ from cmc_parser import fetch_cmc_data
 from auto_analysis import run_scheduled_analysis, run_dual_analysis
 from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking, update_altcoin_daily_prices
 from mentions_tracker import run_mentions_scan
+from shitcoin_monitor import start_monitor, get_detected_tokens, is_monitor_running
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
@@ -176,6 +177,13 @@ async def lifespan(app: FastAPI):
         logger.warning("CLAUDE_API_KEY or GEMINI_API_KEY not set. Scheduled analysis DISABLED.")
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
+    
+    # Start shitcoin monitor in background
+    try:
+        asyncio.create_task(start_monitor())
+        logger.info("Shitcoin monitor task started")
+    except Exception as e:
+        logger.warning(f"Failed to start shitcoin monitor: {e}")
     
     yield
     
@@ -959,6 +967,27 @@ async def fix_verified_flags():
                 continue
         await session.commit()
         return {"success": True, "fixed": fixed}
+
+
+@app.get("/api/shitcoins/list")
+async def get_shitcoins():
+    """Get all detected shitcoins from caller channels."""
+    tokens = get_detected_tokens()
+    return {
+        "success": True,
+        "monitor_running": is_monitor_running(),
+        "total": len(tokens),
+        "tokens": tokens[:50],  # Last 50
+    }
+
+
+@app.post("/api/shitcoins/start")
+async def start_shitcoin_monitor():
+    """Manually start the shitcoin monitor if not running."""
+    if is_monitor_running():
+        return {"success": True, "message": "Monitor already running"}
+    asyncio.create_task(start_monitor())
+    return {"success": True, "message": "Monitor starting..."}
 
 
 @app.post("/api/mentions/scan")

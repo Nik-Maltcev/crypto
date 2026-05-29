@@ -16,6 +16,7 @@ import StatsTracker from './components/StatsTracker';
 import AltcoinWeekly from './components/AltcoinWeekly';
 import SourcesCheck from './components/SourcesCheck';
 import MentionsTracker from './components/MentionsTracker';
+import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisTracker from './components/HypothesisTracker';
 
 // Icons
@@ -48,7 +49,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis'>('hypothesis');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis' | 'shitcoins'>('hypothesis');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -524,6 +525,12 @@ const App: React.FC = () => {
               >
                 🔮 Альткоины
               </button>
+              <button
+                onClick={() => setActiveTab('shitcoins')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'shitcoins' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🎯 Щитки
+              </button>
             </div>
           </div>
 
@@ -577,6 +584,8 @@ const App: React.FC = () => {
           <StatsTracker />
         ) : activeTab === 'altcoins' ? (
           <AltcoinWeekly />
+        ) : activeTab === 'shitcoins' ? (
+          <ShitcoinTracker />
         ) : activeTab === 'sources' ? (
           <MentionsTracker />
         ) : activeTab === 'hypothesis' ? (
