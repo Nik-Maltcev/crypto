@@ -193,7 +193,7 @@ async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_pos
         for i, chunk in enumerate(reddit_chunks):
             chunk_text = json.dumps(chunk, ensure_ascii=False)
             summary_prompt = f"""Кратко суммаризируй ключевые крипто-новости и настроения из этих постов/комментов.
-Фокус на: BTC, ETH, SOL, XRP, DOGE, BNB. Что обсуждают? Какой sentiment?
+Фокус на: BTC, ETH, SOL, DOGE, BNB. Что обсуждают? Какой sentiment?
 Ответь 5-10 пунктами на русском.
 
 {chunk_text}"""
