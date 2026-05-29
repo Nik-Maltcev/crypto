@@ -881,6 +881,11 @@ async def revalidate_all_hypothesis():
                             "https://api.binance.com/api/v3/klines",
                             params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
                         )
+                        if resp.status_code == 451:
+                            resp = await client.get(
+                                "https://api.binance.us/api/v3/klines",
+                                params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
+                            )
                         if resp.status_code == 200:
                             klines = resp.json()
                             if klines:
@@ -1267,6 +1272,11 @@ async def backfill_altcoin_tracking():
                             "https://api.binance.com/api/v3/klines",
                             params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
                         )
+                        if resp.status_code == 451:
+                            resp = await client.get(
+                                "https://api.binance.us/api/v3/klines",
+                                params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
+                            )
                         if resp.status_code == 200:
                             klines = resp.json()
                             if klines:
@@ -1715,6 +1725,16 @@ async def backfill_polymarket():
                                 "limit": 24,
                             }
                         )
+                        if resp.status_code == 451:
+                            resp = await client.get(
+                                "https://api.binance.us/api/v3/klines",
+                                params={
+                                    "symbol": pair,
+                                    "interval": "1h",
+                                    "startTime": start_ms,
+                                    "limit": 24,
+                                }
+                            )
                         if resp.status_code != 200:
                             logger.warning(f"[Backfill] Binance API error for {tracking.symbol}: {resp.status_code}")
                             continue

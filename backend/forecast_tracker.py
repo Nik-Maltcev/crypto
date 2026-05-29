@@ -425,6 +425,11 @@ async def fetch_binance_kline(symbol: str, interval: str = "1h", limit: int = 1)
                 "https://api.binance.com/api/v3/klines",
                 params={"symbol": pair, "interval": interval, "limit": 3}
             )
+            if resp.status_code == 451:
+                resp = await client.get(
+                    "https://api.binance.us/api/v3/klines",
+                    params={"symbol": pair, "interval": interval, "limit": 3}
+                )
             if resp.status_code == 200:
                 data = resp.json()
                 # data[-1] = currently open candle
