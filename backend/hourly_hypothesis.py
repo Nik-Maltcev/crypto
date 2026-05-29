@@ -23,6 +23,7 @@ from core.models import AnalysisLog
 logger = logging.getLogger(__name__)
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
 CLAUDE_API_URL = "https://api.deepseek.com/chat/completions"
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "BNBUSDT"]
@@ -31,16 +32,11 @@ SYMBOL_MAP = {"BTCUSDT": "BTC", "ETHUSDT": "ETH", "SOLUSDT": "SOL", "DOGEUSDT": 
 
 async def _fetch_binance_candles(symbol: str, interval: str = "1h", limit: int = 6) -> list[dict]:
     """Fetch recent candles from Binance (with .us fallback)."""
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, proxy=BINANCE_PROXY) as client:
         try:
             resp = await client.get(BINANCE_KLINES_URL, params={
                 "symbol": symbol, "interval": interval, "limit": limit
             })
-            if resp.status_code == 451:
-                # Geo-blocked, try binance.us
-                resp = await client.get("https://api.binance.us/api/v3/klines", params={
-                    "symbol": symbol, "interval": interval, "limit": limit
-                })
             if resp.status_code == 200:
                 data = resp.json()
                 candles = []
@@ -524,18 +520,11 @@ async def verify_hypothesis_results() -> None:
                     
                     try:
                         # Fetch the exact predicted candle by startTime
-                        # Try binance.com first, fallback to binance.us
-                        async with httpx.AsyncClient(timeout=15) as http_client:
+                        async with httpx.AsyncClient(timeout=15, proxy=BINANCE_PROXY) as http_client:
                             resp = await http_client.get(
                                 "https://api.binance.com/api/v3/klines",
                                 params={"symbol": binance_symbol, "interval": "1h", "startTime": start_ms, "limit": 1}
                             )
-                            if resp.status_code == 451:
-                                # Geo-blocked, try binance.us
-                                resp = await http_client.get(
-                                    "https://api.binance.us/api/v3/klines",
-                                    params={"symbol": binance_symbol, "interval": "1h", "startTime": start_ms, "limit": 1}
-                                )
                         if resp.status_code != 200:
                             logger.warning(f"[HYPOTHESIS] Binance returned {resp.status_code} for {binance_symbol}")
                             continue

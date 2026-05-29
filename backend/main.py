@@ -27,6 +27,8 @@ from mentions_tracker import run_mentions_scan
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
+BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -826,7 +828,7 @@ async def revalidate_all_hypothesis():
         logs = result.scalars().all()
         fixed = 0
         
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, proxy=BINANCE_PROXY) as client:
             for log in logs:
                 if not log.result_json:
                     continue
@@ -881,11 +883,6 @@ async def revalidate_all_hypothesis():
                             "https://api.binance.com/api/v3/klines",
                             params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
                         )
-                        if resp.status_code == 451:
-                            resp = await client.get(
-                                "https://api.binance.us/api/v3/klines",
-                                params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
-                            )
                         if resp.status_code == 200:
                             klines = resp.json()
                             if klines:
@@ -1218,7 +1215,7 @@ async def backfill_altcoin_tracking():
         filled = 0
         errors = []
         
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, proxy=BINANCE_PROXY) as client:
             for tracking in active:
                 symbol = tracking.symbol.upper()
                 pair = f"{symbol}USDT"
@@ -1272,11 +1269,6 @@ async def backfill_altcoin_tracking():
                             "https://api.binance.com/api/v3/klines",
                             params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
                         )
-                        if resp.status_code == 451:
-                            resp = await client.get(
-                                "https://api.binance.us/api/v3/klines",
-                                params={"symbol": pair, "interval": "1h", "startTime": start_ms, "limit": 1}
-                            )
                         if resp.status_code == 200:
                             klines = resp.json()
                             if klines:
@@ -1683,7 +1675,7 @@ async def backfill_polymarket():
             all_trackings = result.scalars().all()
             
             filled = 0
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, proxy=BINANCE_PROXY) as client:
                 for tracking in all_trackings:
                     # Skip if already has full 24h polymarket data
                     if tracking.polymarket_prices_json:
@@ -1725,16 +1717,6 @@ async def backfill_polymarket():
                                 "limit": 24,
                             }
                         )
-                        if resp.status_code == 451:
-                            resp = await client.get(
-                                "https://api.binance.us/api/v3/klines",
-                                params={
-                                    "symbol": pair,
-                                    "interval": "1h",
-                                    "startTime": start_ms,
-                                    "limit": 24,
-                                }
-                            )
                         if resp.status_code != 200:
                             logger.warning(f"[Backfill] Binance API error for {tracking.symbol}: {resp.status_code}")
                             continue

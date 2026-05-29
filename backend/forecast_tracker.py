@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 TRACKED_SYMBOLS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB"]
 CMC_QUOTES_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
 
 # Binance symbol mapping (our symbol -> Binance pair)
 BINANCE_PAIRS = {
@@ -419,17 +420,12 @@ async def fetch_binance_kline(symbol: str, interval: str = "1h", limit: int = 1)
     if not pair:
         return None
     
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, proxy=BINANCE_PROXY) as client:
         try:
             resp = await client.get(
                 "https://api.binance.com/api/v3/klines",
                 params={"symbol": pair, "interval": interval, "limit": 3}
             )
-            if resp.status_code == 451:
-                resp = await client.get(
-                    "https://api.binance.us/api/v3/klines",
-                    params={"symbol": pair, "interval": interval, "limit": 3}
-                )
             if resp.status_code == 200:
                 data = resp.json()
                 # data[-1] = currently open candle
