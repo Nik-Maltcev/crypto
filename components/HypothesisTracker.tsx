@@ -166,6 +166,47 @@ const HypothesisTracker: React.FC = () => {
                 );
             })()}
 
+            {/* Reverse winrate — if you bet opposite */}
+            {totalChecked > 0 && (() => {
+                const coins = ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+                const allPreds = verifiedEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
+                const reverseTotalHits = totalChecked - totalHits;
+                const reverseOverallWinrate = totalChecked > 0 ? Math.round((reverseTotalHits / totalChecked) * 100) : 0;
+                return (
+                    <>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className={`text-3xl font-bold ${reverseOverallWinrate >= 55 ? 'text-emerald-400' : reverseOverallWinrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{reverseOverallWinrate}%</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Реверс винрейт</div>
+                            </div>
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className="text-3xl font-bold text-white">{reverseTotalHits}/{totalChecked}</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Совпало (наоборот)</div>
+                            </div>
+                            <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
+                                <div className="text-3xl font-bold text-white">{verifiedEntries.length}</div>
+                                <div className="text-[10px] text-gray-500 uppercase">Проверено часов</div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                            {coins.map(coin => {
+                                const preds = allPreds.filter(p => p.symbol === coin);
+                                const hits = preds.filter(p => p.matched).length;
+                                const reverseHits = preds.length - hits;
+                                const rwr = preds.length > 0 ? Math.round((reverseHits / preds.length) * 100) : 0;
+                                return (
+                                    <div key={coin} className={`bg-brand-card border rounded-xl p-3 text-center ${rwr >= 55 ? 'border-emerald-500/30' : rwr >= 50 ? 'border-yellow-500/30' : 'border-red-500/30'}`}>
+                                        <div className="text-sm font-bold text-white">{coin}</div>
+                                        <div className={`text-xl font-bold ${rwr >= 55 ? 'text-emerald-400' : rwr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{rwr}%</div>
+                                        <div className="text-[9px] text-gray-500">{reverseHits}/{preds.length}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                );
+            })()}
+
             {/* Daily winrate by coin */}
             {totalChecked > 0 && (() => {
                 const coins = ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
