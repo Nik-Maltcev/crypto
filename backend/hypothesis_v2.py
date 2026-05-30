@@ -281,7 +281,7 @@ async def _call_claude_opus(system_prompt: str, user_prompt: str, api_key: str) 
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-opus-4-20250514",
+                "model": "claude-opus-4-6",
                 "max_tokens": 8192,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
