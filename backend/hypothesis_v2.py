@@ -176,9 +176,9 @@ def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list
     # Filter CMC coins to only Bybit-available
     bybit_coins = [c for c in cmc_coins if c["symbol"] in bybit_symbols]
     
-    # Market data
+    # Market data — all Bybit coins
     market_lines = []
-    for coin in bybit_coins[:60]:
+    for coin in bybit_coins:
         market_lines.append(
             f"{coin['symbol']} ({coin['name']}): ${coin['price']:.6f} | "
             f"1h: {coin['change_1h']:+.1f}% | 24h: {coin['change_24h']:+.1f}% | "
@@ -311,8 +311,56 @@ async def _call_claude_opus(system_prompt: str, user_prompt: str, api_key: str) 
 
 
 async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) -> dict:
-    """Call DeepSeek v4 Pro API."""
-    async with httpx.AsyncClient(timeout=300) as client:
+    """Call DeepSeek v4 Pro API. Two-stage batching if data too large for 128K context."""
+    
+    # Check if we need batching for DeepSeek (128K context limit)
+    total_chars = len(system_prompt) + len(user_prompt)
+    estimated_tokens = total_chars // 4
+    
+    if estimated_tokens > 100000:
+        logger.info(f"[HYP_V2] DeepSeek: data too large ({estimated_tokens} est. tokens), using 2-stage batch...")
+        
+        # Stage 1: Send Reddit + CMC to DeepSeek, get preliminary analysis
+        reddit_start = user_prompt.find("REDDIT (last 16 hours")
+        twitter_start = user_prompt.find("TWITTER (last 16 hours")
+        
+        if reddit_start > 0 and twitter_start > reddit_start:
+            market_and_reddit = user_prompt[:twitter_start]
+            twitter_section = user_prompt[twitter_start:]
+            
+            stage1_prompt = f"""{market_and_reddit}
+
+ЗАДАЧА ЭТАП 1: Проанализируй рыночные данные и Reddit. Выдели 15-20 альткоинов которые с наибольшей вероятностью упадут в ближайшие 24 часа.
+Для каждого укажи: symbol, причину ожидаемого падения, текущий sentiment в Reddit.
+Ответь списком на русском."""
+
+            stage1_result = ""
+            async with httpx.AsyncClient(timeout=600) as client:
+                resp = await client.post(
+                    DEEPSEEK_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                    json={
+                        "model": "deepseek-v4-pro",
+                        "max_tokens": 4096,
+                        "messages": [{"role": "user", "content": stage1_prompt}],
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    stage1_result = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    logger.info(f"[HYP_V2] DeepSeek Stage 1 complete: {len(stage1_result)} chars")
+            
+            if stage1_result:
+                # Stage 2: Send Twitter + Stage 1 results → final JSON answer
+                user_prompt = f"""ПРЕДВАРИТЕЛЬНЫЙ АНАЛИЗ (Reddit + Market Data):
+{stage1_result}
+
+{twitter_section}
+
+Теперь на основе предварительного анализа и Twitter данных, дай финальный ответ в формате JSON."""
+                logger.info("[HYP_V2] DeepSeek Stage 2: sending final request...")
+    
+    async with httpx.AsyncClient(timeout=600) as client:
         resp = await client.post(
             DEEPSEEK_API_URL,
             headers={
