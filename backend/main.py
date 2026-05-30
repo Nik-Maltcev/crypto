@@ -26,6 +26,7 @@ from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking, upda
 from mentions_tracker import run_mentions_scan
 from shitcoin_monitor import start_monitor, get_detected_tokens, is_monitor_running
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
+from hypothesis_v2 import run_hypothesis_v2, verify_hypothesis_v2_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
@@ -169,8 +170,23 @@ async def lifespan(app: FastAPI):
                 name="Daily Altcoin Price Snapshot (08:00 MSK)",
                 replace_existing=True,
             )
+            scheduler.add_job(
+                run_hypothesis_v2,
+                trigger=CronTrigger(hour="5,13,21", minute=0),  # 08:00, 16:00, 00:00 MSK
+                id="hypothesis_v2",
+                name="Hypothesis V2: Altcoin Drop Predictor (3x daily)",
+                kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                verify_hypothesis_v2_results,
+                trigger=CronTrigger(hour="6,14,22", minute=30),  # 24h+ after each run
+                id="hypothesis_v2_verify",
+                name="Hypothesis V2 Verification",
+                replace_existing=True,
+            )
             scheduler.start()
-            logger.info("APScheduler started — hourly hypothesis, daily altcoin tracking")
+            logger.info("APScheduler started — hourly hypothesis, daily altcoin tracking, hypothesis v2")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
@@ -979,6 +995,63 @@ async def get_shitcoins():
         "total": len(tokens),
         "tokens": tokens[:50],  # Last 50
     }
+
+
+# ==================== HYPOTHESIS V2 ====================
+
+@app.post("/api/hypothesis_v2/run")
+async def trigger_hypothesis_v2():
+    """Manually trigger Hypothesis V2 (altcoin drop predictor)."""
+    if not os.environ.get("CLAUDE_API_KEY"):
+        raise HTTPException(400, "CLAUDE_API_KEY not configured")
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        raise HTTPException(400, "DEEPSEEK_API_KEY not configured")
+
+    asyncio.create_task(run_hypothesis_v2(trigger="manual"))
+    return {"status": "started", "message": "Hypothesis V2 triggered. Check /api/hypothesis_v2/history for results."}
+
+
+@app.get("/api/hypothesis_v2/history")
+async def get_hypothesis_v2_history(limit: int = 20):
+    """Get Hypothesis V2 prediction history."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+
+        items = []
+        for log in logs:
+            result_data = None
+            if log.result_json:
+                try:
+                    result_data = json.loads(log.result_json)
+                except:
+                    pass
+            items.append({
+                "id": log.id,
+                "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+                "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
+                "status": log.status,
+                "trigger": log.trigger,
+                "reddit_posts_count": log.reddit_posts_count,
+                "twitter_tweets_count": log.twitter_tweets_count,
+                "error_message": log.error_message,
+                "result": result_data,
+            })
+
+        return {"success": True, "items": items}
+
+
+@app.post("/api/hypothesis_v2/verify")
+async def trigger_hypothesis_v2_verify():
+    """Manually trigger Hypothesis V2 verification."""
+    asyncio.create_task(verify_hypothesis_v2_results())
+    return {"status": "started", "message": "Verification triggered."}
 
 
 @app.post("/api/shitcoins/start")

@@ -18,6 +18,7 @@ import SourcesCheck from './components/SourcesCheck';
 import MentionsTracker from './components/MentionsTracker';
 import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisTracker from './components/HypothesisTracker';
+import HypothesisV2 from './components/HypothesisV2';
 
 // Icons
 const RefreshIcon = () => (
@@ -49,7 +50,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis' | 'shitcoins'>('hypothesis');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis' | 'hypothesis_v2' | 'shitcoins'>('hypothesis');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -502,6 +503,12 @@ const App: React.FC = () => {
                 🧪 Гипотеза
               </button>
               <button
+                onClick={() => setActiveTab('hypothesis_v2')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📉 Гипотеза №2
+              </button>
+              <button
                 onClick={() => setActiveTab('history')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'history' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -590,6 +597,8 @@ const App: React.FC = () => {
           <MentionsTracker />
         ) : activeTab === 'hypothesis' ? (
           <HypothesisTracker />
+        ) : activeTab === 'hypothesis_v2' ? (
+          <HypothesisV2 />
         ) : (
           <>
             {/* Progress Display */}
