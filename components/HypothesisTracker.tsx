@@ -146,7 +146,7 @@ const HypothesisTracker: React.FC = () => {
 
             {/* Per coin winrate */}
             {totalChecked > 0 && (() => {
-                const coins = ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+                const coins = ['BTC'];
                 const allPreds = verifiedEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
                 return (
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
@@ -168,7 +168,7 @@ const HypothesisTracker: React.FC = () => {
 
             {/* Reverse winrate — if you bet opposite */}
             {totalChecked > 0 && (() => {
-                const coins = ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+                const coins = ['BTC'];
                 const allPreds = verifiedEntries.flatMap(e => e.result?.predictions?.filter(p => p.matched !== undefined) || []);
                 const reverseTotalHits = totalChecked - totalHits;
                 const reverseOverallWinrate = totalChecked > 0 ? Math.round((reverseTotalHits / totalChecked) * 100) : 0;
@@ -209,7 +209,7 @@ const HypothesisTracker: React.FC = () => {
 
             {/* Daily winrate by coin */}
             {totalChecked > 0 && (() => {
-                const coins = ['BTC', 'ETH', 'SOL', 'DOGE', 'BNB'];
+                const coins = ['BTC'];
                 const monthNames = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
                 // Group verified entries by date (MSK)
                 const byDate: Record<string, typeof verifiedEntries> = {};

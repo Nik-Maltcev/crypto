@@ -26,8 +26,8 @@ BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
 CLAUDE_API_URL = "https://api.deepseek.com/chat/completions"
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "BNBUSDT"]
-SYMBOL_MAP = {"BTCUSDT": "BTC", "ETHUSDT": "ETH", "SOLUSDT": "SOL", "DOGEUSDT": "DOGE", "BNBUSDT": "BNB"}
+SYMBOLS = ["BTCUSDT"]
+SYMBOL_MAP = {"BTCUSDT": "BTC"}
 
 
 async def _fetch_binance_candles(symbol: str, interval: str = "1h", limit: int = 6) -> list[dict]:
@@ -194,7 +194,7 @@ async def _predict_next_hour(candles_data: dict, reddit_posts: list, twitter_pos
         for i, chunk in enumerate(reddit_chunks):
             chunk_text = json.dumps(chunk, ensure_ascii=False)
             summary_prompt = f"""Кратко суммаризируй ключевые крипто-новости и настроения из этих постов/комментов.
-Фокус на: BTC, ETH, SOL, DOGE, BNB. Что обсуждают? Какой sentiment?
+Фокус на: BTC. Что обсуждают? Какой sentiment?
 Ответь 5-10 пунктами на русском.
 
 {chunk_text}"""
