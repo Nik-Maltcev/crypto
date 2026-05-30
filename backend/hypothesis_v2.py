@@ -187,19 +187,19 @@ def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list
         )
     market_context = "\n".join(market_lines)
 
-    # Social data
-    top_reddit = sorted(reddit_posts, key=lambda x: x.get("score", 0), reverse=True)[:400]
+    # Social data — ALL posts, no limits
+    top_reddit = sorted(reddit_posts, key=lambda x: x.get("score", 0), reverse=True)
     reddit_payload = json.dumps([{
         "title": p.get("title", ""),
-        "text": (p.get("selftext", "") or "")[:150],
+        "text": (p.get("selftext", "") or ""),
         "sub": p.get("subreddit", ""),
         "score": p.get("score", 0),
     } for p in top_reddit], ensure_ascii=False)
 
     twitter_payload = json.dumps([{
-        "text": t.get("text", "")[:200],
+        "text": t.get("text", ""),
         "user": t.get("user", ""),
-    } for t in twitter_posts[:300]], ensure_ascii=False) if twitter_posts else "No Twitter data."
+    } for t in twitter_posts], ensure_ascii=False) if twitter_posts else "No Twitter data."
 
     bybit_available_list = sorted([c["symbol"] for c in bybit_coins])
 
