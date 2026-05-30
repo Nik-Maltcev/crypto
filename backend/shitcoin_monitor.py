@@ -95,6 +95,9 @@ async def check_dexscreener(contract: str) -> dict:
                         "dexscreener_url": pair.get("url", ""),
                         "txns_buys_5m": pair.get("txns", {}).get("m5", {}).get("buys", 0),
                         "txns_sells_5m": pair.get("txns", {}).get("m5", {}).get("sells", 0),
+                        "website": (pair.get("info", {}).get("websites", [{}]) or [{}])[0].get("url", ""),
+                        "twitter": next((s.get("url", "") for s in (pair.get("info", {}).get("socials", []) or []) if s.get("type") == "twitter"), ""),
+                        "telegram": next((s.get("url", "") for s in (pair.get("info", {}).get("socials", []) or []) if s.get("type") == "telegram"), ""),
                     }
         except Exception as e:
             logger.warning(f"[SHITCOIN] Dexscreener error for {contract[:8]}...: {e}")

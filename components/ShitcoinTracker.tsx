@@ -195,6 +195,15 @@ const ShitcoinTracker: React.FC = () => {
                                     <span>💧 LP: {(token.rug_check?.lp_locked_pct || 0).toFixed(0)}%</span>
                                     <span>👤 Creator: {(token.rug_check?.creator_pct || 0).toFixed(1)}%</span>
                                     <span>💰 Liq: {formatMcap(token.dex_data?.liquidity_usd || 0)}</span>
+                                    {token.dex_data?.website && (
+                                        <a href={token.dex_data.website} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🌐 Сайт</a>
+                                    )}
+                                    {token.dex_data?.twitter && (
+                                        <a href={token.dex_data.twitter} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🐦 Twitter</a>
+                                    )}
+                                    {token.dex_data?.telegram && (
+                                        <a href={token.dex_data.telegram} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">✈️ TG</a>
+                                    )}
                                     {token.dex_data?.dexscreener_url && (
                                         <a href={token.dex_data.dexscreener_url} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">
                                             📊 Dexscreener
