@@ -172,15 +172,15 @@ async def lifespan(app: FastAPI):
             )
             scheduler.add_job(
                 run_hypothesis_v2,
-                trigger=CronTrigger(hour="5,13,21", minute=0),  # 08:00, 16:00, 00:00 MSK
+                trigger=CronTrigger(hour=5, minute=0),  # 08:00 MSK (05:00 UTC)
                 id="hypothesis_v2",
-                name="Hypothesis V2: Altcoin Drop Predictor (3x daily)",
+                name="Hypothesis V2: Altcoin Drop Predictor (daily 08:00 MSK)",
                 kwargs={"trigger": "scheduled"},
                 replace_existing=True,
             )
             scheduler.add_job(
                 verify_hypothesis_v2_results,
-                trigger=CronTrigger(hour="6,14,22", minute=30),  # 24h+ after each run
+                trigger=CronTrigger(hour=6, minute=0),  # 09:00 MSK (24h+ after run)
                 id="hypothesis_v2_verify",
                 name="Hypothesis V2 Verification",
                 replace_existing=True,
