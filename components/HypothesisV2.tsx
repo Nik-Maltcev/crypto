@@ -74,7 +74,7 @@ const HypothesisV2: React.FC = () => {
     const [nextVerify, setNextVerify] = useState('');
 
     // Exchanges available in Russia
-    const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'HTX', 'Phemex', 'CoinEx', 'WhiteBIT', 'EXMO']);
+    const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'Gate', 'HTX', 'CoinEx', 'WhiteBIT', 'LBank', 'XT.COM', 'BitMart', 'Pionex', 'BTCC', 'BYDFi', 'CoinTR', 'DigiFinex', 'Bitrue', 'AscendEX (BitMax)', 'BloFin', 'WEEX']);
 
     // Timer: next verification countdown
     useEffect(() => {
