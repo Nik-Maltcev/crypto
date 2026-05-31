@@ -1002,10 +1002,8 @@ async def get_shitcoins():
 @app.post("/api/hypothesis_v2/run")
 async def trigger_hypothesis_v2():
     """Manually trigger Hypothesis V2 (altcoin drop predictor)."""
-    if not os.environ.get("CLAUDE_API_KEY"):
-        raise HTTPException(400, "CLAUDE_API_KEY not configured")
-    if not os.environ.get("DEEPSEEK_API_KEY"):
-        raise HTTPException(400, "DEEPSEEK_API_KEY not configured")
+    if not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("DEEPSEEK_API_KEY"):
+        raise HTTPException(400, "Neither CLAUDE_API_KEY nor DEEPSEEK_API_KEY configured")
 
     asyncio.create_task(run_hypothesis_v2(trigger="manual"))
     return {"status": "started", "message": "Hypothesis V2 triggered. Check /api/hypothesis_v2/history for results."}

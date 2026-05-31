@@ -381,11 +381,8 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
     cmc_key = os.environ.get("CMC_API_KEY", "")
 
-    if not claude_key:
-        logger.error("[HYP_V2] CLAUDE_API_KEY missing. Skipping.")
-        return
-    if not deepseek_key:
-        logger.error("[HYP_V2] DEEPSEEK_API_KEY missing. Skipping.")
+    if not claude_key and not deepseek_key:
+        logger.error("[HYP_V2] Neither CLAUDE_API_KEY nor DEEPSEEK_API_KEY set. Skipping.")
         return
 
     async_session = get_async_session()
@@ -446,28 +443,33 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             system_prompt, user_prompt = _build_prompt(cmc_coins, reddit_posts, twitter_posts)
 
             # 5. Call both models in parallel
-            logger.info("[HYP_V2] Step 4/4: Calling Claude Opus 4.6 + DeepSeek v4 Pro in parallel...")
+            logger.info("[HYP_V2] Step 4/4: Calling AI models...")
             
-            claude_task = _call_claude_opus(system_prompt, user_prompt, claude_key)
-            deepseek_task = _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
+            tasks = []
+            task_names = []
+            
+            if claude_key:
+                tasks.append(_call_claude_opus(system_prompt, user_prompt, claude_key))
+                task_names.append("claude")
+            if deepseek_key:
+                tasks.append(_call_deepseek_v4(system_prompt, user_prompt, deepseek_key))
+                task_names.append("deepseek")
 
-            results = await asyncio.gather(claude_task, deepseek_task, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
             claude_result = None
             deepseek_result = None
             errors = []
 
-            if isinstance(results[0], Exception):
-                errors.append(f"Claude: {results[0]}")
-                logger.error(f"[HYP_V2] Claude failed: {results[0]}")
-            else:
-                claude_result = results[0]
-
-            if isinstance(results[1], Exception):
-                errors.append(f"DeepSeek: {results[1]}")
-                logger.error(f"[HYP_V2] DeepSeek failed: {results[1]}")
-            else:
-                deepseek_result = results[1]
+            for i, name in enumerate(task_names):
+                if isinstance(results[i], Exception):
+                    errors.append(f"{name}: {results[i]}")
+                    logger.error(f"[HYP_V2] {name} failed: {results[i]}")
+                else:
+                    if name == "claude":
+                        claude_result = results[i]
+                    else:
+                        deepseek_result = results[i]
 
             if not claude_result and not deepseek_result:
                 raise RuntimeError(f"Both models failed: {'; '.join(errors)}")
