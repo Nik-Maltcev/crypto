@@ -50,13 +50,18 @@ async def _fetch_bybit_spot_symbols() -> set[str]:
                 data = resp.json()
                 items = data.get("result", {}).get("list", [])
                 for item in items:
-                    # Symbol format: "BTCUSDT" -> extract base coin "BTC"
                     symbol = item.get("baseCoin", "").upper()
                     if symbol:
                         symbols.add(symbol)
                 logger.info(f"[BYBIT] Fetched {len(symbols)} spot symbols")
+            else:
+                logger.warning(f"[BYBIT] API returned {resp.status_code}")
         except Exception as e:
             logger.warning(f"[BYBIT] Failed to fetch symbols: {e}")
+    
+    if not symbols:
+        logger.warning("[BYBIT] API returned 0 symbols! Skipping Bybit filter.")
+    
     return symbols
 
 

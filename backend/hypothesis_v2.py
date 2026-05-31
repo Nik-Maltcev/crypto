@@ -50,8 +50,14 @@ async def _fetch_bybit_symbols() -> set[str]:
                         base = item.get("baseCoin", "").upper()
                         if base:
                             symbols.add(base)
+                else:
+                    logger.warning(f"[HYP_V2] Bybit {category} returned {resp.status_code}")
             except Exception as e:
                 logger.warning(f"[HYP_V2] Bybit {category} fetch error: {e}")
+    
+    if not symbols:
+        logger.warning("[HYP_V2] Bybit API returned 0 symbols! Skipping Bybit filter.")
+    
     logger.info(f"[HYP_V2] Bybit: {len(symbols)} symbols (spot + linear)")
     return symbols
 
@@ -173,8 +179,11 @@ async def _fetch_twitter_16h() -> list[dict]:
 def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list, bybit_symbols: set[str]) -> tuple[str, str]:
     """Build system + user prompts for both models."""
     
-    # Filter CMC coins to only Bybit-available
-    bybit_coins = [c for c in cmc_coins if c["symbol"] in bybit_symbols]
+    # Filter CMC coins to only Bybit-available (skip filter if Bybit returned 0)
+    if bybit_symbols:
+        bybit_coins = [c for c in cmc_coins if c["symbol"] in bybit_symbols]
+    else:
+        bybit_coins = cmc_coins
     
     # Market data — all Bybit coins
     market_lines = []
@@ -240,6 +249,7 @@ Response Format:
 }
 
 RULES:
+- You MUST ALWAYS provide exactly 5-10 shortCandidates. NEVER return an empty list. Even if the market looks uncertain, pick the LEAST favorable coins with lower confidence scores.
 - Select 5-10 altcoins most likely to DROP 5-20%+ in the next 24 hours
 - Sort by confidence (highest first)
 - ONLY pick coins from the BYBIT AVAILABLE list
@@ -248,7 +258,8 @@ RULES:
 - Include stop-loss levels (where the short thesis is invalidated)
 - "avoidShorting": 2-4 coins that look weak but have short-squeeze risk or strong support
 - All text in Russian
-- EXCLUDE: BTC, ETH, BNB, USDT, USDC, DOGE, SOL, XRP"""
+- EXCLUDE: BTC, ETH, BNB, USDT, USDC, DOGE, SOL, XRP
+- If market conditions make shorting risky, still provide picks but set confidence lower (30-50%) and note the risk in reasoning"""
 
     user_prompt = f"""CURRENT TIME (UTC): {datetime.utcnow().isoformat()}Z
 
@@ -500,13 +511,14 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             if not claude_result and not deepseek_result:
                 raise RuntimeError(f"Both models failed: {'; '.join(errors)}")
 
-            # Post-process: verify Bybit availability
-            for result in [claude_result, deepseek_result]:
-                if result and result.get("shortCandidates"):
-                    result["shortCandidates"] = [
-                        c for c in result["shortCandidates"]
-                        if c.get("symbol", "").upper() in bybit_symbols
-                    ]
+            # Post-process: verify Bybit availability (skip if Bybit returned 0)
+            if bybit_symbols:
+                for result in [claude_result, deepseek_result]:
+                    if result and result.get("shortCandidates"):
+                        result["shortCandidates"] = [
+                            c for c in result["shortCandidates"]
+                            if c.get("symbol", "").upper() in bybit_symbols
+                        ]
 
             # Combine results
             combined = {
