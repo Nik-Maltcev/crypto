@@ -73,6 +73,9 @@ const HypothesisV2: React.FC = () => {
     const [error, setError] = useState('');
     const [nextVerify, setNextVerify] = useState('');
 
+    // Exchanges available in Russia
+    const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'HTX', 'Phemex', 'CoinEx', 'WhiteBIT', 'EXMO']);
+
     // Timer: next verification countdown
     useEffect(() => {
         const calcNext = () => {
@@ -254,8 +257,12 @@ const HypothesisV2: React.FC = () => {
                             {c.exchanges && c.exchanges.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
                                     {c.exchanges.map(ex => (
-                                        <span key={ex} className="text-xs px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-                                            {ex}
+                                        <span key={ex} className={`text-xs px-1.5 py-0.5 rounded border ${
+                                            RU_EXCHANGES.has(ex) 
+                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                                                : 'bg-gray-800 text-gray-500 border-gray-700'
+                                        }`}>
+                                            {RU_EXCHANGES.has(ex) ? '🇷🇺 ' : ''}{ex}
                                         </span>
                                     ))}
                                 </div>
@@ -331,8 +338,12 @@ const HypothesisV2: React.FC = () => {
                                 {c.exchanges && c.exchanges.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {c.exchanges.map(ex => (
-                                            <span key={ex} className="text-xs px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-                                                {ex}
+                                            <span key={ex} className={`text-xs px-1.5 py-0.5 rounded border ${
+                                                RU_EXCHANGES.has(ex) 
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                                                    : 'bg-gray-800 text-gray-500 border-gray-700'
+                                            }`}>
+                                                {RU_EXCHANGES.has(ex) ? '🇷🇺 ' : ''}{ex}
                                             </span>
                                         ))}
                                     </div>

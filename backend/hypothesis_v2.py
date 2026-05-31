@@ -165,13 +165,29 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str = "") ->
                     exchanges_map[symbol] = sorted(found_exchanges)
                     logger.info(f"[HYP_V2] {symbol}: {len(found_exchanges)} exchanges")
                 elif resp.status_code == 429:
-                    logger.warning(f"[HYP_V2] CoinGecko rate limited, stopping")
-                    break
+                    logger.warning(f"[HYP_V2] CoinGecko rate limited, waiting 60s...")
+                    await asyncio.sleep(60)
+                    # Retry this symbol
+                    resp = await client.get(
+                        f"https://api.coingecko.com/api/v3/coins/{coin_id}/tickers",
+                        params={"include_exchange_logo": "false"}
+                    )
+                    if resp.status_code == 200:
+                        tickers = resp.json().get("tickers", [])
+                        found_exchanges = set()
+                        for ticker in tickers:
+                            market_name = ticker.get("market", {}).get("name", "")
+                            if market_name:
+                                found_exchanges.add(market_name)
+                        exchanges_map[symbol] = sorted(found_exchanges)
+                        logger.info(f"[HYP_V2] {symbol} (retry): {len(found_exchanges)} exchanges")
+                    else:
+                        exchanges_map[symbol] = []
                 else:
                     exchanges_map[symbol] = []
                 
                 # CoinGecko free: 10-30 req/min, be gentle
-                await asyncio.sleep(2.5)
+                await asyncio.sleep(1.5)
                 
             except Exception as e:
                 logger.warning(f"[HYP_V2] CoinGecko error for {symbol}: {e}")
