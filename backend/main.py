@@ -1052,6 +1052,58 @@ async def trigger_hypothesis_v2_verify():
     return {"status": "started", "message": "Verification triggered."}
 
 
+@app.post("/api/hypothesis_v2/enrich_exchanges")
+async def enrich_hypothesis_v2_exchanges():
+    """Fetch exchanges for picks in the latest hypothesis_v2 result."""
+    from hypothesis_v2 import _fetch_exchanges_for_symbols
+    
+    cmc_key = os.environ.get("CMC_API_KEY", "")
+    if not cmc_key:
+        raise HTTPException(400, "CMC_API_KEY not configured")
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "success")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(1)
+        )
+        entry = result.scalars().first()
+        if not entry or not entry.result_json:
+            raise HTTPException(404, "No hypothesis_v2 results found")
+        
+        data = json.loads(entry.result_json)
+        model_data = data.get("deepseek_v4")
+        if not model_data:
+            raise HTTPException(404, "No deepseek_v4 data")
+        
+        # Collect symbols
+        all_symbols = []
+        for c in model_data.get("shortCandidates", []):
+            all_symbols.append(c.get("symbol", "").upper())
+        for c in model_data.get("longCandidates", []):
+            all_symbols.append(c.get("symbol", "").upper())
+        
+        if not all_symbols:
+            return {"success": True, "message": "No picks to enrich"}
+        
+        # Fetch exchanges
+        exchanges_map = await _fetch_exchanges_for_symbols(all_symbols, cmc_key)
+        
+        # Update candidates
+        for c in model_data.get("shortCandidates", []):
+            c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+        for c in model_data.get("longCandidates", []):
+            c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+        
+        entry.result_json = json.dumps(data, ensure_ascii=False)
+        await session.commit()
+        
+        return {"success": True, "enriched": len(all_symbols), "exchanges": exchanges_map}
+
+
 @app.post("/api/shitcoins/start")
 async def start_shitcoin_monitor():
     """Manually start the shitcoin monitor if not running."""
