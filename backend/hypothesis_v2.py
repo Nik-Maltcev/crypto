@@ -119,64 +119,62 @@ async def _retry_deepseek_json(broken_text: str, system_prompt: str, api_key: st
             return None
 
 
-async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict[str, list[str]]:
-    """Fetch exchange listings for each symbol from CMC market-pairs endpoint."""
+async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str = "") -> dict[str, list[str]]:
+    """Fetch exchange listings for each symbol using CoinGecko (free, no key needed)."""
     exchanges_map = {}
     
     async with httpx.AsyncClient(timeout=30) as client:
-        headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
+        # First get coin list to map symbol -> coingecko id
+        coin_list = []
+        try:
+            resp = await client.get("https://api.coingecko.com/api/v3/coins/list")
+            if resp.status_code == 200:
+                coin_list = resp.json()
+        except Exception as e:
+            logger.warning(f"[HYP_V2] CoinGecko coin list error: {e}")
+            return {s: [] for s in symbols}
         
+        # Build symbol -> id map (take first match)
+        symbol_to_id = {}
+        for coin in coin_list:
+            sym = coin.get("symbol", "").upper()
+            if sym in [s.upper() for s in symbols] and sym not in symbol_to_id:
+                symbol_to_id[sym] = coin.get("id", "")
+        
+        # Fetch tickers for each symbol
         for symbol in symbols:
+            sym_upper = symbol.upper()
+            coin_id = symbol_to_id.get(sym_upper)
+            if not coin_id:
+                logger.warning(f"[HYP_V2] CoinGecko: no id for {symbol}")
+                exchanges_map[symbol] = []
+                continue
+            
             try:
                 resp = await client.get(
-                    f"{CMC_BASE}/v2/cryptocurrency/market-pairs/latest",
-                    headers=headers,
-                    params={"symbol": symbol, "limit": 100}
+                    f"https://api.coingecko.com/api/v3/coins/{coin_id}/tickers",
+                    params={"include_exchange_logo": "false"}
                 )
                 if resp.status_code == 200:
-                    data = resp.json().get("data", {})
-                    logger.info(f"[HYP_V2] CMC raw keys for {symbol}: {list(data.keys())[:5]}")
-                    
-                    # CMC v2 may return data differently - try multiple formats
-                    pairs = []
-                    if isinstance(data, dict):
-                        # Format: {SYMBOL: [{market_pairs: [...]}]} or {SYMBOL: {market_pairs: [...]}}
-                        coin_data = data.get(symbol, data.get(symbol.upper(), None))
-                        if coin_data is None and len(data) > 0:
-                            # Maybe nested under numeric ID or different key
-                            first_val = next(iter(data.values()), None)
-                            if first_val:
-                                coin_data = first_val
-                        if isinstance(coin_data, list) and len(coin_data) > 0:
-                            coin_data = coin_data[0]
-                        if isinstance(coin_data, dict):
-                            pairs = coin_data.get("market_pairs", [])
-                    elif isinstance(data, list):
-                        # Format: [{market_pairs: [...]}]
-                        if len(data) > 0 and isinstance(data[0], dict):
-                            pairs = data[0].get("market_pairs", [])
-                    
-                    if not pairs:
-                        logger.warning(f"[HYP_V2] No market_pairs found for {symbol}, data type: {type(data)}, sample: {str(data)[:200]}")
-                    
+                    tickers = resp.json().get("tickers", [])
                     found_exchanges = set()
-                    for pair in pairs:
-                        exchange_name = pair.get("exchange", {}).get("name", "")
-                        if exchange_name:
-                            found_exchanges.add(exchange_name)
-                    
+                    for ticker in tickers:
+                        market_name = ticker.get("market", {}).get("name", "")
+                        if market_name:
+                            found_exchanges.add(market_name)
                     exchanges_map[symbol] = sorted(found_exchanges)
-                    if found_exchanges:
-                        logger.info(f"[HYP_V2] {symbol}: {exchanges_map[symbol]}")
+                    logger.info(f"[HYP_V2] {symbol}: {len(found_exchanges)} exchanges")
+                elif resp.status_code == 429:
+                    logger.warning(f"[HYP_V2] CoinGecko rate limited, stopping")
+                    break
                 else:
-                    logger.warning(f"[HYP_V2] CMC market-pairs for {symbol}: {resp.status_code}")
                     exchanges_map[symbol] = []
-                    
-                # Small delay to avoid rate limiting
-                await asyncio.sleep(0.3)
+                
+                # CoinGecko free: 10-30 req/min, be gentle
+                await asyncio.sleep(2.5)
                 
             except Exception as e:
-                logger.warning(f"[HYP_V2] Exchange fetch error for {symbol}: {e}")
+                logger.warning(f"[HYP_V2] CoinGecko error for {symbol}: {e}")
                 exchanges_map[symbol] = []
     
     return exchanges_map
