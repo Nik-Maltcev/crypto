@@ -185,160 +185,161 @@ const HypothesisV2: React.FC = () => {
                 )}
 
                 {/* Short candidates */}
-                <div className="p-4 space-y-3">
-                    <div className="text-xs text-red-400 uppercase font-bold mb-2">📉 Шорт-кандидаты</div>
+                <div className="p-4">
+                    <div className="text-xs text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {modelData.shortCandidates?.map((c, idx) => (
-                        <div key={c.symbol} className={`rounded-lg p-4 border ${
+                        <div key={c.symbol} className={`rounded-xl p-4 border ${
                             c.strongHit ? 'bg-emerald-500/10 border-emerald-500/30' :
                             c.hit === true ? 'bg-emerald-500/5 border-emerald-500/20' :
                             c.hit === false ? 'bg-red-500/5 border-red-500/20' :
                             'bg-gray-900/50 border-gray-700/50'
                         }`}>
-                            {/* Row 1: Symbol + confidence + risk */}
+                            {/* Header: Symbol + confidence */}
                             <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-white">#{idx + 1}</span>
+                                <div className="flex items-center gap-1.5">
                                     <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                    <span className="text-xs text-gray-500">{c.name}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                         {c.riskLevel}
                                     </span>
-                                    <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold">
-                                        {c.confidence}%
-                                    </span>
                                 </div>
+                                <span className="text-sm font-bold text-indigo-400">{c.confidence}%</span>
                             </div>
 
-                            {/* Row 2: Prices */}
-                            <div className="grid grid-cols-4 gap-2 mb-2">
+                            {/* Prices row */}
+                            <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Сейчас</div>
+                                    <div className="text-[9px] text-gray-500">Сейчас</div>
                                     <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                 </div>
                                 <div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Цель 24ч</div>
+                                    <div className="text-[9px] text-gray-500">Цель</div>
                                     <div className="text-xs font-mono text-red-400">{formatPrice(c.targetPrice24h)}</div>
                                 </div>
-                                <div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Падение</div>
-                                    <div className="text-sm font-bold text-red-400">{(c.expectedChange || c.expectedDrop)?.toFixed(1)}%</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Stop-Loss</div>
-                                    <div className="text-xs font-mono text-yellow-400">{formatPrice(c.stopLoss)}</div>
-                                </div>
+                            </div>
+
+                            {/* Change + SL */}
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-bold text-red-400">{(c.expectedChange || c.expectedDrop)?.toFixed(1)}%</span>
+                                <span className="text-[9px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                             </div>
 
                             {/* Exchanges */}
                             {c.exchanges && c.exchanges.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
                                     {c.exchanges.map(ex => (
-                                        <span key={ex} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                        <span key={ex} className="text-[8px] px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
                                             {ex}
                                         </span>
                                     ))}
                                 </div>
                             )}
 
-                            {/* Verification result */}
+                            {/* Verification */}
                             {c.actualChange24h !== undefined && (
-                                <div className={`rounded px-3 py-1.5 mb-2 flex items-center justify-between ${
+                                <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
                                     c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
                                 }`}>
-                                    <span className="text-xs font-bold">
-                                        {c.strongHit ? '🎯 Сильное попадание' : c.hit ? '✅ Упало' : '❌ Не упало'}
+                                    <span className="text-[10px] font-bold">
+                                        {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
                                     </span>
-                                    <span className={`text-sm font-bold font-mono ${c.actualChange24h < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                        {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(2)}%
-                                        <span className="text-gray-500 text-xs ml-1">({formatPrice(c.actualPrice24h || 0)})</span>
+                                    <span className={`text-xs font-bold font-mono ${c.actualChange24h < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                        {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
                                     </span>
                                 </div>
                             )}
 
-                            {/* Row 3: Catalyst + timeframe */}
-                            <div className="flex items-start gap-4 mb-1">
-                                <div className="flex-1">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Катализатор: </span>
-                                    <span className="text-xs text-orange-400">{c.catalyst}</span>
-                                </div>
-                                <span className="text-[10px] text-gray-500 whitespace-nowrap">⏱ {c.timeframe}</span>
+                            {/* Catalyst */}
+                            <div className="mb-1">
+                                <span className="text-[9px] text-orange-400">{c.catalyst}</span>
                             </div>
 
-                            {/* Row 4: Reasoning */}
-                            <p className="text-[11px] text-gray-400 line-clamp-2 hover:line-clamp-none transition-all cursor-pointer">
+                            {/* Reasoning */}
+                            <p className="text-[10px] text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                 {c.reasoning}
                             </p>
+
+                            <div className="text-[9px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
                         </div>
                     ))}
+                    </div>
                 </div>
 
                 {/* Long candidates */}
                 {modelData.longCandidates && modelData.longCandidates.length > 0 && (
-                    <div className="p-4 space-y-3 border-t border-gray-800">
-                        <div className="text-xs text-emerald-400 uppercase font-bold mb-2">📈 Лонг-кандидаты</div>
+                    <div className="p-4 border-t border-gray-800">
+                        <div className="text-xs text-emerald-400 uppercase font-bold mb-3">📈 Лонг-кандидаты</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {modelData.longCandidates.map((c, idx) => (
-                            <div key={c.symbol} className="rounded-lg p-4 border bg-gray-900/50 border-emerald-700/30">
+                            <div key={c.symbol} className="rounded-xl p-4 border bg-gray-900/50 border-emerald-700/30">
+                                {/* Header */}
                                 <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold text-white">#{idx + 1}</span>
+                                    <div className="flex items-center gap-1.5">
                                         <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                        <span className="text-xs text-gray-500">{c.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                             {c.riskLevel}
                                         </span>
-                                        <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold">
-                                            {c.confidence}%
-                                        </span>
                                     </div>
+                                    <span className="text-sm font-bold text-indigo-400">{c.confidence}%</span>
                                 </div>
 
-                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                {/* Prices */}
+                                <div className="grid grid-cols-2 gap-2 mb-2">
                                     <div>
-                                        <div className="text-[10px] text-gray-500 uppercase">Сейчас</div>
+                                        <div className="text-[9px] text-gray-500">Сейчас</div>
                                         <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                     </div>
                                     <div>
-                                        <div className="text-[10px] text-gray-500 uppercase">Цель 24ч</div>
+                                        <div className="text-[9px] text-gray-500">Цель</div>
                                         <div className="text-xs font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
                                     </div>
-                                    <div>
-                                        <div className="text-[10px] text-gray-500 uppercase">Рост</div>
-                                        <div className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-[10px] text-gray-500 uppercase">Stop-Loss</div>
-                                        <div className="text-xs font-mono text-yellow-400">{formatPrice(c.stopLoss)}</div>
-                                    </div>
+                                </div>
+
+                                {/* Change + SL */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</span>
+                                    <span className="text-[9px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                                 </div>
 
                                 {/* Exchanges */}
                                 {c.exchanges && c.exchanges.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {c.exchanges.map(ex => (
-                                            <span key={ex} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                            <span key={ex} className="text-[8px] px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
                                                 {ex}
                                             </span>
                                         ))}
                                     </div>
                                 )}
 
-                                <div className="flex items-start gap-4 mb-1">
-                                    <div className="flex-1">
-                                        <span className="text-[10px] text-gray-500 uppercase font-bold">Катализатор: </span>
-                                        <span className="text-xs text-emerald-400">{c.catalyst}</span>
+                                {/* Verification */}
+                                {c.actualChange24h !== undefined && (
+                                    <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
+                                        c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                                    }`}>
+                                        <span className="text-[10px] font-bold">
+                                            {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
+                                        </span>
+                                        <span className={`text-xs font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
+                                        </span>
                                     </div>
-                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">⏱ {c.timeframe}</span>
+                                )}
+
+                                {/* Catalyst */}
+                                <div className="mb-1">
+                                    <span className="text-[9px] text-emerald-400">{c.catalyst}</span>
                                 </div>
 
-                                <p className="text-[11px] text-gray-400 line-clamp-2 hover:line-clamp-none transition-all cursor-pointer">
+                                {/* Reasoning */}
+                                <p className="text-[10px] text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                     {c.reasoning}
                                 </p>
+
+                                <div className="text-[9px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
                             </div>
                         ))}
+                        </div>
                     </div>
                 )}
 
