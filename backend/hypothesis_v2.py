@@ -705,8 +705,14 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
 
 
 async def verify_hypothesis_v2_results() -> None:
-    """Verify hypothesis v2 predictions after 24 hours by checking actual prices."""
-    logger.info("[HYP_V2] Verifying predictions...")
+    """Verify hypothesis v2 predictions by taking price snapshots every 6 hours.
+    
+    Runs every 6 hours. For each active analysis (0-48h old):
+    - Fetches current prices for all picks (shorts + longs)
+    - Adds a snapshot with timestamp and change from start
+    - After 24h marks as fully verified with final stats
+    """
+    logger.info("[HYP_V2] Verifying predictions (6h snapshot)...")
 
     cmc_key = os.environ.get("CMC_API_KEY", "")
     if not cmc_key:
@@ -715,16 +721,14 @@ async def verify_hypothesis_v2_results() -> None:
 
     async_session = get_async_session()
     async with async_session() as session:
-        # Find entries from 24-48h ago that haven't been verified
-        cutoff_start = datetime.utcnow() - timedelta(hours=48)
-        cutoff_end = datetime.utcnow() - timedelta(hours=24)
+        # Find all successful entries from last 48 hours
+        cutoff = datetime.utcnow() - timedelta(hours=48)
 
         result = await session.execute(
             select(AnalysisLog)
             .where(AnalysisLog.mode == "hypothesis_v2")
             .where(AnalysisLog.status == "success")
-            .where(AnalysisLog.created_at >= cutoff_start)
-            .where(AnalysisLog.created_at <= cutoff_end)
+            .where(AnalysisLog.created_at >= cutoff)
         )
         entries = result.scalars().all()
 
@@ -741,17 +745,20 @@ async def verify_hypothesis_v2_results() -> None:
             except:
                 continue
 
-            # Skip if already verified
-            if data.get("verified"):
+            # Skip if already fully verified (24h+ passed and marked done)
+            if data.get("verification_complete"):
                 continue
 
-            # Collect all symbols from both models
+            model_data = data.get("deepseek_v4")
+            if not model_data:
+                continue
+
+            # Collect all symbols from shorts + longs
             all_symbols = set()
-            for model_key in ["claude_opus", "deepseek_v4"]:
-                model_data = data.get(model_key)
-                if model_data and model_data.get("shortCandidates"):
-                    for c in model_data["shortCandidates"]:
-                        all_symbols.add(c.get("symbol", "").upper())
+            for c in model_data.get("shortCandidates", []):
+                all_symbols.add(c.get("symbol", "").upper())
+            for c in model_data.get("longCandidates", []):
+                all_symbols.add(c.get("symbol", "").upper())
 
             if not all_symbols:
                 continue
@@ -776,48 +783,106 @@ async def verify_hypothesis_v2_results() -> None:
                     logger.warning(f"[HYP_V2] Price fetch error: {e}")
                     continue
 
-            # Verify each model's predictions
-            verification = {"verified": True, "verified_at": datetime.utcnow().isoformat()}
+            if not prices:
+                continue
 
-            for model_key in ["claude_opus", "deepseek_v4"]:
-                model_data = data.get(model_key)
-                if not model_data or not model_data.get("shortCandidates"):
+            # Calculate hours since analysis
+            hours_elapsed = (datetime.utcnow() - entry.created_at).total_seconds() / 3600
+            snapshot_label = f"{int(hours_elapsed)}h"
+            now_iso = datetime.utcnow().isoformat()
+
+            # Process shorts
+            for candidate in model_data.get("shortCandidates", []):
+                sym = candidate.get("symbol", "").upper()
+                current_price = prices.get(sym)
+                start_price = candidate.get("currentPrice", 0)
+
+                if not current_price or start_price <= 0:
                     continue
 
-                hits = 0
-                total = 0
-                for candidate in model_data["shortCandidates"]:
-                    sym = candidate.get("symbol", "").upper()
-                    current_price = prices.get(sym)
-                    start_price = candidate.get("currentPrice", 0)
+                actual_change = ((current_price - start_price) / start_price) * 100
 
-                    if current_price and start_price > 0:
-                        actual_change = ((current_price - start_price) / start_price) * 100
-                        candidate["actualPrice24h"] = current_price
-                        candidate["actualChange24h"] = round(actual_change, 2)
-                        candidate["hit"] = actual_change < 0  # Any drop = partial hit
-                        candidate["strongHit"] = actual_change <= -5  # 5%+ drop = strong hit
+                # Initialize snapshots array
+                if "snapshots" not in candidate:
+                    candidate["snapshots"] = []
 
-                        total += 1
-                        if actual_change < 0:
-                            hits += 1
+                # Add snapshot (avoid duplicates for same hour range)
+                existing_labels = [s.get("label") for s in candidate["snapshots"]]
+                if snapshot_label not in existing_labels:
+                    candidate["snapshots"].append({
+                        "label": snapshot_label,
+                        "time": now_iso,
+                        "price": current_price,
+                        "change": round(actual_change, 2),
+                    })
+
+                # Update latest values
+                candidate["actualPrice24h"] = current_price
+                candidate["actualChange24h"] = round(actual_change, 2)
+                candidate["hit"] = actual_change < 0
+                candidate["strongHit"] = actual_change <= -5
+
+            # Process longs
+            for candidate in model_data.get("longCandidates", []):
+                sym = candidate.get("symbol", "").upper()
+                current_price = prices.get(sym)
+                start_price = candidate.get("currentPrice", 0)
+
+                if not current_price or start_price <= 0:
+                    continue
+
+                actual_change = ((current_price - start_price) / start_price) * 100
+
+                if "snapshots" not in candidate:
+                    candidate["snapshots"] = []
+
+                existing_labels = [s.get("label") for s in candidate["snapshots"]]
+                if snapshot_label not in existing_labels:
+                    candidate["snapshots"].append({
+                        "label": snapshot_label,
+                        "time": now_iso,
+                        "price": current_price,
+                        "change": round(actual_change, 2),
+                    })
+
+                candidate["actualPrice24h"] = current_price
+                candidate["actualChange24h"] = round(actual_change, 2)
+                candidate["hit"] = actual_change > 0  # For longs, up = hit
+                candidate["strongHit"] = actual_change >= 5
+
+            # After 24h — mark as fully verified with final stats
+            if hours_elapsed >= 24:
+                shorts = model_data.get("shortCandidates", [])
+                longs = model_data.get("longCandidates", [])
+
+                short_hits = len([c for c in shorts if c.get("hit")])
+                short_total = len([c for c in shorts if c.get("actualChange24h") is not None])
+                long_hits = len([c for c in longs if c.get("hit")])
+                long_total = len([c for c in longs if c.get("actualChange24h") is not None])
 
                 model_data["verification"] = {
-                    "hits": hits,
-                    "total": total,
-                    "winrate": round((hits / total) * 100) if total > 0 else 0,
-                    "strong_hits": len([c for c in model_data["shortCandidates"] if c.get("strongHit")]),
+                    "short_hits": short_hits,
+                    "short_total": short_total,
+                    "short_winrate": round((short_hits / short_total) * 100) if short_total > 0 else 0,
+                    "short_strong": len([c for c in shorts if c.get("strongHit")]),
+                    "long_hits": long_hits,
+                    "long_total": long_total,
+                    "long_winrate": round((long_hits / long_total) * 100) if long_total > 0 else 0,
+                    "long_strong": len([c for c in longs if c.get("strongHit")]),
+                    "hits": short_hits + long_hits,
+                    "total": short_total + long_total,
+                    "winrate": round(((short_hits + long_hits) / (short_total + long_total)) * 100) if (short_total + long_total) > 0 else 0,
                 }
 
-            data["verified"] = True
-            data["verified_at"] = datetime.utcnow().isoformat()
-            entry.result_json = json.dumps(data, ensure_ascii=False)
+                data["verification_complete"] = True
+                data["verified"] = True
+                data["verified_at"] = now_iso
 
-            # Log results
-            for model_key in ["claude_opus", "deepseek_v4"]:
-                v = data.get(model_key, {}).get("verification", {})
-                if v:
-                    logger.info(f"[HYP_V2] {model_key}: {v.get('hits', 0)}/{v.get('total', 0)} drops ({v.get('winrate', 0)}%), strong: {v.get('strong_hits', 0)}")
+                logger.info(f"[HYP_V2] ID {entry.id} FINAL: shorts {short_hits}/{short_total}, longs {long_hits}/{long_total}")
+            else:
+                logger.info(f"[HYP_V2] ID {entry.id} snapshot at {snapshot_label}")
+
+            entry.result_json = json.dumps(data, ensure_ascii=False)
 
         await session.commit()
     logger.info("[HYP_V2] Verification complete")
