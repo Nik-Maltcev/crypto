@@ -71,6 +71,32 @@ const HypothesisV2: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isRunning, setIsRunning] = useState(false);
     const [error, setError] = useState('');
+    const [nextVerify, setNextVerify] = useState('');
+
+    // Timer: next verification countdown
+    useEffect(() => {
+        const calcNext = () => {
+            const now = new Date();
+            const utcH = now.getUTCHours();
+            const utcM = now.getUTCMinutes();
+            // Verification runs at 00:30, 06:30, 12:30, 18:30 UTC
+            const slots = [0.5, 6.5, 12.5, 18.5]; // hours in decimal
+            const nowDecimal = utcH + utcM / 60;
+            let nextSlot = slots.find(s => s > nowDecimal);
+            let hoursUntil: number;
+            if (nextSlot !== undefined) {
+                hoursUntil = nextSlot - nowDecimal;
+            } else {
+                hoursUntil = (24 - nowDecimal) + slots[0];
+            }
+            const h = Math.floor(hoursUntil);
+            const m = Math.floor((hoursUntil - h) * 60);
+            setNextVerify(`${h}ч ${m}м`);
+        };
+        calcNext();
+        const interval = setInterval(calcNext, 60000);
+        return () => clearInterval(interval);
+    }, []);
 
     const fetchHistory = async () => {
         try {
@@ -199,7 +225,7 @@ const HypothesisV2: React.FC = () => {
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                    <span className={`text-[11px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                         {c.riskLevel}
                                     </span>
                                 </div>
@@ -209,11 +235,11 @@ const HypothesisV2: React.FC = () => {
                             {/* Prices row */}
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
-                                    <div className="text-[9px] text-gray-500">Сейчас</div>
+                                    <div className="text-[11px] text-gray-500">Сейчас</div>
                                     <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                 </div>
                                 <div>
-                                    <div className="text-[9px] text-gray-500">Цель</div>
+                                    <div className="text-[11px] text-gray-500">Цель</div>
                                     <div className="text-xs font-mono text-red-400">{formatPrice(c.targetPrice24h)}</div>
                                 </div>
                             </div>
@@ -221,14 +247,14 @@ const HypothesisV2: React.FC = () => {
                             {/* Change + SL */}
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-bold text-red-400">{(c.expectedChange || c.expectedDrop)?.toFixed(1)}%</span>
-                                <span className="text-[9px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
+                                <span className="text-[11px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                             </div>
 
                             {/* Exchanges */}
                             {c.exchanges && c.exchanges.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
                                     {c.exchanges.map(ex => (
-                                        <span key={ex} className="text-[8px] px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                        <span key={ex} className="text-xs px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
                                             {ex}
                                         </span>
                                     ))}
@@ -240,7 +266,7 @@ const HypothesisV2: React.FC = () => {
                                 <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
                                     c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
                                 }`}>
-                                    <span className="text-[10px] font-bold">
+                                    <span className="text-xs font-bold">
                                         {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
                                     </span>
                                     <span className={`text-xs font-bold font-mono ${c.actualChange24h < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -251,15 +277,15 @@ const HypothesisV2: React.FC = () => {
 
                             {/* Catalyst */}
                             <div className="mb-1">
-                                <span className="text-[9px] text-orange-400">{c.catalyst}</span>
+                                <span className="text-[11px] text-orange-400">{c.catalyst}</span>
                             </div>
 
                             {/* Reasoning */}
-                            <p className="text-[10px] text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
+                            <p className="text-xs text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                 {c.reasoning}
                             </p>
 
-                            <div className="text-[9px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
+                            <div className="text-[11px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
                         </div>
                     ))}
                     </div>
@@ -276,7 +302,7 @@ const HypothesisV2: React.FC = () => {
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                        <span className={`text-[11px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                             {c.riskLevel}
                                         </span>
                                     </div>
@@ -286,11 +312,11 @@ const HypothesisV2: React.FC = () => {
                                 {/* Prices */}
                                 <div className="grid grid-cols-2 gap-2 mb-2">
                                     <div>
-                                        <div className="text-[9px] text-gray-500">Сейчас</div>
+                                        <div className="text-[11px] text-gray-500">Сейчас</div>
                                         <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                     </div>
                                     <div>
-                                        <div className="text-[9px] text-gray-500">Цель</div>
+                                        <div className="text-[11px] text-gray-500">Цель</div>
                                         <div className="text-xs font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
                                     </div>
                                 </div>
@@ -298,14 +324,14 @@ const HypothesisV2: React.FC = () => {
                                 {/* Change + SL */}
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</span>
-                                    <span className="text-[9px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
+                                    <span className="text-[11px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                                 </div>
 
                                 {/* Exchanges */}
                                 {c.exchanges && c.exchanges.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {c.exchanges.map(ex => (
-                                            <span key={ex} className="text-[8px] px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                            <span key={ex} className="text-xs px-1 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
                                                 {ex}
                                             </span>
                                         ))}
@@ -317,7 +343,7 @@ const HypothesisV2: React.FC = () => {
                                     <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
                                         c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
                                     }`}>
-                                        <span className="text-[10px] font-bold">
+                                        <span className="text-xs font-bold">
                                             {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
                                         </span>
                                         <span className={`text-xs font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -328,15 +354,15 @@ const HypothesisV2: React.FC = () => {
 
                                 {/* Catalyst */}
                                 <div className="mb-1">
-                                    <span className="text-[9px] text-emerald-400">{c.catalyst}</span>
+                                    <span className="text-[11px] text-emerald-400">{c.catalyst}</span>
                                 </div>
 
                                 {/* Reasoning */}
-                                <p className="text-[10px] text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
+                                <p className="text-xs text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                     {c.reasoning}
                                 </p>
 
-                                <div className="text-[9px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
+                                <div className="text-[11px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
                             </div>
                         ))}
                         </div>
@@ -346,7 +372,7 @@ const HypothesisV2: React.FC = () => {
                 {/* Avoid shorting */}
                 {modelData.avoidShorting && modelData.avoidShorting.length > 0 && (
                     <div className="px-5 pb-4">
-                        <div className="text-[10px] text-yellow-400 uppercase font-bold mb-2">⚠️ Не шортить:</div>
+                        <div className="text-xs text-yellow-400 uppercase font-bold mb-2">⚠️ Не шортить:</div>
                         <div className="space-y-1">
                             {modelData.avoidShorting.map((a, i) => (
                                 <div key={i} className="flex items-start gap-2 text-xs">
@@ -361,7 +387,7 @@ const HypothesisV2: React.FC = () => {
                 {/* Risk note */}
                 {modelData.marketRiskNote && (
                     <div className="px-5 pb-4">
-                        <p className="text-[10px] text-gray-500 italic">⚠️ {modelData.marketRiskNote}</p>
+                        <p className="text-xs text-gray-500 italic">⚠️ {modelData.marketRiskNote}</p>
                     </div>
                 )}
             </div>
@@ -409,11 +435,17 @@ const HypothesisV2: React.FC = () => {
             </div>
 
             {/* Schedule info */}
-            <div className="bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 rounded-xl p-4 flex items-center gap-4">
-                <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
-                <div>
-                    <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
+            <div className="bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
+                    <div>
+                        <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
+                    </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-4">
+                    <div className="text-xs text-gray-500 uppercase">Верификация через</div>
+                    <div className="text-sm font-bold text-cyan-400">{nextVerify}</div>
                 </div>
             </div>
 
@@ -425,17 +457,17 @@ const HypothesisV2: React.FC = () => {
                         <div className={`text-2xl font-bold ${deepseekStats.winrate >= 60 ? 'text-emerald-400' : deepseekStats.winrate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
                             {deepseekStats.winrate}%
                         </div>
-                        <div className="text-[10px] text-gray-500">{deepseekStats.totalHits}/{deepseekStats.totalPicks} drops, {deepseekStats.strongHits} strong</div>
+                        <div className="text-xs text-gray-500">{deepseekStats.totalHits}/{deepseekStats.totalPicks} drops, {deepseekStats.strongHits} strong</div>
                     </div>
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
                         <div className="text-xs text-gray-500 uppercase mb-1">Проверено</div>
                         <div className="text-2xl font-bold text-white">{verifiedItems.length}</div>
-                        <div className="text-[10px] text-gray-500">анализов</div>
+                        <div className="text-xs text-gray-500">анализов</div>
                     </div>
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
                         <div className="text-xs text-gray-500 uppercase mb-1">Всего</div>
                         <div className="text-2xl font-bold text-white">{items.filter(i => i.status === 'success').length}</div>
-                        <div className="text-[10px] text-gray-500">запусков</div>
+                        <div className="text-xs text-gray-500">запусков</div>
                     </div>
                 </div>
             )}
@@ -463,7 +495,7 @@ const HypothesisV2: React.FC = () => {
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
                             Последний анализ — {latestSuccess.created_at ? new Date(latestSuccess.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : ''}
                         </h3>
-                        <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
                             <span>Reddit: {latestSuccess.reddit_posts_count}</span>
                             <span>Twitter: {latestSuccess.twitter_tweets_count}</span>
                             <span>CMC: {latestSuccess.result.metadata?.cmc_coins_analyzed}</span>
