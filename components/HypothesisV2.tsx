@@ -43,13 +43,12 @@ interface ModelResult {
 }
 
 interface HypV2Result {
-    claude_opus: ModelResult | null;
+    claude_opus?: ModelResult | null;
     deepseek_v4: ModelResult | null;
     metadata: {
         reddit_posts: number;
         twitter_tweets: number;
         cmc_coins_analyzed: number;
-        bybit_symbols_available: number;
         lookback_hours: number;
         prediction_horizon: string;
         errors?: string[] | null;
@@ -153,7 +152,6 @@ const HypothesisV2: React.FC = () => {
         return { totalHits, totalPicks, strongHits, winrate: totalPicks > 0 ? Math.round((totalHits / totalPicks) * 100) : 0 };
     };
 
-    const claudeStats = getModelStats('claude_opus');
     const deepseekStats = getModelStats('deepseek_v4');
 
     const renderModelCard = (modelData: ModelResult | null, modelName: string, color: string) => {
@@ -300,9 +298,9 @@ const HypothesisV2: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">📉 Гипотеза №2 — Шорт 24ч</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">📉 Гипотеза — Шорт 24ч</h2>
                     <p className="text-gray-400 text-sm">
-                        16ч данных → Claude Opus 4.6 vs DeepSeek v4 Pro • Альткоины на падение • Только Bybit
+                        16ч данных → DeepSeek v4 Pro • Альткоины на падение
                     </p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
@@ -340,20 +338,13 @@ const HypothesisV2: React.FC = () => {
                 <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
                 <div>
                     <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → Claude Opus 4.6 + DeepSeek v4 Pro параллельно</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
                 </div>
             </div>
 
             {/* Overall stats */}
             {verifiedItems.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                        <div className="text-xs text-gray-500 uppercase mb-1">Claude Opus 4.6</div>
-                        <div className={`text-2xl font-bold ${claudeStats.winrate >= 60 ? 'text-emerald-400' : claudeStats.winrate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                            {claudeStats.winrate}%
-                        </div>
-                        <div className="text-[10px] text-gray-500">{claudeStats.totalHits}/{claudeStats.totalPicks} drops, {claudeStats.strongHits} strong</div>
-                    </div>
+                <div className="grid grid-cols-3 gap-4">
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
                         <div className="text-xs text-gray-500 uppercase mb-1">DeepSeek v4 Pro</div>
                         <div className={`text-2xl font-bold ${deepseekStats.winrate >= 60 ? 'text-emerald-400' : deepseekStats.winrate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -386,7 +377,7 @@ const HypothesisV2: React.FC = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
-                    <span className="text-yellow-400 text-sm font-semibold">Анализ выполняется... Обычно 2-5 минут (два AI параллельно).</span>
+                    <span className="text-yellow-400 text-sm font-semibold">Анализ выполняется... Обычно 2-5 минут.</span>
                 </div>
             )}
 
@@ -401,39 +392,12 @@ const HypothesisV2: React.FC = () => {
                             <span>Reddit: {latestSuccess.reddit_posts_count}</span>
                             <span>Twitter: {latestSuccess.twitter_tweets_count}</span>
                             <span>CMC: {latestSuccess.result.metadata?.cmc_coins_analyzed}</span>
-                            <span>Bybit: {latestSuccess.result.metadata?.bybit_symbols_available}</span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {renderModelCard(latestSuccess.result.claude_opus, '🧠 Claude Opus 4.6', 'from-purple-900/30 to-indigo-900/30')}
+                    <div>
                         {renderModelCard(latestSuccess.result.deepseek_v4, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
                     </div>
-
-                    {/* Consensus picks (appear in both models) */}
-                    {latestSuccess.result.claude_opus && latestSuccess.result.deepseek_v4 && (() => {
-                        const claudeSymbols = new Set(latestSuccess.result.claude_opus?.shortCandidates?.map(c => c.symbol) || []);
-                        const deepseekSymbols = latestSuccess.result.deepseek_v4?.shortCandidates?.map(c => c.symbol) || [];
-                        const consensus = deepseekSymbols.filter(s => claudeSymbols.has(s));
-
-                        if (consensus.length === 0) return null;
-
-                        return (
-                            <div className="mt-4 bg-gradient-to-r from-emerald-900/20 to-teal-900/20 border border-emerald-500/20 rounded-xl p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-sm font-bold text-emerald-400">🤝 Консенсус (оба AI согласны):</span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {consensus.map(sym => (
-                                        <span key={sym} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-bold">
-                                            {sym} ↓
-                                        </span>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-2">Монеты, которые оба AI предсказали к падению — наиболее надёжные шорт-кандидаты</p>
-                            </div>
-                        );
-                    })()}
                 </div>
             )}
 
@@ -455,11 +419,6 @@ const HypothesisV2: React.FC = () => {
                                         {item.result?.verified && (
                                             <>
                                                 <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                                                    (item.result.claude_opus?.verification?.winrate || 0) >= 50 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                                                }`}>
-                                                    Claude: {item.result.claude_opus?.verification?.winrate || 0}%
-                                                </span>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
                                                     (item.result.deepseek_v4?.verification?.winrate || 0) >= 50 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                                                 }`}>
                                                     DeepSeek: {item.result.deepseek_v4?.verification?.winrate || 0}%
@@ -470,8 +429,7 @@ const HypothesisV2: React.FC = () => {
                                     <span className="text-gray-500 text-xs group-open:rotate-180 transition-transform">▼</span>
                                 </div>
                             </summary>
-                            <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {renderModelCard(item.result?.claude_opus || null, '🧠 Claude Opus 4.6', 'from-purple-900/30 to-indigo-900/30')}
+                            <div className="mt-2">
                                 {renderModelCard(item.result?.deepseek_v4 || null, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
                             </div>
                         </details>
@@ -487,7 +445,7 @@ const HypothesisV2: React.FC = () => {
                     </div>
                     <h3 className="text-xl font-semibold text-white mb-2">Нет анализов</h3>
                     <p className="text-gray-400 max-w-md">
-                        Нажмите «Запустить анализ» или дождитесь автозапуска (3 раза в день).
+                        Нажмите «Запустить анализ» или дождитесь автозапуска (1 раз в день).
                     </p>
                 </div>
             )}

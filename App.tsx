@@ -17,7 +17,6 @@ import AltcoinWeekly from './components/AltcoinWeekly';
 import SourcesCheck from './components/SourcesCheck';
 import MentionsTracker from './components/MentionsTracker';
 import ShitcoinTracker from './components/ShitcoinTracker';
-import HypothesisTracker from './components/HypothesisTracker';
 import HypothesisV2 from './components/HypothesisV2';
 
 // Icons
@@ -50,7 +49,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis' | 'hypothesis_v2' | 'shitcoins'>('hypothesis');
+  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -497,16 +496,10 @@ const App: React.FC = () => {
             {/* Navigation Tabs */}
             <div className="hidden md:flex items-center space-x-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1">
               <button
-                onClick={() => setActiveTab('hypothesis')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis' ? 'bg-amber-700/50 text-amber-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🧪 Гипотеза
-              </button>
-              <button
                 onClick={() => setActiveTab('hypothesis_v2')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                📉 Гипотеза №2
+                📉 Гипотеза
               </button>
               <button
                 onClick={() => setActiveTab('history')}
@@ -595,8 +588,6 @@ const App: React.FC = () => {
           <ShitcoinTracker />
         ) : activeTab === 'sources' ? (
           <MentionsTracker />
-        ) : activeTab === 'hypothesis' ? (
-          <HypothesisTracker />
         ) : activeTab === 'hypothesis_v2' ? (
           <HypothesisV2 />
         ) : (

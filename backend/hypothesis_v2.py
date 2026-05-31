@@ -26,7 +26,6 @@ from core.models import AnalysisLog
 
 logger = logging.getLogger(__name__)
 
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 CMC_BASE = "https://pro-api.coinmarketcap.com"
 
@@ -245,46 +244,6 @@ Pick from the provided market data list."""
     return system_prompt, user_prompt
 
 
-async def _call_claude_opus(system_prompt: str, user_prompt: str, api_key: str) -> dict:
-    """Call Claude Opus 4.6 API."""
-    async with httpx.AsyncClient(timeout=300) as client:
-        resp = await client.post(
-            CLAUDE_API_URL,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-opus-4-6",
-                "max_tokens": 8192,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
-            },
-        )
-
-        if resp.status_code != 200:
-            raise RuntimeError(f"Claude API error: {resp.status_code} - {resp.text[:500]}")
-
-        data = resp.json()
-        text = ""
-        for block in data.get("content", []):
-            if block.get("type") == "text":
-                text = block.get("text", "")
-                break
-
-        text = text.replace("```json", "").replace("```", "").strip()
-        if not text.endswith("}"):
-            last_brace = text.rfind("}")
-            if last_brace != -1:
-                text = text[:last_brace + 1]
-
-        if not text:
-            raise RuntimeError("Empty response from Claude Opus")
-
-        return json.loads(text)
-
-
 async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) -> dict:
     """Call DeepSeek v4 Pro API. Two-stage batching if data too large for 128K context."""
     
@@ -380,8 +339,8 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
     reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
     cmc_key = os.environ.get("CMC_API_KEY", "")
 
-    if not claude_key and not deepseek_key:
-        logger.error("[HYP_V2] Neither CLAUDE_API_KEY nor DEEPSEEK_API_KEY set. Skipping.")
+    if not deepseek_key:
+        logger.error("[HYP_V2] DEEPSEEK_API_KEY missing. Skipping.")
         return
 
     async_session = get_async_session()
@@ -441,41 +400,16 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             # 4. Build prompts (same for both models)
             system_prompt, user_prompt = _build_prompt(cmc_coins, reddit_posts, twitter_posts)
 
-            # 5. Call both models in parallel
-            logger.info("[HYP_V2] Step 4/4: Calling AI models...")
+            # 5. Call DeepSeek v4 Pro
+            logger.info("[HYP_V2] Step 4/4: Calling DeepSeek v4 Pro...")
             
-            tasks = []
-            task_names = []
-            
-            if claude_key:
-                tasks.append(_call_claude_opus(system_prompt, user_prompt, claude_key))
-                task_names.append("claude")
-            if deepseek_key:
-                tasks.append(_call_deepseek_v4(system_prompt, user_prompt, deepseek_key))
-                task_names.append("deepseek")
+            deepseek_result = await _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            claude_result = None
-            deepseek_result = None
-            errors = []
-
-            for i, name in enumerate(task_names):
-                if isinstance(results[i], Exception):
-                    errors.append(f"{name}: {results[i]}")
-                    logger.error(f"[HYP_V2] {name} failed: {results[i]}")
-                else:
-                    if name == "claude":
-                        claude_result = results[i]
-                    else:
-                        deepseek_result = results[i]
-
-            if not claude_result and not deepseek_result:
-                raise RuntimeError(f"Both models failed: {'; '.join(errors)}")
+            if not deepseek_result:
+                raise RuntimeError("DeepSeek returned empty result")
 
             # Combine results
             combined = {
-                "claude_opus": claude_result,
                 "deepseek_v4": deepseek_result,
                 "metadata": {
                     "reddit_posts": len(reddit_posts),
@@ -483,7 +417,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                     "cmc_coins_analyzed": len(cmc_coins),
                     "lookback_hours": 16,
                     "prediction_horizon": "24h",
-                    "errors": errors if errors else None,
                 },
             }
 
@@ -497,8 +430,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             await session.commit()
 
             logger.info(f"=== HYPOTHESIS V2 complete (ID: {log.id}) ===")
-            if claude_result and claude_result.get("shortCandidates"):
-                logger.info(f"  Claude picks: {[c['symbol'] for c in claude_result['shortCandidates']]}")
             if deepseek_result and deepseek_result.get("shortCandidates"):
                 logger.info(f"  DeepSeek picks: {[c['symbol'] for c in deepseek_result['shortCandidates']]}")
 
