@@ -1,16 +1,15 @@
 """Hypothesis V2 — Short-term Altcoin Drop Predictor.
 
 Collects 16 hours of data (Reddit + Twitter + CMC) and predicts which altcoins
-will DROP in the next 24 hours (for short positions on Bybit).
+will DROP in the next 24 hours (for short positions).
 
 Two models run in parallel on the SAME data:
 1. Claude Opus 4.6 (Anthropic)
 2. DeepSeek v4 Pro
 
 Results are compared side-by-side.
-Only coins available on Bybit are included.
 
-Schedule: Every 8 hours (3x per day) — 08:00, 16:00, 00:00 MSK.
+Schedule: Once per day at 08:00 MSK (05:00 UTC).
 """
 
 import asyncio
@@ -387,8 +386,8 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
 
     async_session = get_async_session()
     async with async_session() as session:
-        # Guard: don't run if already ran within last 6 hours
-        recent_cutoff = datetime.utcnow() - timedelta(hours=6)
+        # Guard: don't run if already ran within last 1 hour
+        recent_cutoff = datetime.utcnow() - timedelta(hours=1)
         existing = await session.execute(
             select(AnalysisLog)
             .where(AnalysisLog.mode == "hypothesis_v2")

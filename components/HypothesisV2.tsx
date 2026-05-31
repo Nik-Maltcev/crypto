@@ -339,7 +339,7 @@ const HypothesisV2: React.FC = () => {
             <div className="bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 rounded-xl p-4 flex items-center gap-4">
                 <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
                 <div>
-                    <p className="text-sm text-red-300 font-semibold">Авто-запуск: 3 раза в день (08:00, 16:00, 00:00 МСК)</p>
+                    <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
                     <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → Claude Opus 4.6 + DeepSeek v4 Pro параллельно</p>
                 </div>
             </div>
