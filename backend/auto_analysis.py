@@ -87,17 +87,7 @@ DEFAULT_SUBREDDITS = list(set([
 
 # All Twitter accounts — named usernames + raw IDs (same as frontend constants.ts)
 DEFAULT_TWITTER_ACCOUNTS = [
-    # Named accounts (by username)
-    "VitalikButerin", "cz_binance", "brian_armstrong", "SBF_FTX",
-    "CryptoCapo_", "DaanCrypto", "rovercrc", "IncomeSharks", "ali_charts",
-    "crypto", "CoinDesk", "Cointelegraph", "TheBlock__", "decryptmedia",
-    "MessariCrypto", "glassnode", "santimentfeed", "whale_alert",
-    "a16zcrypto", "paradigm", "PanteraCapital", "aantonop", "100trillionUSD",
-    "scottmelker", "TheMoonCarl", "MMCrypto", "bitboy_crypto", "AltcoinDailyio",
-    "CryptoWendyO", "ToneVays", "IvanOnTech", "intocryptoverse", "CoinMarketCap",
-    "BinanceResearch", "IOHK_Charles", "solana", "rajgokal", "aeyakovenko",
-    "CryptoGodJohn", "CryptoKaleo", "Pentosh1", "Cobie", "Algorand", "0xPolygon",
-    # Raw IDs
+    # All numeric IDs only (username-based requests return 404)
     "1394397159273811971", "1437041804214370314", "1438591882691555329", "29938901", "712198712",
     "1174156053774102528", "1229568798", "867773137060069376", "1471618454", "810270119515553793",
     "13141", "861445409205563392", "729400696085348353", "16909060", "1641971", "945045726605729793",

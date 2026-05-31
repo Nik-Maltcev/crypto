@@ -16,6 +16,7 @@ interface ShortCandidate {
     riskLevel: 'Low' | 'Medium' | 'High';
     entryZone: string;
     stopLoss: number;
+    exchanges?: string[];
     // Verification fields
     actualPrice24h?: number;
     actualChange24h?: number;
@@ -230,6 +231,17 @@ const HypothesisV2: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* Exchanges */}
+                            {c.exchanges && c.exchanges.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                    {c.exchanges.map(ex => (
+                                        <span key={ex} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                            {ex}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
                             {/* Verification result */}
                             {c.actualChange24h !== undefined && (
                                 <div className={`rounded px-3 py-1.5 mb-2 flex items-center justify-between ${
@@ -302,6 +314,17 @@ const HypothesisV2: React.FC = () => {
                                         <div className="text-xs font-mono text-yellow-400">{formatPrice(c.stopLoss)}</div>
                                     </div>
                                 </div>
+
+                                {/* Exchanges */}
+                                {c.exchanges && c.exchanges.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                        {c.exchanges.map(ex => (
+                                            <span key={ex} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+                                                {ex}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div className="flex items-start gap-4 mb-1">
                                     <div className="flex-1">

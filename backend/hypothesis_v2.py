@@ -32,6 +32,53 @@ CMC_BASE = "https://pro-api.coinmarketcap.com"
 EXCLUDED_SYMBOLS = {"BTC", "ETH", "BNB", "USDT", "USDC", "STETH", "WBTC", "WETH", "DAI", "BUSD"}
 
 
+async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict[str, list[str]]:
+    """Fetch exchange listings for each symbol from CMC market-pairs endpoint."""
+    exchanges_map = {}
+    
+    # Major exchanges we care about
+    MAJOR_EXCHANGES = {"Binance", "Bybit", "OKX", "Bitget", "KuCoin", "Gate.io", "HTX", "MEXC", "Coinbase Exchange", "Kraken"}
+    
+    async with httpx.AsyncClient(timeout=30) as client:
+        headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
+        
+        for symbol in symbols:
+            try:
+                resp = await client.get(
+                    f"{CMC_BASE}/v2/cryptocurrency/market-pairs/latest",
+                    headers=headers,
+                    params={"symbol": symbol, "limit": 100}
+                )
+                if resp.status_code == 200:
+                    data = resp.json().get("data", {})
+                    # v2 returns {SYMBOL: {market_pairs: [...]}}
+                    coin_data = data.get(symbol, data.get(symbol.upper(), {}))
+                    if isinstance(coin_data, list):
+                        coin_data = coin_data[0] if coin_data else {}
+                    pairs = coin_data.get("market_pairs", [])
+                    
+                    found_exchanges = set()
+                    for pair in pairs:
+                        exchange_name = pair.get("exchange", {}).get("name", "")
+                        if exchange_name in MAJOR_EXCHANGES:
+                            found_exchanges.add(exchange_name)
+                    
+                    exchanges_map[symbol] = sorted(found_exchanges)
+                    logger.info(f"[HYP_V2] {symbol}: {exchanges_map[symbol]}")
+                else:
+                    logger.warning(f"[HYP_V2] CMC market-pairs for {symbol}: {resp.status_code}")
+                    exchanges_map[symbol] = []
+                    
+                # Small delay to avoid rate limiting
+                await asyncio.sleep(0.3)
+                
+            except Exception as e:
+                logger.warning(f"[HYP_V2] Exchange fetch error for {symbol}: {e}")
+                exchanges_map[symbol] = []
+    
+    return exchanges_map
+
+
 async def _fetch_cmc_losers_and_volatile(cmc_key: str) -> list[dict]:
     """Fetch potential drop candidates from CMC: losers, high-volume alts, recently pumped."""
     coins = []
@@ -257,55 +304,126 @@ Pick from the provided market data list."""
 
 
 async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) -> dict:
-    """Call DeepSeek v4 Pro API. Two-stage batching if data too large for 128K context."""
+    """Call DeepSeek v4 Pro API. Dynamic multi-stage batching for large data."""
     
-    # Check if we need batching for DeepSeek (128K context limit)
+    MAX_TOKENS_PER_REQUEST = 100000  # safe limit for 128K context
+    
     total_chars = len(system_prompt) + len(user_prompt)
     estimated_tokens = total_chars // 4
     
-    if estimated_tokens > 100000:
-        logger.info(f"[HYP_V2] DeepSeek: data too large ({estimated_tokens} est. tokens), using 2-stage batch...")
+    if estimated_tokens <= MAX_TOKENS_PER_REQUEST:
+        # Fits in one request — send directly
+        logger.info(f"[HYP_V2] DeepSeek: {estimated_tokens} est. tokens, sending directly...")
+    else:
+        # Dynamic batching: split data into chunks, process sequentially
+        logger.info(f"[HYP_V2] DeepSeek: {estimated_tokens} est. tokens, using dynamic batching...")
         
-        # Stage 1: Send Reddit + CMC to DeepSeek, get preliminary analysis
-        reddit_start = user_prompt.find("REDDIT (last 16 hours")
-        twitter_start = user_prompt.find("TWITTER (last 16 hours")
+        # Split user_prompt into sections by markers
+        sections = []
+        markers = ["MARKET DATA", "AVAILABLE SYMBOLS", "REDDIT (last 16 hours", "TWITTER (last 16 hours", "TASK:"]
         
-        if reddit_start > 0 and twitter_start > reddit_start:
-            market_and_reddit = user_prompt[:twitter_start]
-            twitter_section = user_prompt[twitter_start:]
+        remaining = user_prompt
+        for i, marker in enumerate(markers):
+            pos = remaining.find(marker)
+            if pos > 0:
+                sections.append(remaining[:pos])
+                remaining = remaining[pos:]
+        if remaining:
+            sections.append(remaining)
+        
+        # Merge small sections, split large ones into chunks that fit
+        chunks = []
+        current_chunk = ""
+        for section in sections:
+            section_tokens = len(section) // 4
+            if section_tokens > MAX_TOKENS_PER_REQUEST * 0.8:
+                # Section too large — split by lines
+                if current_chunk:
+                    chunks.append(current_chunk)
+                    current_chunk = ""
+                lines = section.split("\n")
+                sub_chunk = ""
+                for line in lines:
+                    if len(sub_chunk + line) // 4 > MAX_TOKENS_PER_REQUEST * 0.7:
+                        chunks.append(sub_chunk)
+                        sub_chunk = line + "\n"
+                    else:
+                        sub_chunk += line + "\n"
+                if sub_chunk:
+                    chunks.append(sub_chunk)
+            elif len(current_chunk + section) // 4 > MAX_TOKENS_PER_REQUEST * 0.8:
+                chunks.append(current_chunk)
+                current_chunk = section
+            else:
+                current_chunk += section
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        num_batches = len(chunks)
+        logger.info(f"[HYP_V2] DeepSeek: split into {num_batches} batches")
+        
+        # Process batches sequentially, accumulating intermediate results
+        accumulated_analysis = ""
+        
+        for i, chunk in enumerate(chunks):
+            is_last = (i == num_batches - 1)
             
-            stage1_prompt = f"""{market_and_reddit}
+            if is_last:
+                # Final batch — request JSON output
+                batch_prompt = f"""ПРЕДВАРИТЕЛЬНЫЙ АНАЛИЗ (из предыдущих этапов):
+{accumulated_analysis}
 
-ЗАДАЧА ЭТАП 1: Проанализируй рыночные данные и Reddit. Выдели 15-20 альткоинов которые с наибольшей вероятностью упадут в ближайшие 24 часа.
-Для каждого укажи: symbol, причину ожидаемого падения, текущий sentiment в Reddit.
-Ответь списком на русском."""
+ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ:
+{chunk}
 
-            stage1_result = ""
+Теперь на основе всего анализа дай финальный ответ в формате JSON."""
+                logger.info(f"[HYP_V2] DeepSeek Batch {i+1}/{num_batches} (final): sending...")
+            else:
+                # Intermediate batch — request summary analysis
+                batch_prompt = f"""{f'ПРЕДВАРИТЕЛЬНЫЙ АНАЛИЗ (из предыдущих этапов):{chr(10)}{accumulated_analysis}{chr(10)}{chr(10)}' if accumulated_analysis else ''}ДАННЫЕ (часть {i+1}/{num_batches}):
+{chunk}
+
+ЗАДАЧА ЭТАП {i+1}: Проанализируй эти данные. Выдели ключевые сигналы:
+- Какие альткоины упоминаются негативно (кандидаты на шорт)
+- Какие альткоины упоминаются позитивно (кандидаты на лонг)  
+- Ключевые события и катализаторы
+Ответь кратким списком на русском (до 2000 слов)."""
+                logger.info(f"[HYP_V2] DeepSeek Batch {i+1}/{num_batches}: sending...")
+            
             async with httpx.AsyncClient(timeout=600) as client:
                 resp = await client.post(
                     DEEPSEEK_API_URL,
                     headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
                     json={
                         "model": "deepseek-v4-pro",
-                        "max_tokens": 4096,
-                        "messages": [{"role": "user", "content": stage1_prompt}],
+                        "max_tokens": 4096 if not is_last else 8192,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": batch_prompt},
+                        ],
                     },
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    stage1_result = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    logger.info(f"[HYP_V2] DeepSeek Stage 1 complete: {len(stage1_result)} chars")
-            
-            if stage1_result:
-                # Stage 2: Send Twitter + Stage 1 results → final JSON answer
-                user_prompt = f"""ПРЕДВАРИТЕЛЬНЫЙ АНАЛИЗ (Reddit + Market Data):
-{stage1_result}
-
-{twitter_section}
-
-Теперь на основе предварительного анализа и Twitter данных, дай финальный ответ в формате JSON."""
-                logger.info("[HYP_V2] DeepSeek Stage 2: sending final request...")
+                if resp.status_code != 200:
+                    raise RuntimeError(f"DeepSeek API error batch {i+1}: {resp.status_code} - {resp.text[:500]}")
+                
+                data = resp.json()
+                result_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                logger.info(f"[HYP_V2] DeepSeek Batch {i+1}/{num_batches} complete: {len(result_text)} chars")
+                
+                if is_last:
+                    # Parse final JSON
+                    result_text = result_text.replace("```json", "").replace("```", "").strip()
+                    if not result_text.endswith("}"):
+                        last_brace = result_text.rfind("}")
+                        if last_brace != -1:
+                            result_text = result_text[:last_brace + 1]
+                    if not result_text:
+                        raise RuntimeError("Empty response from DeepSeek v4 Pro (final batch)")
+                    return json.loads(result_text)
+                else:
+                    accumulated_analysis += f"\n--- Этап {i+1} ---\n{result_text}\n"
     
+    # Single request path (no batching needed)
     async with httpx.AsyncClient(timeout=600) as client:
         resp = await client.post(
             DEEPSEEK_API_URL,
@@ -419,6 +537,23 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
 
             if not deepseek_result:
                 raise RuntimeError("DeepSeek returned empty result")
+
+            # Fetch exchanges for all picked symbols
+            all_picks = []
+            for c in deepseek_result.get("shortCandidates", []):
+                all_picks.append(c.get("symbol", "").upper())
+            for c in deepseek_result.get("longCandidates", []):
+                all_picks.append(c.get("symbol", "").upper())
+            
+            if all_picks and cmc_key:
+                logger.info(f"[HYP_V2] Fetching exchanges for {len(all_picks)} symbols...")
+                exchanges_map = await _fetch_exchanges_for_symbols(all_picks, cmc_key)
+                
+                # Add exchanges to each candidate
+                for c in deepseek_result.get("shortCandidates", []):
+                    c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+                for c in deepseek_result.get("longCandidates", []):
+                    c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
 
             # Combine results
             combined = {
