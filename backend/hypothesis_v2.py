@@ -32,6 +32,93 @@ CMC_BASE = "https://pro-api.coinmarketcap.com"
 EXCLUDED_SYMBOLS = {"BTC", "ETH", "BNB", "USDT", "USDC", "STETH", "WBTC", "WETH", "DAI", "BUSD"}
 
 
+def _repair_json(text: str) -> dict | None:
+    """Try to repair truncated JSON by closing brackets/braces."""
+    text = text.strip()
+    if not text:
+        return None
+    
+    # Try parsing as-is first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Find the last complete object in shortCandidates/longCandidates arrays
+    # Strategy: progressively close open brackets
+    for attempt in range(10):
+        # Count open/close brackets
+        opens = text.count("{") - text.count("}")
+        open_arrays = text.count("[") - text.count("]")
+        
+        # Try closing arrays then objects
+        fixed = text
+        if open_arrays > 0:
+            # Find last complete item in array (last "},")
+            last_complete = fixed.rfind("},")
+            if last_complete > 0:
+                fixed = fixed[:last_complete + 1]
+            fixed += "]" * open_arrays
+        
+        opens = fixed.count("{") - fixed.count("}")
+        if opens > 0:
+            fixed += "}" * opens
+        
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            # Try more aggressive: cut to last complete top-level field
+            last_brace = text.rfind("}")
+            if last_brace > 0:
+                text = text[:last_brace + 1]
+            else:
+                break
+    
+    return None
+
+
+async def _retry_deepseek_json(broken_text: str, system_prompt: str, api_key: str) -> dict | None:
+    """Ask DeepSeek to complete/fix truncated JSON."""
+    # Take first 500 and last 500 chars to show what was generated
+    preview = broken_text[:500] + "\n...[ОБРЕЗАНО]...\n" + broken_text[-500:] if len(broken_text) > 1200 else broken_text
+    
+    retry_prompt = f"""Твой предыдущий ответ был обрезан и JSON невалидный. Вот что ты начал генерировать:
+
+{preview}
+
+Пожалуйста, сгенерируй ПОЛНЫЙ валидный JSON ответ заново в том же формате. Ответ должен быть parseable через JSON.parse()."""
+
+    async with httpx.AsyncClient(timeout=300) as client:
+        resp = await client.post(
+            DEEPSEEK_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+            json={
+                "model": "deepseek-v4-pro",
+                "max_tokens": 8192,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": retry_prompt},
+                ],
+            },
+        )
+        if resp.status_code != 200:
+            logger.warning(f"[HYP_V2] JSON retry failed: {resp.status_code}")
+            return None
+        
+        data = resp.json()
+        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        text = text.replace("```json", "").replace("```", "").strip()
+        if not text.endswith("}"):
+            last_brace = text.rfind("}")
+            if last_brace != -1:
+                text = text[:last_brace + 1]
+        
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+
+
 async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict[str, list[str]]:
     """Fetch exchange listings for each symbol from CMC market-pairs endpoint."""
     exchanges_map = {}
@@ -390,7 +477,7 @@ async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) 
 Ответь кратким списком на русском (до 2000 слов)."""
                 logger.info(f"[HYP_V2] DeepSeek Batch {i+1}/{num_batches}: sending...")
             
-            async with httpx.AsyncClient(timeout=600) as client:
+            async with httpx.AsyncClient(timeout=180 if not is_last else 300) as client:
                 resp = await client.post(
                     DEEPSEEK_API_URL,
                     headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
@@ -411,7 +498,7 @@ async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) 
                 logger.info(f"[HYP_V2] DeepSeek Batch {i+1}/{num_batches} complete: {len(result_text)} chars")
                 
                 if is_last:
-                    # Parse final JSON
+                    # Parse final JSON with repair+retry
                     result_text = result_text.replace("```json", "").replace("```", "").strip()
                     if not result_text.endswith("}"):
                         last_brace = result_text.rfind("}")
@@ -419,12 +506,26 @@ async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) 
                             result_text = result_text[:last_brace + 1]
                     if not result_text:
                         raise RuntimeError("Empty response from DeepSeek v4 Pro (final batch)")
-                    return json.loads(result_text)
+                    
+                    try:
+                        return json.loads(result_text)
+                    except json.JSONDecodeError:
+                        logger.warning("[HYP_V2] Final batch JSON invalid, attempting repair...")
+                        repaired = _repair_json(result_text)
+                        if repaired:
+                            logger.info("[HYP_V2] JSON repaired successfully")
+                            return repaired
+                        logger.warning("[HYP_V2] Repair failed, retrying with DeepSeek...")
+                        retried = await _retry_deepseek_json(result_text, system_prompt, api_key)
+                        if retried:
+                            logger.info("[HYP_V2] JSON retry successful")
+                            return retried
+                        raise RuntimeError("DeepSeek returned invalid JSON, repair and retry both failed")
                 else:
                     accumulated_analysis += f"\n--- Этап {i+1} ---\n{result_text}\n"
     
     # Single request path (no batching needed)
-    async with httpx.AsyncClient(timeout=600) as client:
+    async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
             DEEPSEEK_API_URL,
             headers={
@@ -456,7 +557,20 @@ async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) 
         if not text:
             raise RuntimeError("Empty response from DeepSeek v4 Pro")
 
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("[HYP_V2] JSON invalid, attempting repair...")
+            repaired = _repair_json(text)
+            if repaired:
+                logger.info("[HYP_V2] JSON repaired successfully")
+                return repaired
+            logger.warning("[HYP_V2] Repair failed, retrying with DeepSeek...")
+            retried = await _retry_deepseek_json(text, system_prompt, api_key)
+            if retried:
+                logger.info("[HYP_V2] JSON retry successful")
+                return retried
+            raise RuntimeError("DeepSeek returned invalid JSON, repair and retry both failed")
 
 
 async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
