@@ -123,9 +123,6 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict
     """Fetch exchange listings for each symbol from CMC market-pairs endpoint."""
     exchanges_map = {}
     
-    # Major exchanges we care about
-    MAJOR_EXCHANGES = {"Binance", "Bybit", "OKX", "Bitget", "KuCoin", "Gate.io", "HTX", "MEXC", "Coinbase Exchange", "Kraken"}
-    
     async with httpx.AsyncClient(timeout=30) as client:
         headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
         
@@ -147,7 +144,7 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict
                     found_exchanges = set()
                     for pair in pairs:
                         exchange_name = pair.get("exchange", {}).get("name", "")
-                        if exchange_name in MAJOR_EXCHANGES:
+                        if exchange_name:
                             found_exchanges.add(exchange_name)
                     
                     exchanges_map[symbol] = sorted(found_exchanges)
