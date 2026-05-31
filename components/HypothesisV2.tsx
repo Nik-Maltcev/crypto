@@ -7,7 +7,8 @@ interface ShortCandidate {
     name: string;
     currentPrice: number;
     targetPrice24h: number;
-    expectedDrop: number;
+    expectedChange: number;
+    expectedDrop?: number;
     confidence: number;
     timeframe: string;
     catalyst: string;
@@ -15,7 +16,6 @@ interface ShortCandidate {
     riskLevel: 'Low' | 'Medium' | 'High';
     entryZone: string;
     stopLoss: number;
-    bybitAvailable: boolean;
     // Verification fields
     actualPrice24h?: number;
     actualChange24h?: number;
@@ -23,15 +23,11 @@ interface ShortCandidate {
     strongHit?: boolean;
 }
 
-interface AvoidEntry {
-    symbol: string;
-    reason: string;
-}
-
 interface ModelResult {
     summary: string;
     analysisTime?: string;
     shortCandidates: ShortCandidate[];
+    longCandidates?: ShortCandidate[];
     avoidShorting?: AvoidEntry[];
     marketRiskNote?: string;
     verification?: {
@@ -177,7 +173,7 @@ const HypothesisV2: React.FC = () => {
                             </span>
                         )}
                     </div>
-                    <span className="text-xs text-gray-400">{modelData.shortCandidates?.length || 0} picks</span>
+                    <span className="text-xs text-gray-400">{modelData.shortCandidates?.length || 0} shorts / {modelData.longCandidates?.length || 0} longs</span>
                 </div>
 
                 {/* Summary */}
@@ -189,6 +185,7 @@ const HypothesisV2: React.FC = () => {
 
                 {/* Short candidates */}
                 <div className="p-4 space-y-3">
+                    <div className="text-xs text-red-400 uppercase font-bold mb-2">📉 Шорт-кандидаты</div>
                     {modelData.shortCandidates?.map((c, idx) => (
                         <div key={c.symbol} className={`rounded-lg p-4 border ${
                             c.strongHit ? 'bg-emerald-500/10 border-emerald-500/30' :
@@ -210,9 +207,6 @@ const HypothesisV2: React.FC = () => {
                                     <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold">
                                         {c.confidence}%
                                     </span>
-                                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                                        Bybit ✓
-                                    </span>
                                 </div>
                             </div>
 
@@ -228,7 +222,7 @@ const HypothesisV2: React.FC = () => {
                                 </div>
                                 <div>
                                     <div className="text-[10px] text-gray-500 uppercase">Падение</div>
-                                    <div className="text-sm font-bold text-red-400">{c.expectedDrop?.toFixed(1)}%</div>
+                                    <div className="text-sm font-bold text-red-400">{(c.expectedChange || c.expectedDrop)?.toFixed(1)}%</div>
                                 </div>
                                 <div>
                                     <div className="text-[10px] text-gray-500 uppercase">Stop-Loss</div>
@@ -267,6 +261,63 @@ const HypothesisV2: React.FC = () => {
                         </div>
                     ))}
                 </div>
+
+                {/* Long candidates */}
+                {modelData.longCandidates && modelData.longCandidates.length > 0 && (
+                    <div className="p-4 space-y-3 border-t border-gray-800">
+                        <div className="text-xs text-emerald-400 uppercase font-bold mb-2">📈 Лонг-кандидаты</div>
+                        {modelData.longCandidates.map((c, idx) => (
+                            <div key={c.symbol} className="rounded-lg p-4 border bg-gray-900/50 border-emerald-700/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-white">#{idx + 1}</span>
+                                        <span className="text-lg font-bold text-white">{c.symbol}</span>
+                                        <span className="text-xs text-gray-500">{c.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                            {c.riskLevel}
+                                        </span>
+                                        <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold">
+                                            {c.confidence}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase">Сейчас</div>
+                                        <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase">Цель 24ч</div>
+                                        <div className="text-xs font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase">Рост</div>
+                                        <div className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 uppercase">Stop-Loss</div>
+                                        <div className="text-xs font-mono text-yellow-400">{formatPrice(c.stopLoss)}</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-4 mb-1">
+                                    <div className="flex-1">
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold">Катализатор: </span>
+                                        <span className="text-xs text-emerald-400">{c.catalyst}</span>
+                                    </div>
+                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">⏱ {c.timeframe}</span>
+                                </div>
+
+                                <p className="text-[11px] text-gray-400 line-clamp-2 hover:line-clamp-none transition-all cursor-pointer">
+                                    {c.reasoning}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Avoid shorting */}
                 {modelData.avoidShorting && modelData.avoidShorting.length > 0 && (

@@ -184,7 +184,7 @@ Output pure JSON only. No markdown wrappers. Response must be parseable by JSON.
 
 Response Format:
 {
-  "summary": "String (Russian) - Overall market sentiment and why drops are expected, 2-3 sentences",
+  "summary": "String (Russian) - Overall market sentiment, 2-3 sentences",
   "analysisTime": "ISO datetime string",
   "shortCandidates": [
     {
@@ -192,37 +192,48 @@ Response Format:
       "name": "Full Name",
       "currentPrice": 1.23,
       "targetPrice24h": 1.05,
-      "expectedDrop": -14.6,
+      "expectedChange": -14.6,
       "confidence": 75,
       "timeframe": "6-12h" | "12-18h" | "18-24h",
-      "catalyst": "String (Russian) - What will trigger the drop",
+      "catalyst": "String (Russian) - What will trigger the move",
       "reasoning": "String (Russian) - Detailed analysis",
       "riskLevel": "Low" | "Medium" | "High",
       "entryZone": "String - price range for entry",
       "stopLoss": 1.35
     }
   ],
-  "avoidShorting": [
+  "longCandidates": [
     {
       "symbol": "COIN",
-      "reason": "String (Russian) - Why NOT to short this despite looking weak"
+      "name": "Full Name",
+      "currentPrice": 1.23,
+      "targetPrice24h": 1.50,
+      "expectedChange": 22.0,
+      "confidence": 70,
+      "timeframe": "6-12h" | "12-18h" | "18-24h",
+      "catalyst": "String (Russian) - What will trigger the pump",
+      "reasoning": "String (Russian) - Detailed analysis",
+      "riskLevel": "Low" | "Medium" | "High",
+      "entryZone": "String - price range for entry",
+      "stopLoss": 1.10
     }
   ],
   "marketRiskNote": "String (Russian) - General risk warning for the next 24h"
 }
 
 RULES:
-- You MUST ALWAYS provide exactly 5-10 shortCandidates. NEVER return an empty list. Even if the market looks uncertain, pick the LEAST favorable coins with lower confidence scores.
-- Select 5-10 altcoins most likely to DROP 5-20%+ in the next 24 hours
-- Sort by confidence (highest first)
+- You MUST ALWAYS provide exactly 5-10 shortCandidates AND 3-7 longCandidates. NEVER return empty lists.
+- shortCandidates: altcoins most likely to DROP 5-20%+ in the next 24 hours
+- longCandidates: altcoins most likely to PUMP 10-30%+ in the next 24 hours
+- Sort each list by confidence (highest first)
 - ONLY pick coins from the PROVIDED MARKET DATA list
-- Look for: exhausted pumps, negative news, broken support, token unlocks, whale dumps, declining volume after spike
-- Be REALISTIC — don't predict -50% drops, focus on -5% to -20% range
-- Include stop-loss levels (where the short thesis is invalidated)
-- "avoidShorting": 2-4 coins that look weak but have short-squeeze risk or strong support
+- For SHORTS look for: exhausted pumps, negative news, broken support, token unlocks, whale dumps, declining volume after spike
+- For LONGS look for: breakout patterns, positive catalysts, accumulation signals, strong community momentum, upcoming launches/partnerships
+- Be REALISTIC — don't predict extreme moves, focus on achievable targets
+- Include stop-loss levels (where the thesis is invalidated)
 - All text in Russian
 - EXCLUDE: BTC, ETH, BNB, USDT, USDC, DOGE, SOL, XRP
-- If market conditions make shorting risky, still provide picks but set confidence lower (30-50%) and note the risk in reasoning"""
+- If market conditions are uncertain, still provide picks but set confidence lower (30-50%) and note the risk"""
 
     user_prompt = f"""CURRENT TIME (UTC): {datetime.utcnow().isoformat()}Z
 
@@ -237,8 +248,9 @@ REDDIT (last 16 hours, {len(reddit_posts)} posts, top 400 by score):
 TWITTER (last 16 hours, {len(twitter_posts)} tweets):
 {twitter_payload}
 
-TASK: Identify 5-10 altcoins that will DROP in the next 24 hours.
-Focus on: exhausted pumps, negative sentiment, broken technicals, upcoming bad events.
+TASK: Identify 5-10 altcoins that will DROP and 3-7 altcoins that will PUMP in the next 24 hours.
+For SHORTS: exhausted pumps, negative sentiment, broken technicals, upcoming bad events.
+For LONGS: breakout setups, positive catalysts, accumulation, strong momentum.
 Pick from the provided market data list."""
 
     return system_prompt, user_prompt
