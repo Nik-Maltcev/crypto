@@ -29,37 +29,9 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
-BYBIT_INSTRUMENTS_URL = "https://api.bybit.com/v5/market/instruments-info"
 CMC_BASE = "https://pro-api.coinmarketcap.com"
-BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
 
 EXCLUDED_SYMBOLS = {"BTC", "ETH", "BNB", "USDT", "USDC", "STETH", "WBTC", "WETH", "DAI", "BUSD"}
-
-
-async def _fetch_bybit_symbols() -> set[str]:
-    """Fetch all Bybit spot + linear perpetual symbols."""
-    symbols = set()
-    async with httpx.AsyncClient(timeout=30) as client:
-        for category in ["spot", "linear"]:
-            try:
-                resp = await client.get(BYBIT_INSTRUMENTS_URL, params={"category": category, "limit": 1000})
-                if resp.status_code == 200:
-                    data = resp.json()
-                    items = data.get("result", {}).get("list", [])
-                    for item in items:
-                        base = item.get("baseCoin", "").upper()
-                        if base:
-                            symbols.add(base)
-                else:
-                    logger.warning(f"[HYP_V2] Bybit {category} returned {resp.status_code}")
-            except Exception as e:
-                logger.warning(f"[HYP_V2] Bybit {category} fetch error: {e}")
-    
-    if not symbols:
-        logger.warning("[HYP_V2] Bybit API returned 0 symbols! Skipping Bybit filter.")
-    
-    logger.info(f"[HYP_V2] Bybit: {len(symbols)} symbols (spot + linear)")
-    return symbols
 
 
 async def _fetch_cmc_losers_and_volatile(cmc_key: str) -> list[dict]:
@@ -176,18 +148,12 @@ async def _fetch_twitter_16h() -> list[dict]:
     return tweets
 
 
-def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list, bybit_symbols: set[str]) -> tuple[str, str]:
+def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list) -> tuple[str, str]:
     """Build system + user prompts for both models."""
     
-    # Filter CMC coins to only Bybit-available (skip filter if Bybit returned 0)
-    if bybit_symbols:
-        bybit_coins = [c for c in cmc_coins if c["symbol"] in bybit_symbols]
-    else:
-        bybit_coins = cmc_coins
-    
-    # Market data — all Bybit coins
+    # Market data — all CMC coins
     market_lines = []
-    for coin in bybit_coins:
+    for coin in cmc_coins:
         market_lines.append(
             f"{coin['symbol']} ({coin['name']}): ${coin['price']:.6f} | "
             f"1h: {coin['change_1h']:+.1f}% | 24h: {coin['change_24h']:+.1f}% | "
@@ -210,7 +176,7 @@ def _build_prompt(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list
         "user": t.get("user", ""),
     } for t in twitter_posts], ensure_ascii=False) if twitter_posts else "No Twitter data."
 
-    bybit_available_list = sorted([c["symbol"] for c in bybit_coins])
+    all_symbols_list = sorted([c["symbol"] for c in cmc_coins])
 
     system_prompt = """You are CryptoPulse AI — a professional short-term crypto analyst specializing in SHORT positions.
 
@@ -235,8 +201,7 @@ Response Format:
       "reasoning": "String (Russian) - Detailed analysis",
       "riskLevel": "Low" | "Medium" | "High",
       "entryZone": "String - price range for entry",
-      "stopLoss": 1.35,
-      "bybitAvailable": true
+      "stopLoss": 1.35
     }
   ],
   "avoidShorting": [
@@ -252,7 +217,7 @@ RULES:
 - You MUST ALWAYS provide exactly 5-10 shortCandidates. NEVER return an empty list. Even if the market looks uncertain, pick the LEAST favorable coins with lower confidence scores.
 - Select 5-10 altcoins most likely to DROP 5-20%+ in the next 24 hours
 - Sort by confidence (highest first)
-- ONLY pick coins from the BYBIT AVAILABLE list
+- ONLY pick coins from the PROVIDED MARKET DATA list
 - Look for: exhausted pumps, negative news, broken support, token unlocks, whale dumps, declining volume after spike
 - Be REALISTIC — don't predict -50% drops, focus on -5% to -20% range
 - Include stop-loss levels (where the short thesis is invalidated)
@@ -263,10 +228,10 @@ RULES:
 
     user_prompt = f"""CURRENT TIME (UTC): {datetime.utcnow().isoformat()}Z
 
-MARKET DATA (Bybit-available altcoins only):
+MARKET DATA (altcoins from CMC):
 {market_context}
 
-BYBIT AVAILABLE SYMBOLS: {json.dumps(bybit_available_list)}
+AVAILABLE SYMBOLS: {json.dumps(all_symbols_list)}
 
 REDDIT (last 16 hours, {len(reddit_posts)} posts, top 400 by score):
 {reddit_payload}
@@ -276,7 +241,7 @@ TWITTER (last 16 hours, {len(twitter_posts)} tweets):
 
 TASK: Identify 5-10 altcoins that will DROP in the next 24 hours.
 Focus on: exhausted pumps, negative sentiment, broken technicals, upcoming bad events.
-All coins MUST be on Bybit for shorting."""
+Pick from the provided market data list."""
 
     return system_prompt, user_prompt
 
@@ -455,37 +420,33 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
         await session.refresh(log)
 
         try:
-            # 1. Bybit symbols
-            logger.info("[HYP_V2] Step 1/5: Fetching Bybit symbols...")
-            bybit_symbols = await _fetch_bybit_symbols()
-
-            # 2. CMC data
-            logger.info("[HYP_V2] Step 2/5: Fetching CMC data...")
+            # 1. CMC data
+            logger.info("[HYP_V2] Step 1/4: Fetching CMC data...")
             cmc_coins = []
             if cmc_key:
                 cmc_coins = await _fetch_cmc_losers_and_volatile(cmc_key)
             logger.info(f"[HYP_V2] CMC: {len(cmc_coins)} coins")
 
-            # 3. Reddit (16h)
-            logger.info("[HYP_V2] Step 3/5: Fetching Reddit (16h)...")
+            # 2. Reddit (16h)
+            logger.info("[HYP_V2] Step 2/4: Fetching Reddit (16h)...")
             reddit_posts = []
             if reddit_id and reddit_secret:
                 reddit_posts = await _fetch_reddit_16h(reddit_id, reddit_secret)
             logger.info(f"[HYP_V2] Reddit: {len(reddit_posts)} posts")
 
-            # 4. Twitter (16h)
-            logger.info("[HYP_V2] Step 4/5: Fetching Twitter (16h)...")
+            # 3. Twitter (16h)
+            logger.info("[HYP_V2] Step 3/4: Fetching Twitter (16h)...")
             twitter_posts = await _fetch_twitter_16h()
             logger.info(f"[HYP_V2] Twitter: {len(twitter_posts)} tweets")
 
             if not cmc_coins and not reddit_posts:
                 raise RuntimeError("No data collected (CMC + Reddit both empty)")
 
-            # 5. Build prompts (same for both models)
-            system_prompt, user_prompt = _build_prompt(cmc_coins, reddit_posts, twitter_posts, bybit_symbols)
+            # 4. Build prompts (same for both models)
+            system_prompt, user_prompt = _build_prompt(cmc_coins, reddit_posts, twitter_posts)
 
-            # 6. Call both models in parallel
-            logger.info("[HYP_V2] Step 5/5: Calling Claude Opus 4.6 + DeepSeek v4 Pro in parallel...")
+            # 5. Call both models in parallel
+            logger.info("[HYP_V2] Step 4/4: Calling Claude Opus 4.6 + DeepSeek v4 Pro in parallel...")
             
             claude_task = _call_claude_opus(system_prompt, user_prompt, claude_key)
             deepseek_task = _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
@@ -511,15 +472,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             if not claude_result and not deepseek_result:
                 raise RuntimeError(f"Both models failed: {'; '.join(errors)}")
 
-            # Post-process: verify Bybit availability (skip if Bybit returned 0)
-            if bybit_symbols:
-                for result in [claude_result, deepseek_result]:
-                    if result and result.get("shortCandidates"):
-                        result["shortCandidates"] = [
-                            c for c in result["shortCandidates"]
-                            if c.get("symbol", "").upper() in bybit_symbols
-                        ]
-
             # Combine results
             combined = {
                 "claude_opus": claude_result,
@@ -528,7 +480,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                     "reddit_posts": len(reddit_posts),
                     "twitter_tweets": len(twitter_posts),
                     "cmc_coins_analyzed": len(cmc_coins),
-                    "bybit_symbols_available": len(bybit_symbols),
                     "lookback_hours": 16,
                     "prediction_horizon": "24h",
                     "errors": errors if errors else None,
