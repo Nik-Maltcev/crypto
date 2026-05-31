@@ -135,11 +135,29 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict
                 )
                 if resp.status_code == 200:
                     data = resp.json().get("data", {})
-                    # v2 returns {SYMBOL: {market_pairs: [...]}}
-                    coin_data = data.get(symbol, data.get(symbol.upper(), {}))
-                    if isinstance(coin_data, list):
-                        coin_data = coin_data[0] if coin_data else {}
-                    pairs = coin_data.get("market_pairs", [])
+                    logger.info(f"[HYP_V2] CMC raw keys for {symbol}: {list(data.keys())[:5]}")
+                    
+                    # CMC v2 may return data differently - try multiple formats
+                    pairs = []
+                    if isinstance(data, dict):
+                        # Format: {SYMBOL: [{market_pairs: [...]}]} or {SYMBOL: {market_pairs: [...]}}
+                        coin_data = data.get(symbol, data.get(symbol.upper(), None))
+                        if coin_data is None and len(data) > 0:
+                            # Maybe nested under numeric ID or different key
+                            first_val = next(iter(data.values()), None)
+                            if first_val:
+                                coin_data = first_val
+                        if isinstance(coin_data, list) and len(coin_data) > 0:
+                            coin_data = coin_data[0]
+                        if isinstance(coin_data, dict):
+                            pairs = coin_data.get("market_pairs", [])
+                    elif isinstance(data, list):
+                        # Format: [{market_pairs: [...]}]
+                        if len(data) > 0 and isinstance(data[0], dict):
+                            pairs = data[0].get("market_pairs", [])
+                    
+                    if not pairs:
+                        logger.warning(f"[HYP_V2] No market_pairs found for {symbol}, data type: {type(data)}, sample: {str(data)[:200]}")
                     
                     found_exchanges = set()
                     for pair in pairs:
@@ -148,7 +166,8 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str) -> dict
                             found_exchanges.add(exchange_name)
                     
                     exchanges_map[symbol] = sorted(found_exchanges)
-                    logger.info(f"[HYP_V2] {symbol}: {exchanges_map[symbol]}")
+                    if found_exchanges:
+                        logger.info(f"[HYP_V2] {symbol}: {exchanges_map[symbol]}")
                 else:
                     logger.warning(f"[HYP_V2] CMC market-pairs for {symbol}: {resp.status_code}")
                     exchanges_map[symbol] = []
