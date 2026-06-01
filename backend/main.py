@@ -1083,8 +1083,6 @@ async def enrich_hypothesis_v2_exchanges():
         all_symbols = []
         for c in model_data.get("shortCandidates", []):
             all_symbols.append(c.get("symbol", "").upper())
-        for c in model_data.get("longCandidates", []):
-            all_symbols.append(c.get("symbol", "").upper())
         
         if not all_symbols:
             return {"success": True, "message": "No picks to enrich"}
@@ -1094,8 +1092,6 @@ async def enrich_hypothesis_v2_exchanges():
         
         # Update candidates
         for c in model_data.get("shortCandidates", []):
-            c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
-        for c in model_data.get("longCandidates", []):
             c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
         
         entry.result_json = json.dumps(data, ensure_ascii=False)

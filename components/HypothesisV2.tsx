@@ -212,7 +212,7 @@ const HypothesisV2: React.FC = () => {
                             </span>
                         )}
                     </div>
-                    <span className="text-sm text-gray-400">{modelData.shortCandidates?.length || 0} shorts / {modelData.longCandidates?.length || 0} longs</span>
+                    <span className="text-sm text-gray-400">{modelData.shortCandidates?.length || 0} shorts</span>
                 </div>
 
                 {/* Summary */}
@@ -322,101 +322,6 @@ const HypothesisV2: React.FC = () => {
                 </div>
 
                 {/* Long candidates */}
-                {modelData.longCandidates && modelData.longCandidates.length > 0 && (
-                    <div className="p-4 border-t border-gray-800">
-                        <div className="text-sm text-emerald-400 uppercase font-bold mb-3">📈 Лонг-кандидаты</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {modelData.longCandidates.map((c, idx) => (
-                            <div key={c.symbol} className="rounded-xl p-4 border bg-gray-900/50 border-emerald-700/30">
-                                {/* Header */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                        <span className={`text-sm px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
-                                            {c.riskLevel}
-                                        </span>
-                                    </div>
-                                    <span className="text-sm font-bold text-indigo-400">{c.confidence}%</span>
-                                </div>
-
-                                {/* Prices */}
-                                <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div>
-                                        <div className="text-sm text-gray-500">Сейчас</div>
-                                        <div className="text-sm font-mono text-white">{formatPrice(c.currentPrice)}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-sm text-gray-500">Цель</div>
-                                        <div className="text-sm font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
-                                    </div>
-                                </div>
-
-                                {/* Change + SL */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</span>
-                                    <span className="text-sm text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
-                                </div>
-
-                                {/* Exchanges */}
-                                {c.exchanges && c.exchanges.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                        {c.exchanges.map(ex => (
-                                            <span key={ex} className={`text-sm px-1.5 py-0.5 rounded border ${
-                                                RU_EXCHANGES.has(ex) 
-                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                                                    : 'bg-gray-800 text-gray-500 border-gray-700'
-                                            }`}>
-                                                {RU_EXCHANGES.has(ex) ? '🇷🇺 ' : ''}{ex}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Verification */}
-                                {c.actualChange24h !== undefined && (
-                                    <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
-                                        c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
-                                    }`}>
-                                        <span className="text-sm font-bold">
-                                            {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
-                                        </span>
-                                        <span className={`text-sm font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
-                                        </span>
-                                    </div>
-                                )}
-
-                                {/* Snapshots (6h price tracking) */}
-                                {c.snapshots && c.snapshots.length > 0 && (
-                                    <div className="flex gap-1 mb-2 overflow-x-auto">
-                                        {c.snapshots.map((s, i) => (
-                                            <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
-                                                <div className="text-sm text-gray-500">{s.label}</div>
-                                                <div className={`text-sm font-bold ${s.change > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Catalyst */}
-                                <div className="mb-1">
-                                    <span className="text-sm text-emerald-400">{c.catalyst}</span>
-                                </div>
-
-                                {/* Reasoning */}
-                                <p className="text-sm text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
-                                    {c.reasoning}
-                                </p>
-
-                                <div className="text-sm text-gray-600 mt-1">⏱ {c.timeframe}</div>
-                            </div>
-                        ))}
-                        </div>
-                    </div>
-                )}
-
                 {/* Avoid shorting */}
                 {modelData.avoidShorting && modelData.avoidShorting.length > 0 && (
                     <div className="px-5 pb-4">

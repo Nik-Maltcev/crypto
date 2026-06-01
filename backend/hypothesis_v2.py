@@ -366,33 +366,15 @@ Response Format:
       "stopLoss": 1.35
     }
   ],
-  "longCandidates": [
-    {
-      "symbol": "COIN",
-      "name": "Full Name",
-      "currentPrice": 1.23,
-      "targetPrice24h": 1.50,
-      "expectedChange": 22.0,
-      "confidence": 70,
-      "timeframe": "6-12h" | "12-18h" | "18-24h",
-      "catalyst": "String (Russian) - What will trigger the pump",
-      "reasoning": "String (Russian) - Detailed analysis",
-      "riskLevel": "Low" | "Medium" | "High",
-      "entryZone": "String - price range for entry",
-      "stopLoss": 1.10
-    }
-  ],
   "marketRiskNote": "String (Russian) - General risk warning for the next 24h"
 }
 
 RULES:
-- You MUST ALWAYS provide exactly 5-10 shortCandidates AND 3-7 longCandidates. NEVER return empty lists.
+- You MUST ALWAYS provide exactly 5-10 shortCandidates. NEVER return an empty list.
 - shortCandidates: altcoins most likely to DROP 5-20%+ in the next 24 hours
-- longCandidates: altcoins most likely to PUMP 10-30%+ in the next 24 hours
-- Sort each list by confidence (highest first)
+- Sort by confidence (highest first)
 - ONLY pick coins from the PROVIDED MARKET DATA list
-- For SHORTS look for: exhausted pumps, negative news, broken support, token unlocks, whale dumps, declining volume after spike
-- For LONGS look for: breakout patterns, positive catalysts, accumulation signals, strong community momentum, upcoming launches/partnerships
+- Look for: exhausted pumps, negative news, broken support, token unlocks, whale dumps, declining volume after spike
 - Be REALISTIC — don't predict extreme moves, focus on achievable targets
 - Include stop-loss levels (where the thesis is invalidated)
 - All text in Russian
@@ -412,9 +394,8 @@ REDDIT (last 16 hours, {len(reddit_posts)} posts, top 400 by score):
 TWITTER (last 16 hours, {len(twitter_posts)} tweets):
 {twitter_payload}
 
-TASK: Identify 5-10 altcoins that will DROP and 3-7 altcoins that will PUMP in the next 24 hours.
-For SHORTS: exhausted pumps, negative sentiment, broken technicals, upcoming bad events.
-For LONGS: breakout setups, positive catalysts, accumulation, strong momentum.
+TASK: Identify 5-10 altcoins that will DROP in the next 24 hours.
+Focus on: exhausted pumps, negative sentiment, broken technicals, upcoming bad events.
 Pick from the provided market data list."""
 
     return system_prompt, user_prompt
@@ -686,8 +667,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             all_picks = []
             for c in deepseek_result.get("shortCandidates", []):
                 all_picks.append(c.get("symbol", "").upper())
-            for c in deepseek_result.get("longCandidates", []):
-                all_picks.append(c.get("symbol", "").upper())
             
             if all_picks and cmc_key:
                 logger.info(f"[HYP_V2] Fetching exchanges for {len(all_picks)} symbols...")
@@ -695,8 +674,6 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                 
                 # Add exchanges to each candidate
                 for c in deepseek_result.get("shortCandidates", []):
-                    c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
-                for c in deepseek_result.get("longCandidates", []):
                     c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
 
             # Combine results
@@ -783,11 +760,9 @@ async def verify_hypothesis_v2_results() -> None:
             if not model_data:
                 continue
 
-            # Collect all symbols from shorts + longs
+            # Collect all symbols from shorts
             all_symbols = set()
             for c in model_data.get("shortCandidates", []):
-                all_symbols.add(c.get("symbol", "").upper())
-            for c in model_data.get("longCandidates", []):
                 all_symbols.add(c.get("symbol", "").upper())
 
             if not all_symbols:
@@ -852,63 +827,25 @@ async def verify_hypothesis_v2_results() -> None:
                 candidate["hit"] = actual_change < 0
                 candidate["strongHit"] = actual_change <= -5
 
-            # Process longs
-            for candidate in model_data.get("longCandidates", []):
-                sym = candidate.get("symbol", "").upper()
-                current_price = prices.get(sym)
-                start_price = candidate.get("currentPrice", 0)
-
-                if not current_price or start_price <= 0:
-                    continue
-
-                actual_change = ((current_price - start_price) / start_price) * 100
-
-                if "snapshots" not in candidate:
-                    candidate["snapshots"] = []
-
-                existing_labels = [s.get("label") for s in candidate["snapshots"]]
-                if snapshot_label not in existing_labels:
-                    candidate["snapshots"].append({
-                        "label": snapshot_label,
-                        "time": now_iso,
-                        "price": current_price,
-                        "change": round(actual_change, 2),
-                    })
-
-                candidate["actualPrice24h"] = current_price
-                candidate["actualChange24h"] = round(actual_change, 2)
-                candidate["hit"] = actual_change > 0  # For longs, up = hit
-                candidate["strongHit"] = actual_change >= 5
-
             # After 24h — mark as fully verified with final stats
             if hours_elapsed >= 24:
                 shorts = model_data.get("shortCandidates", [])
-                longs = model_data.get("longCandidates", [])
 
                 short_hits = len([c for c in shorts if c.get("hit")])
                 short_total = len([c for c in shorts if c.get("actualChange24h") is not None])
-                long_hits = len([c for c in longs if c.get("hit")])
-                long_total = len([c for c in longs if c.get("actualChange24h") is not None])
 
                 model_data["verification"] = {
-                    "short_hits": short_hits,
-                    "short_total": short_total,
-                    "short_winrate": round((short_hits / short_total) * 100) if short_total > 0 else 0,
-                    "short_strong": len([c for c in shorts if c.get("strongHit")]),
-                    "long_hits": long_hits,
-                    "long_total": long_total,
-                    "long_winrate": round((long_hits / long_total) * 100) if long_total > 0 else 0,
-                    "long_strong": len([c for c in longs if c.get("strongHit")]),
-                    "hits": short_hits + long_hits,
-                    "total": short_total + long_total,
-                    "winrate": round(((short_hits + long_hits) / (short_total + long_total)) * 100) if (short_total + long_total) > 0 else 0,
+                    "hits": short_hits,
+                    "total": short_total,
+                    "winrate": round((short_hits / short_total) * 100) if short_total > 0 else 0,
+                    "strong_hits": len([c for c in shorts if c.get("strongHit")]),
                 }
 
                 data["verification_complete"] = True
                 data["verified"] = True
                 data["verified_at"] = now_iso
 
-                logger.info(f"[HYP_V2] ID {entry.id} FINAL: shorts {short_hits}/{short_total}, longs {long_hits}/{long_total}")
+                logger.info(f"[HYP_V2] ID {entry.id} FINAL: shorts {short_hits}/{short_total}")
             else:
                 logger.info(f"[HYP_V2] ID {entry.id} snapshot at {snapshot_label}")
 
