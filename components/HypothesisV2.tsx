@@ -523,15 +523,12 @@ const HypothesisV2: React.FC = () => {
                                         <span className="text-sm text-gray-500 font-mono">
                                             {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                                         </span>
-                                        <span className="text-sm text-gray-400">
-                                            R:{item.reddit_posts_count} T:{item.twitter_tweets_count}
-                                        </span>
                                         {item.result?.verified && (
                                             <>
                                                 <span className={`text-sm px-2 py-0.5 rounded font-bold ${
                                                     (item.result.deepseek_v4?.verification?.winrate || 0) >= 50 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                                                 }`}>
-                                                    DeepSeek: {item.result.deepseek_v4?.verification?.winrate || 0}%
+                                                    Винрейт: {item.result.deepseek_v4?.verification?.winrate || 0}%
                                                 </span>
                                             </>
                                         )}
