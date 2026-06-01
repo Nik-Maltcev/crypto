@@ -162,7 +162,15 @@ const HypothesisV2: React.FC = () => {
     };
 
     const latestSuccess = items.find(i => i.status === 'success' && i.result);
-    const runningItem = items.find(i => i.status === 'running');
+    const runningItem = items.find(i => {
+        if (i.status !== 'running') return false;
+        // Ignore stuck items (running > 30 min)
+        if (i.created_at) {
+            const elapsed = (Date.now() - new Date(i.created_at).getTime()) / 60000;
+            if (elapsed > 30) return false;
+        }
+        return true;
+    });
 
     // Calculate overall stats
     const verifiedItems = items.filter(i => i.result?.verified);
