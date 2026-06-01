@@ -535,6 +535,22 @@ const HypothesisV2: React.FC = () => {
                                                 </span>
                                             </>
                                         )}
+                                        {/* P&L in history summary */}
+                                        {(() => {
+                                            const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined) || [];
+                                            if (sc.length === 0) return null;
+                                            let pnl = 0;
+                                            sc.forEach((c: ShortCandidate) => {
+                                                const shortChange = -(c.actualChange24h || 0);
+                                                const eff = shortChange < -3 ? -3 : shortChange;
+                                                pnl += 100 * 10 * (eff / 100);
+                                            });
+                                            return (
+                                                <span className={`text-sm px-2 py-0.5 rounded font-bold font-mono ${pnl >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                    {pnl >= 0 ? '+' : ''}{pnl.toFixed(0)}$
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                     <span className="text-gray-500 text-sm group-open:rotate-180 transition-transform">▼</span>
                                 </div>
