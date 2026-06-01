@@ -32,7 +32,7 @@ from auto_analysis import (
 logger = logging.getLogger(__name__)
 
 CMC_BASE = "https://pro-api.coinmarketcap.com"
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+CLAUDE_API_URL = "https://agentrouter.org/v1/messages"
 
 # Exclude major coins — we only want altcoins
 EXCLUDED_SYMBOLS = {"BTC", "ETH", "BNB", "SOL", "XRP", "USDT", "USDC", "DOGE", "STETH", "WBTC", "WETH"}
