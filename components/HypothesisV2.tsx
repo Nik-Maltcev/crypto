@@ -17,6 +17,7 @@ interface ShortCandidate {
     entryZone: string;
     stopLoss: number;
     exchanges?: string[];
+    snapshots?: { label: string; time: string; price: number; change: number }[];
     // Verification fields
     actualPrice24h?: number;
     actualChange24h?: number;
@@ -282,6 +283,20 @@ const HypothesisV2: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Snapshots (6h price tracking) */}
+                            {c.snapshots && c.snapshots.length > 0 && (
+                                <div className="flex gap-1 mb-2 overflow-x-auto">
+                                    {c.snapshots.map((s, i) => (
+                                        <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
+                                            <div className="text-[9px] text-gray-500">{s.label}</div>
+                                            <div className={`text-[10px] font-bold ${s.change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             {/* Catalyst */}
                             <div className="mb-1">
                                 <span className="text-[11px] text-orange-400">{c.catalyst}</span>
@@ -360,6 +375,20 @@ const HypothesisV2: React.FC = () => {
                                         <span className={`text-xs font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                             {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
                                         </span>
+                                    </div>
+                                )}
+
+                                {/* Snapshots (6h price tracking) */}
+                                {c.snapshots && c.snapshots.length > 0 && (
+                                    <div className="flex gap-1 mb-2 overflow-x-auto">
+                                        {c.snapshots.map((s, i) => (
+                                            <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
+                                                <div className="text-[9px] text-gray-500">{s.label}</div>
+                                                <div className={`text-[10px] font-bold ${s.change > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
 
