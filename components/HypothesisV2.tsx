@@ -458,6 +458,56 @@ const HypothesisV2: React.FC = () => {
                     <div>
                         {renderModelCard(latestSuccess.result.deepseek_v4, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
                     </div>
+
+                    {/* Profit calculator */}
+                    {(() => {
+                        const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined) || [];
+                        if (candidates.length === 0) return null;
+
+                        const BET = 100; // $100 per coin
+                        const LEVERAGE = 10;
+                        const STOP_LOSS_PCT = 3;
+
+                        let totalPnl = 0;
+                        const trades = candidates.map((c: ShortCandidate) => {
+                            // Short: profit when price drops, loss when rises
+                            const change = c.actualChange24h || 0;
+                            const shortChange = -change; // invert for short
+                            // If price went up more than stop loss — capped at stop loss
+                            const effectiveChange = shortChange < -(STOP_LOSS_PCT) ? -(STOP_LOSS_PCT) : shortChange;
+                            const pnl = BET * LEVERAGE * (effectiveChange / 100);
+                            totalPnl += pnl;
+                            return { symbol: c.symbol, change, pnl, stopped: shortChange < -(STOP_LOSS_PCT) };
+                        });
+
+                        const totalInvested = candidates.length * BET;
+
+                        return (
+                            <div className="mt-4 bg-brand-card border border-gray-800 rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm font-bold text-gray-400 uppercase">💰 Симуляция P&L</span>
+                                    <span className="text-sm text-gray-500">${BET} × {LEVERAGE}x на монету, SL {STOP_LOSS_PCT}%</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                                    {trades.map((t: any) => (
+                                        <div key={t.symbol} className={`rounded px-2 py-1.5 text-center border ${t.pnl >= 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                                            <div className="text-sm font-bold text-white">{t.symbol}</div>
+                                            <div className={`text-sm font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(0)}$
+                                            </div>
+                                            {t.stopped && <div className="text-[9px] text-yellow-400">SL</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+                                    <span className="text-sm text-gray-400">Вложено: ${totalInvested} (маржа)</span>
+                                    <span className={`text-lg font-bold ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        Итого: {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
