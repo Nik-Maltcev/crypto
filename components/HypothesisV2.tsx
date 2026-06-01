@@ -203,7 +203,7 @@ const HypothesisV2: React.FC = () => {
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white">{modelName}</span>
                         {modelData.verification && (
-                            <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                            <span className={`text-sm px-2 py-0.5 rounded font-bold ${
                                 modelData.verification.winrate >= 60 ? 'bg-emerald-500/20 text-emerald-400' :
                                 modelData.verification.winrate >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
                                 'bg-red-500/20 text-red-400'
@@ -212,19 +212,19 @@ const HypothesisV2: React.FC = () => {
                             </span>
                         )}
                     </div>
-                    <span className="text-xs text-gray-400">{modelData.shortCandidates?.length || 0} shorts / {modelData.longCandidates?.length || 0} longs</span>
+                    <span className="text-sm text-gray-400">{modelData.shortCandidates?.length || 0} shorts / {modelData.longCandidates?.length || 0} longs</span>
                 </div>
 
                 {/* Summary */}
                 {modelData.summary && (
                     <div className="px-5 py-3 border-b border-gray-800/50">
-                        <p className="text-xs text-gray-400 italic">{modelData.summary}</p>
+                        <p className="text-sm text-gray-400 italic">{modelData.summary}</p>
                     </div>
                 )}
 
                 {/* Short candidates */}
                 <div className="p-4">
-                    <div className="text-xs text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
+                    <div className="text-sm text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {modelData.shortCandidates?.map((c, idx) => (
                         <div key={c.symbol} className={`rounded-xl p-4 border ${
@@ -237,7 +237,7 @@ const HypothesisV2: React.FC = () => {
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                    <span className={`text-[11px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                    <span className={`text-sm px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                         {c.riskLevel}
                                     </span>
                                 </div>
@@ -247,26 +247,26 @@ const HypothesisV2: React.FC = () => {
                             {/* Prices row */}
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
-                                    <div className="text-[11px] text-gray-500">Сейчас</div>
-                                    <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
+                                    <div className="text-sm text-gray-500">Сейчас</div>
+                                    <div className="text-sm font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                 </div>
                                 <div>
-                                    <div className="text-[11px] text-gray-500">Цель</div>
-                                    <div className="text-xs font-mono text-red-400">{formatPrice(c.targetPrice24h)}</div>
+                                    <div className="text-sm text-gray-500">Цель</div>
+                                    <div className="text-sm font-mono text-red-400">{formatPrice(c.targetPrice24h)}</div>
                                 </div>
                             </div>
 
                             {/* Change + SL */}
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-bold text-red-400">{(c.expectedChange || c.expectedDrop)?.toFixed(1)}%</span>
-                                <span className="text-[11px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
+                                <span className="text-sm text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                             </div>
 
                             {/* Exchanges */}
                             {c.exchanges && c.exchanges.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
                                     {c.exchanges.map(ex => (
-                                        <span key={ex} className={`text-xs px-1.5 py-0.5 rounded border ${
+                                        <span key={ex} className={`text-sm px-1.5 py-0.5 rounded border ${
                                             RU_EXCHANGES.has(ex) 
                                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
                                                 : 'bg-gray-800 text-gray-500 border-gray-700'
@@ -282,10 +282,10 @@ const HypothesisV2: React.FC = () => {
                                 <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
                                     c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
                                 }`}>
-                                    <span className="text-xs font-bold">
+                                    <span className="text-sm font-bold">
                                         {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
                                     </span>
-                                    <span className={`text-xs font-bold font-mono ${c.actualChange24h < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    <span className={`text-sm font-bold font-mono ${c.actualChange24h < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                         {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
                                     </span>
                                 </div>
@@ -296,8 +296,8 @@ const HypothesisV2: React.FC = () => {
                                 <div className="flex gap-1 mb-2 overflow-x-auto">
                                     {c.snapshots.map((s, i) => (
                                         <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
-                                            <div className="text-[9px] text-gray-500">{s.label}</div>
-                                            <div className={`text-[10px] font-bold ${s.change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                            <div className="text-sm text-gray-500">{s.label}</div>
+                                            <div className={`text-sm font-bold ${s.change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                                 {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
                                             </div>
                                         </div>
@@ -307,15 +307,15 @@ const HypothesisV2: React.FC = () => {
 
                             {/* Catalyst */}
                             <div className="mb-1">
-                                <span className="text-[11px] text-orange-400">{c.catalyst}</span>
+                                <span className="text-sm text-orange-400">{c.catalyst}</span>
                             </div>
 
                             {/* Reasoning */}
-                            <p className="text-xs text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
+                            <p className="text-sm text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                 {c.reasoning}
                             </p>
 
-                            <div className="text-[11px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
+                            <div className="text-sm text-gray-600 mt-1">⏱ {c.timeframe}</div>
                         </div>
                     ))}
                     </div>
@@ -324,7 +324,7 @@ const HypothesisV2: React.FC = () => {
                 {/* Long candidates */}
                 {modelData.longCandidates && modelData.longCandidates.length > 0 && (
                     <div className="p-4 border-t border-gray-800">
-                        <div className="text-xs text-emerald-400 uppercase font-bold mb-3">📈 Лонг-кандидаты</div>
+                        <div className="text-sm text-emerald-400 uppercase font-bold mb-3">📈 Лонг-кандидаты</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {modelData.longCandidates.map((c, idx) => (
                             <div key={c.symbol} className="rounded-xl p-4 border bg-gray-900/50 border-emerald-700/30">
@@ -332,7 +332,7 @@ const HypothesisV2: React.FC = () => {
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-lg font-bold text-white">{c.symbol}</span>
-                                        <span className={`text-[11px] px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
+                                        <span className={`text-sm px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                             {c.riskLevel}
                                         </span>
                                     </div>
@@ -342,26 +342,26 @@ const HypothesisV2: React.FC = () => {
                                 {/* Prices */}
                                 <div className="grid grid-cols-2 gap-2 mb-2">
                                     <div>
-                                        <div className="text-[11px] text-gray-500">Сейчас</div>
-                                        <div className="text-xs font-mono text-white">{formatPrice(c.currentPrice)}</div>
+                                        <div className="text-sm text-gray-500">Сейчас</div>
+                                        <div className="text-sm font-mono text-white">{formatPrice(c.currentPrice)}</div>
                                     </div>
                                     <div>
-                                        <div className="text-[11px] text-gray-500">Цель</div>
-                                        <div className="text-xs font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
+                                        <div className="text-sm text-gray-500">Цель</div>
+                                        <div className="text-sm font-mono text-emerald-400">{formatPrice(c.targetPrice24h)}</div>
                                     </div>
                                 </div>
 
                                 {/* Change + SL */}
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-bold text-emerald-400">+{(c.expectedChange || 0)?.toFixed(1)}%</span>
-                                    <span className="text-[11px] text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
+                                    <span className="text-sm text-gray-500">SL: {formatPrice(c.stopLoss)}</span>
                                 </div>
 
                                 {/* Exchanges */}
                                 {c.exchanges && c.exchanges.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {c.exchanges.map(ex => (
-                                            <span key={ex} className={`text-xs px-1.5 py-0.5 rounded border ${
+                                            <span key={ex} className={`text-sm px-1.5 py-0.5 rounded border ${
                                                 RU_EXCHANGES.has(ex) 
                                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
                                                     : 'bg-gray-800 text-gray-500 border-gray-700'
@@ -377,10 +377,10 @@ const HypothesisV2: React.FC = () => {
                                     <div className={`rounded px-2 py-1 mb-2 flex items-center justify-between ${
                                         c.strongHit ? 'bg-emerald-500/15' : c.hit ? 'bg-emerald-500/10' : 'bg-red-500/10'
                                     }`}>
-                                        <span className="text-xs font-bold">
+                                        <span className="text-sm font-bold">
                                             {c.strongHit ? '🎯' : c.hit ? '✅' : '❌'}
                                         </span>
-                                        <span className={`text-xs font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        <span className={`text-sm font-bold font-mono ${c.actualChange24h > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                             {c.actualChange24h >= 0 ? '+' : ''}{c.actualChange24h.toFixed(1)}%
                                         </span>
                                     </div>
@@ -391,8 +391,8 @@ const HypothesisV2: React.FC = () => {
                                     <div className="flex gap-1 mb-2 overflow-x-auto">
                                         {c.snapshots.map((s, i) => (
                                             <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
-                                                <div className="text-[9px] text-gray-500">{s.label}</div>
-                                                <div className={`text-[10px] font-bold ${s.change > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                <div className="text-sm text-gray-500">{s.label}</div>
+                                                <div className={`text-sm font-bold ${s.change > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                     {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
                                                 </div>
                                             </div>
@@ -402,15 +402,15 @@ const HypothesisV2: React.FC = () => {
 
                                 {/* Catalyst */}
                                 <div className="mb-1">
-                                    <span className="text-[11px] text-emerald-400">{c.catalyst}</span>
+                                    <span className="text-sm text-emerald-400">{c.catalyst}</span>
                                 </div>
 
                                 {/* Reasoning */}
-                                <p className="text-xs text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
+                                <p className="text-sm text-gray-500 line-clamp-2 hover:line-clamp-none cursor-pointer">
                                     {c.reasoning}
                                 </p>
 
-                                <div className="text-[11px] text-gray-600 mt-1">⏱ {c.timeframe}</div>
+                                <div className="text-sm text-gray-600 mt-1">⏱ {c.timeframe}</div>
                             </div>
                         ))}
                         </div>
@@ -420,10 +420,10 @@ const HypothesisV2: React.FC = () => {
                 {/* Avoid shorting */}
                 {modelData.avoidShorting && modelData.avoidShorting.length > 0 && (
                     <div className="px-5 pb-4">
-                        <div className="text-xs text-yellow-400 uppercase font-bold mb-2">⚠️ Не шортить:</div>
+                        <div className="text-sm text-yellow-400 uppercase font-bold mb-2">⚠️ Не шортить:</div>
                         <div className="space-y-1">
                             {modelData.avoidShorting.map((a, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs">
+                                <div key={i} className="flex items-start gap-2 text-sm">
                                     <span className="text-yellow-400 font-bold">{a.symbol}</span>
                                     <span className="text-gray-500">{a.reason}</span>
                                 </div>
@@ -435,7 +435,7 @@ const HypothesisV2: React.FC = () => {
                 {/* Risk note */}
                 {modelData.marketRiskNote && (
                     <div className="px-5 pb-4">
-                        <p className="text-xs text-gray-500 italic">⚠️ {modelData.marketRiskNote}</p>
+                        <p className="text-sm text-gray-500 italic">⚠️ {modelData.marketRiskNote}</p>
                     </div>
                 )}
             </div>
@@ -488,11 +488,11 @@ const HypothesisV2: React.FC = () => {
                     <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
                     <div>
                         <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
+                        <p className="text-sm text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
                     </div>
                 </div>
                 <div className="text-right flex-shrink-0 ml-4">
-                    <div className="text-xs text-gray-500 uppercase">Верификация через</div>
+                    <div className="text-sm text-gray-500 uppercase">Верификация через</div>
                     <div className="text-sm font-bold text-cyan-400">{nextVerify}</div>
                 </div>
             </div>
@@ -501,21 +501,21 @@ const HypothesisV2: React.FC = () => {
             {verifiedItems.length > 0 && (
                 <div className="grid grid-cols-3 gap-4">
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                        <div className="text-xs text-gray-500 uppercase mb-1">DeepSeek v4 Pro</div>
+                        <div className="text-sm text-gray-500 uppercase mb-1">DeepSeek v4 Pro</div>
                         <div className={`text-2xl font-bold ${deepseekStats.winrate >= 60 ? 'text-emerald-400' : deepseekStats.winrate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
                             {deepseekStats.winrate}%
                         </div>
-                        <div className="text-xs text-gray-500">{deepseekStats.totalHits}/{deepseekStats.totalPicks} drops, {deepseekStats.strongHits} strong</div>
+                        <div className="text-sm text-gray-500">{deepseekStats.totalHits}/{deepseekStats.totalPicks} drops, {deepseekStats.strongHits} strong</div>
                     </div>
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                        <div className="text-xs text-gray-500 uppercase mb-1">Проверено</div>
+                        <div className="text-sm text-gray-500 uppercase mb-1">Проверено</div>
                         <div className="text-2xl font-bold text-white">{verifiedItems.length}</div>
-                        <div className="text-xs text-gray-500">анализов</div>
+                        <div className="text-sm text-gray-500">анализов</div>
                     </div>
                     <div className="bg-brand-card border border-gray-800 rounded-xl p-4 text-center">
-                        <div className="text-xs text-gray-500 uppercase mb-1">Всего</div>
+                        <div className="text-sm text-gray-500 uppercase mb-1">Всего</div>
                         <div className="text-2xl font-bold text-white">{items.filter(i => i.status === 'success').length}</div>
-                        <div className="text-xs text-gray-500">запусков</div>
+                        <div className="text-sm text-gray-500">запусков</div>
                     </div>
                 </div>
             )}
@@ -543,7 +543,7 @@ const HypothesisV2: React.FC = () => {
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
                             Последний анализ — {latestSuccess.created_at ? new Date(latestSuccess.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : ''}
                         </h3>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
                             <span>Reddit: {latestSuccess.reddit_posts_count}</span>
                             <span>Twitter: {latestSuccess.twitter_tweets_count}</span>
                             <span>CMC: {latestSuccess.result.metadata?.cmc_coins_analyzed}</span>
@@ -565,15 +565,15 @@ const HypothesisV2: React.FC = () => {
                             <summary className="bg-brand-card border border-gray-800 rounded-xl p-4 cursor-pointer list-none hover:border-gray-700 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <span className="text-xs text-gray-500 font-mono">
+                                        <span className="text-sm text-gray-500 font-mono">
                                             {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                                         </span>
-                                        <span className="text-xs text-gray-400">
+                                        <span className="text-sm text-gray-400">
                                             R:{item.reddit_posts_count} T:{item.twitter_tweets_count}
                                         </span>
                                         {item.result?.verified && (
                                             <>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                                                <span className={`text-sm px-2 py-0.5 rounded font-bold ${
                                                     (item.result.deepseek_v4?.verification?.winrate || 0) >= 50 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                                                 }`}>
                                                     DeepSeek: {item.result.deepseek_v4?.verification?.winrate || 0}%
@@ -581,7 +581,7 @@ const HypothesisV2: React.FC = () => {
                                             </>
                                         )}
                                     </div>
-                                    <span className="text-gray-500 text-xs group-open:rotate-180 transition-transform">▼</span>
+                                    <span className="text-gray-500 text-sm group-open:rotate-180 transition-transform">▼</span>
                                 </div>
                             </summary>
                             <div className="mt-2">
@@ -611,7 +611,7 @@ const HypothesisV2: React.FC = () => {
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Ошибки</h3>
                     <div className="space-y-2">
                         {items.filter(i => i.status === 'failed').slice(0, 5).map(item => (
-                            <div key={item.id} className="flex items-center gap-3 text-xs">
+                            <div key={item.id} className="flex items-center gap-3 text-sm">
                                 <span className="text-red-400">❌</span>
                                 <span className="text-gray-500">{item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—'}</span>
                                 <span className="text-red-400 truncate">{item.error_message}</span>
