@@ -17,7 +17,7 @@ interface ShortCandidate {
     entryZone: string;
     stopLoss: number;
     exchanges?: string[];
-    snapshots?: { label: string; time: string; price: number; change: number }[];
+    snapshots?: { label: string; time: string; price: number; change: number; changeFromStart?: number }[];
     // Verification fields
     actualPrice24h?: number;
     actualChange24h?: number;
@@ -457,7 +457,7 @@ const HypothesisV2: React.FC = () => {
                     let total = 0;
                     candidates.forEach((c: ShortCandidate) => {
                         const snap = c.snapshots?.find(s => s.label === label);
-                        if (snap) total += calcPnl(snap.change);
+                        if (snap) total += calcPnl(snap.changeFromStart ?? snap.change);
                     });
                     return { label, total };
                 });
@@ -469,7 +469,7 @@ const HypothesisV2: React.FC = () => {
                     totalPnl += pnl;
                     const snaps = allLabels.map(label => {
                         const snap = c.snapshots?.find(s => s.label === label);
-                        return snap ? calcPnl(snap.change) : null;
+                        return snap ? calcPnl(snap.changeFromStart ?? snap.change) : null;
                     });
                     return { symbol: c.symbol, pnl, stopped: -change < -(STOP_LOSS_PCT), snaps };
                 });

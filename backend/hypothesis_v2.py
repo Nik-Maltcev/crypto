@@ -825,11 +825,17 @@ async def verify_hypothesis_v2_results() -> None:
                 # Add snapshot (avoid duplicates for same hour range)
                 existing_labels = [s.get("label") for s in candidate["snapshots"]]
                 if snapshot_label not in existing_labels:
+                    # Change from previous snapshot (or from start if first)
+                    prev_price = candidate["snapshots"][-1]["price"] if candidate["snapshots"] else start_price
+                    change_from_prev = ((current_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
+                    change_from_start = ((current_price - start_price) / start_price) * 100
+
                     candidate["snapshots"].append({
                         "label": snapshot_label,
                         "time": now_iso,
                         "price": current_price,
-                        "change": round(actual_change, 2),
+                        "change": round(change_from_prev, 2),
+                        "changeFromStart": round(change_from_start, 2),
                     })
 
                 # Update latest values
