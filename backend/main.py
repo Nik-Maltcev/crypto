@@ -180,9 +180,9 @@ async def lifespan(app: FastAPI):
             )
             scheduler.add_job(
                 verify_hypothesis_v2_results,
-                trigger=CronTrigger(hour="*/6", minute=30),  # Every 6 hours (00:30, 06:30, 12:30, 18:30 UTC)
+                trigger=CronTrigger(minute=30),  # Every hour at XX:30
                 id="hypothesis_v2_verify",
-                name="Hypothesis V2 Verification (every 6h)",
+                name="Hypothesis V2 Verification (every hour)",
                 replace_existing=True,
             )
             scheduler.start()

@@ -83,19 +83,11 @@ const HypothesisV2: React.FC = () => {
             const now = new Date();
             const utcH = now.getUTCHours();
             const utcM = now.getUTCMinutes();
-            // Verification runs at 00:30, 06:30, 12:30, 18:30 UTC
-            const slots = [0.5, 6.5, 12.5, 18.5]; // hours in decimal
-            const nowDecimal = utcH + utcM / 60;
-            let nextSlot = slots.find(s => s > nowDecimal);
-            let hoursUntil: number;
-            if (nextSlot !== undefined) {
-                hoursUntil = nextSlot - nowDecimal;
-            } else {
-                hoursUntil = (24 - nowDecimal) + slots[0];
-            }
-            const h = Math.floor(hoursUntil);
-            const m = Math.floor((hoursUntil - h) * 60);
-            setNextVerify(`${h}ч ${m}м`);
+            // Verification runs every hour at XX:30
+            const minutesUntil = utcM < 30 ? 30 - utcM : 90 - utcM;
+            const h = Math.floor(minutesUntil / 60);
+            const m = minutesUntil % 60;
+            setNextVerify(h > 0 ? `${h}ч ${m}м` : `${m}м`);
         };
         calcNext();
         const interval = setInterval(calcNext, 60000);
