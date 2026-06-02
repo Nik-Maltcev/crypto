@@ -10,8 +10,6 @@ import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessa
 import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
-import SourcesCheck from './components/SourcesCheck';
-import MentionsTracker from './components/MentionsTracker';
 import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisV2 from './components/HypothesisV2';
 
@@ -45,7 +43,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'sources' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -498,12 +496,6 @@ const App: React.FC = () => {
                 📉 Гипотеза
               </button>
               <button
-                onClick={() => setActiveTab('sources')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📡 Источники
-              </button>
-              <button
                 onClick={() => setActiveTab('shitcoins')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'shitcoins' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -556,8 +548,6 @@ const App: React.FC = () => {
 
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
-        ) : activeTab === 'sources' ? (
-          <MentionsTracker />
         ) : activeTab === 'hypothesis_v2' ? (
           <HypothesisV2 />
         ) : (
