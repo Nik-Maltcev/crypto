@@ -1100,6 +1100,97 @@ async def enrich_hypothesis_v2_exchanges():
         return {"success": True, "enriched": len(all_symbols), "exchanges": exchanges_map}
 
 
+@app.post("/api/hypothesis_v2/fix_prices")
+async def fix_hypothesis_v2_prices():
+    """Fix hallucinated prices in all hypothesis_v2 results using CMC current quotes."""
+    cmc_key = os.environ.get("CMC_API_KEY", "")
+    if not cmc_key:
+        raise HTTPException(400, "CMC_API_KEY not configured")
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "success")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(10)
+        )
+        entries = result.scalars().all()
+        
+        # Collect all symbols from all entries
+        all_symbols = set()
+        for entry in entries:
+            if not entry.result_json:
+                continue
+            data = json.loads(entry.result_json)
+            ds = data.get("deepseek_v4")
+            if not ds:
+                continue
+            for c in ds.get("shortCandidates", []):
+                all_symbols.add(c.get("symbol", "").upper())
+        
+        if not all_symbols:
+            return {"success": True, "message": "No symbols to fix"}
+        
+        # Fetch current prices from CMC
+        prices = {}
+        async with httpx.AsyncClient(timeout=30) as client:
+            headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
+            symbols_str = ",".join(list(all_symbols)[:100])
+            resp = await client.get(
+                "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
+                headers=headers,
+                params={"symbol": symbols_str, "convert": "USD"}
+            )
+            if resp.status_code == 200:
+                resp_data = resp.json().get("data", {})
+                for sym, coin_data in resp_data.items():
+                    price = coin_data.get("quote", {}).get("USD", {}).get("price", 0)
+                    if price > 0:
+                        prices[sym.upper()] = price
+        
+        # Fix prices in each entry
+        fixed_count = 0
+        fixes = {}
+        for entry in entries:
+            if not entry.result_json:
+                continue
+            data = json.loads(entry.result_json)
+            ds = data.get("deepseek_v4")
+            if not ds:
+                continue
+            
+            entry_fixes = []
+            for c in ds.get("shortCandidates", []):
+                sym = c.get("symbol", "").upper()
+                real_price = prices.get(sym)
+                if not real_price:
+                    continue
+                old_price = c.get("currentPrice", 0)
+                if old_price > 0 and abs(real_price - old_price) / old_price > 0.5:
+                    entry_fixes.append(f"{sym}: {old_price} -> {real_price}")
+                    c["currentPrice"] = real_price
+                    # Recalculate snapshots changes
+                    if c.get("snapshots"):
+                        for snap in c["snapshots"]:
+                            if snap.get("price") and real_price > 0:
+                                snap["change"] = round(((snap["price"] - real_price) / real_price) * 100, 2)
+                    # Recalculate actualChange24h
+                    if c.get("actualPrice24h") and real_price > 0:
+                        c["actualChange24h"] = round(((c["actualPrice24h"] - real_price) / real_price) * 100, 2)
+                        c["hit"] = c["actualChange24h"] < 0
+                        c["strongHit"] = c["actualChange24h"] <= -5
+                    fixed_count += 1
+            
+            if entry_fixes:
+                fixes[entry.id] = entry_fixes
+                entry.result_json = json.dumps(data, ensure_ascii=False)
+        
+        await session.commit()
+        return {"success": True, "fixed": fixed_count, "details": fixes}
+
+
 @app.post("/api/shitcoins/start")
 async def start_shitcoin_monitor():
     """Manually start the shitcoin monitor if not running."""
