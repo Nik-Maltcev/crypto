@@ -1102,7 +1102,7 @@ async def enrich_hypothesis_v2_exchanges():
 
 @app.post("/api/hypothesis_v2/fix_prices")
 async def fix_hypothesis_v2_prices():
-    """Fix hallucinated prices: use first snapshot price as real currentPrice."""
+    """Fix hallucinated prices and recalculate all snapshots with proper deltas."""
     async_session = get_async_session()
     async with async_session() as session:
         result = await session.execute(
@@ -1130,31 +1130,48 @@ async def fix_hypothesis_v2_prices():
                 snapshots = c.get("snapshots", [])
                 if not snapshots:
                     continue
+                
                 # Use first snapshot price as the real price at analysis time
                 real_price = snapshots[0].get("price", 0)
                 if not real_price or real_price <= 0:
                     continue
+                
                 old_price = c.get("currentPrice", 0)
+                price_fixed = False
                 if old_price > 0 and abs(real_price - old_price) / max(old_price, real_price) > 0.15:
                     entry_fixes.append(f"{c['symbol']}: {old_price:.6f} -> {real_price:.6f}")
                     c["currentPrice"] = real_price
-                    # Recalculate all snapshot changes from real start price
-                    for snap in snapshots:
-                        if snap.get("price") and real_price > 0:
-                            snap["change"] = round(((snap["price"] - real_price) / real_price) * 100, 2)
-                    # Recalculate actualChange24h
-                    if c.get("actualPrice24h") and real_price > 0:
-                        c["actualChange24h"] = round(((c["actualPrice24h"] - real_price) / real_price) * 100, 2)
-                        c["hit"] = c["actualChange24h"] < 0
-                        c["strongHit"] = c["actualChange24h"] <= -5
+                    price_fixed = True
+                
+                # Always recalculate snapshot changes
+                start_price = c["currentPrice"]
+                prev_price = start_price
+                for snap in snapshots:
+                    snap_price = snap.get("price", 0)
+                    if snap_price and start_price > 0:
+                        snap["changeFromStart"] = round(((snap_price - start_price) / start_price) * 100, 2)
+                        snap["change"] = round(((snap_price - prev_price) / prev_price) * 100, 2) if prev_price > 0 else 0
+                        prev_price = snap_price
+                
+                # Recalculate actualChange24h
+                if c.get("actualPrice24h") and start_price > 0:
+                    c["actualChange24h"] = round(((c["actualPrice24h"] - start_price) / start_price) * 100, 2)
+                    c["hit"] = c["actualChange24h"] < 0
+                    c["strongHit"] = c["actualChange24h"] <= -5
+                
+                if price_fixed:
                     fixed_count += 1
+                else:
+                    # Still count as fixed if snapshots were recalculated
+                    if not entry_fixes or c['symbol'] not in str(entry_fixes):
+                        entry_fixes.append(f"{c['symbol']}: snapshots recalculated")
             
             if entry_fixes:
                 fixes[str(entry.id)] = entry_fixes
-                entry.result_json = json.dumps(data, ensure_ascii=False)
+            entry.result_json = json.dumps(data, ensure_ascii=False)
         
         await session.commit()
-        return {"success": True, "fixed": fixed_count, "details": fixes}
+        return {"success": True, "fixed": fixed_count, "recalculated": len(entries), "details": fixes}
 
 
 @app.post("/api/shitcoins/start")
