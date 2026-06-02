@@ -73,6 +73,11 @@ const HypothesisV2: React.FC = () => {
     const [isRunning, setIsRunning] = useState(false);
     const [error, setError] = useState('');
     const [nextVerify, setNextVerify] = useState('');
+    
+    // P&L Calculator settings
+    const [betSize, setBetSize] = useState(100);
+    const [leverage, setLeverage] = useState(10);
+    const [stopLoss, setStopLoss] = useState(3);
 
     // Exchanges available in Russia (verified May 2026)
     const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'Gate', 'CoinEx', 'LBank', 'XT.COM', 'BitMart', 'Pionex', 'BTCC', 'BYDFi', 'CoinTR', 'DigiFinex', 'Bitrue', 'AscendEX (BitMax)', 'BloFin', 'WEEX']);
@@ -456,10 +461,10 @@ const HypothesisV2: React.FC = () => {
                         const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined || (c.snapshots && c.snapshots.length > 0)) || [];
                         if (candidates.length === 0) return null;
 
-                        const BET = 100;
-                        const LEVERAGE = 10;
-                        const STOP_LOSS_PCT = 3;
-                        const COMMISSION_PCT = 0.1; // 0.05% open + 0.05% close = 0.1% total
+                        const BET = betSize;
+                        const LEVERAGE = leverage;
+                        const STOP_LOSS_PCT = stopLoss;
+                        const COMMISSION_PCT = 0.1;
 
                         const calcPnl = (change: number) => {
                             const shortChange = -change;
@@ -476,10 +481,8 @@ const HypothesisV2: React.FC = () => {
                                 if (!allLabels.includes(s.label)) allLabels.push(s.label);
                             });
                         });
-                        // Sort by numeric value
                         allLabels.sort((a, b) => parseInt(a) - parseInt(b));
 
-                        // Calculate totals per snapshot
                         const snapshotTotals = allLabels.map(label => {
                             let total = 0;
                             candidates.forEach((c: ShortCandidate) => {
@@ -489,7 +492,6 @@ const HypothesisV2: React.FC = () => {
                             return { label, total };
                         });
 
-                        // Final P&L
                         let totalPnl = 0;
                         const trades = candidates.map((c: ShortCandidate) => {
                             const change = c.actualChange24h || 0;
@@ -507,8 +509,30 @@ const HypothesisV2: React.FC = () => {
                         return (
                             <div className="mt-4 bg-brand-card border border-gray-800 rounded-xl p-4">
                                 <div className="flex items-center justify-between mb-3">
-                                    <span className="text-sm font-bold text-gray-400 uppercase">💰 Симуляция P&L</span>
-                                    <span className="text-sm text-gray-500">${BET} × {LEVERAGE}x, SL {STOP_LOSS_PCT}%, комиссия {COMMISSION_PCT}%</span>
+                                    <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
+                                </div>
+
+                                {/* Calculator inputs */}
+                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                    <div>
+                                        <label className="text-sm text-gray-500 block mb-1">Ставка ($)</label>
+                                        <input type="number" value={betSize} onChange={e => setBetSize(Number(e.target.value))} 
+                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm text-gray-500 block mb-1">Плечо (x)</label>
+                                        <input type="number" value={leverage} onChange={e => setLeverage(Number(e.target.value))} 
+                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm text-gray-500 block mb-1">Стоп-лосс (%)</label>
+                                        <input type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} 
+                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                                    </div>
+                                </div>
+
+                                <div className="text-sm text-gray-500 mb-3">
+                                    Позиция: ${BET * LEVERAGE} на монету • Комиссия: {COMMISSION_PCT}% • {candidates.length} монет
                                 </div>
 
                                 {/* Table with 6h snapshots */}
