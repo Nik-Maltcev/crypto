@@ -663,6 +663,17 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             if not deepseek_result:
                 raise RuntimeError("DeepSeek returned empty result")
 
+            # Fix prices: replace model's currentPrice with actual CMC price
+            cmc_prices = {c["symbol"]: c["price"] for c in cmc_coins}
+            for c in deepseek_result.get("shortCandidates", []):
+                sym = c.get("symbol", "").upper()
+                real_price = cmc_prices.get(sym)
+                if real_price and real_price > 0:
+                    model_price = c.get("currentPrice", 0)
+                    if model_price > 0 and abs(real_price - model_price) / model_price > 0.5:
+                        logger.warning(f"[HYP_V2] Price mismatch {sym}: model={model_price}, CMC={real_price}. Using CMC.")
+                    c["currentPrice"] = real_price
+
             # Fetch exchanges for all picked symbols
             all_picks = []
             for c in deepseek_result.get("shortCandidates", []):
