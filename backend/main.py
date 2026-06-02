@@ -1102,13 +1102,7 @@ async def enrich_hypothesis_v2_exchanges():
 
 @app.post("/api/hypothesis_v2/fix_prices")
 async def fix_hypothesis_v2_prices():
-    """Fix hallucinated prices in all hypothesis_v2 results using CMC current quotes."""
-    import httpx
-    
-    cmc_key = os.environ.get("CMC_API_KEY", "")
-    if not cmc_key:
-        raise HTTPException(400, "CMC_API_KEY not configured")
-    
+    """Fix hallucinated prices: use first snapshot price as real currentPrice."""
     async_session = get_async_session()
     async with async_session() as session:
         result = await session.execute(
@@ -1120,41 +1114,9 @@ async def fix_hypothesis_v2_prices():
         )
         entries = result.scalars().all()
         
-        # Collect all symbols from all entries
-        all_symbols = set()
-        for entry in entries:
-            if not entry.result_json:
-                continue
-            data = json.loads(entry.result_json)
-            ds = data.get("deepseek_v4")
-            if not ds:
-                continue
-            for c in ds.get("shortCandidates", []):
-                all_symbols.add(c.get("symbol", "").upper())
-        
-        if not all_symbols:
-            return {"success": True, "message": "No symbols to fix"}
-        
-        # Fetch current prices from CMC
-        prices = {}
-        async with httpx.AsyncClient(timeout=30) as client:
-            headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
-            symbols_str = ",".join(list(all_symbols)[:100])
-            resp = await client.get(
-                "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
-                headers=headers,
-                params={"symbol": symbols_str, "convert": "USD"}
-            )
-            if resp.status_code == 200:
-                resp_data = resp.json().get("data", {})
-                for sym, coin_data in resp_data.items():
-                    price = coin_data.get("quote", {}).get("USD", {}).get("price", 0)
-                    if price > 0:
-                        prices[sym.upper()] = price
-        
-        # Fix prices in each entry
         fixed_count = 0
         fixes = {}
+        
         for entry in entries:
             if not entry.result_json:
                 continue
@@ -1165,19 +1127,21 @@ async def fix_hypothesis_v2_prices():
             
             entry_fixes = []
             for c in ds.get("shortCandidates", []):
-                sym = c.get("symbol", "").upper()
-                real_price = prices.get(sym)
-                if not real_price:
+                snapshots = c.get("snapshots", [])
+                if not snapshots:
+                    continue
+                # Use first snapshot price as the real price at analysis time
+                real_price = snapshots[0].get("price", 0)
+                if not real_price or real_price <= 0:
                     continue
                 old_price = c.get("currentPrice", 0)
-                if old_price > 0 and abs(real_price - old_price) / old_price > 0.5:
-                    entry_fixes.append(f"{sym}: {old_price} -> {real_price}")
+                if old_price > 0 and abs(real_price - old_price) / max(old_price, real_price) > 0.15:
+                    entry_fixes.append(f"{c['symbol']}: {old_price:.6f} -> {real_price:.6f}")
                     c["currentPrice"] = real_price
-                    # Recalculate snapshots changes
-                    if c.get("snapshots"):
-                        for snap in c["snapshots"]:
-                            if snap.get("price") and real_price > 0:
-                                snap["change"] = round(((snap["price"] - real_price) / real_price) * 100, 2)
+                    # Recalculate all snapshot changes from real start price
+                    for snap in snapshots:
+                        if snap.get("price") and real_price > 0:
+                            snap["change"] = round(((snap["price"] - real_price) / real_price) * 100, 2)
                     # Recalculate actualChange24h
                     if c.get("actualPrice24h") and real_price > 0:
                         c["actualChange24h"] = round(((c["actualPrice24h"] - real_price) / real_price) * 100, 2)
@@ -1186,7 +1150,7 @@ async def fix_hypothesis_v2_prices():
                     fixed_count += 1
             
             if entry_fixes:
-                fixes[entry.id] = entry_fixes
+                fixes[str(entry.id)] = entry_fixes
                 entry.result_json = json.dumps(data, ensure_ascii=False)
         
         await session.commit()
