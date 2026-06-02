@@ -1103,6 +1103,8 @@ async def enrich_hypothesis_v2_exchanges():
 @app.post("/api/hypothesis_v2/fix_prices")
 async def fix_hypothesis_v2_prices():
     """Fix hallucinated prices in all hypothesis_v2 results using CMC current quotes."""
+    import httpx
+    
     cmc_key = os.environ.get("CMC_API_KEY", "")
     if not cmc_key:
         raise HTTPException(400, "CMC_API_KEY not configured")
