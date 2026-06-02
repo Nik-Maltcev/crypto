@@ -427,6 +427,134 @@ const HypothesisV2: React.FC = () => {
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">❌ {error}</div>
             )}
 
+            {/* P&L Calculator */}
+            {latestSuccess?.result && (() => {
+                const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined || (c.snapshots && c.snapshots.length > 0)) || [];
+                if (candidates.length === 0) return null;
+
+                const BET = betSize;
+                const LEVERAGE = leverage;
+                const STOP_LOSS_PCT = stopLoss;
+                const COMMISSION_PCT = 0.1;
+
+                const calcPnl = (change: number) => {
+                    const shortChange = -change;
+                    const eff = shortChange < -(STOP_LOSS_PCT) ? -(STOP_LOSS_PCT) : shortChange;
+                    const gross = BET * LEVERAGE * (eff / 100);
+                    const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
+                    return gross - commission;
+                };
+
+                const allLabels: string[] = [];
+                candidates.forEach((c: ShortCandidate) => {
+                    c.snapshots?.forEach(s => {
+                        if (!allLabels.includes(s.label)) allLabels.push(s.label);
+                    });
+                });
+                allLabels.sort((a, b) => parseInt(a) - parseInt(b));
+
+                const snapshotTotals = allLabels.map(label => {
+                    let total = 0;
+                    candidates.forEach((c: ShortCandidate) => {
+                        const snap = c.snapshots?.find(s => s.label === label);
+                        if (snap) total += calcPnl(snap.change);
+                    });
+                    return { label, total };
+                });
+
+                let totalPnl = 0;
+                const trades = candidates.map((c: ShortCandidate) => {
+                    const change = c.actualChange24h || 0;
+                    const pnl = calcPnl(change);
+                    totalPnl += pnl;
+                    const snaps = allLabels.map(label => {
+                        const snap = c.snapshots?.find(s => s.label === label);
+                        return snap ? calcPnl(snap.change) : null;
+                    });
+                    return { symbol: c.symbol, pnl, stopped: -change < -(STOP_LOSS_PCT), snaps };
+                });
+
+                const totalInvested = candidates.length * BET;
+
+                return (
+                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div>
+                                <label className="text-sm text-gray-500 block mb-1">Ставка ($)</label>
+                                <input type="number" value={betSize} onChange={e => setBetSize(Number(e.target.value))} 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-sm text-gray-500 block mb-1">Плечо (x)</label>
+                                <input type="number" value={leverage} onChange={e => setLeverage(Number(e.target.value))} 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-sm text-gray-500 block mb-1">Стоп-лосс (%)</label>
+                                <input type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                            </div>
+                        </div>
+
+                        <div className="text-sm text-gray-500 mb-3">
+                            Позиция: ${BET * LEVERAGE} на монету • Комиссия: {COMMISSION_PCT}% • {candidates.length} монет
+                        </div>
+
+                        {allLabels.length > 0 && (
+                            <div className="overflow-x-auto mb-3">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-gray-500 border-b border-gray-700">
+                                            <th className="text-left py-1 pr-2">Монета</th>
+                                            {allLabels.map(l => <th key={l} className="text-center px-1 py-1">{l}</th>)}
+                                            <th className="text-right pl-2 py-1">Итого</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {trades.map(t => (
+                                            <tr key={t.symbol} className="border-b border-gray-800/50">
+                                                <td className="py-1 pr-2 font-bold text-white">{t.symbol}</td>
+                                                {t.snaps.map((s, i) => (
+                                                    <td key={i} className={`text-center px-1 py-1 font-mono ${s === null ? 'text-gray-700' : s >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {s === null ? '—' : `${s >= 0 ? '+' : ''}${s.toFixed(0)}`}
+                                                    </td>
+                                                ))}
+                                                <td className={`text-right pl-2 py-1 font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(0)}$
+                                                    {t.stopped && <span className="text-yellow-400 ml-1 text-[9px]">SL</span>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-t border-gray-600 font-bold">
+                                            <td className="py-1.5 pr-2 text-gray-400">ВСЕГО</td>
+                                            {snapshotTotals.map((st, i) => (
+                                                <td key={i} className={`text-center px-1 py-1.5 font-mono ${st.total >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {st.total >= 0 ? '+' : ''}{st.total.toFixed(0)}
+                                                </td>
+                                            ))}
+                                            <td className={`text-right pl-2 py-1.5 font-mono text-base ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+                            <span className="text-sm text-gray-400">Маржа: ${totalInvested} ({candidates.length} монет)</span>
+                            <span className={`text-lg font-bold ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$ ({totalInvested > 0 ? ((totalPnl / totalInvested) * 100).toFixed(0) : 0}%)
+                            </span>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Running */}
             {runningItem && (
                 <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 flex items-center gap-3">
@@ -455,137 +583,6 @@ const HypothesisV2: React.FC = () => {
                     <div>
                         {renderModelCard(latestSuccess.result.deepseek_v4, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
                     </div>
-
-                    {/* Profit calculator */}
-                    {(() => {
-                        const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined || (c.snapshots && c.snapshots.length > 0)) || [];
-                        if (candidates.length === 0) return null;
-
-                        const BET = betSize;
-                        const LEVERAGE = leverage;
-                        const STOP_LOSS_PCT = stopLoss;
-                        const COMMISSION_PCT = 0.1;
-
-                        const calcPnl = (change: number) => {
-                            const shortChange = -change;
-                            const eff = shortChange < -(STOP_LOSS_PCT) ? -(STOP_LOSS_PCT) : shortChange;
-                            const gross = BET * LEVERAGE * (eff / 100);
-                            const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
-                            return gross - commission;
-                        };
-
-                        // Get all unique snapshot labels across all candidates
-                        const allLabels: string[] = [];
-                        candidates.forEach((c: ShortCandidate) => {
-                            c.snapshots?.forEach(s => {
-                                if (!allLabels.includes(s.label)) allLabels.push(s.label);
-                            });
-                        });
-                        allLabels.sort((a, b) => parseInt(a) - parseInt(b));
-
-                        const snapshotTotals = allLabels.map(label => {
-                            let total = 0;
-                            candidates.forEach((c: ShortCandidate) => {
-                                const snap = c.snapshots?.find(s => s.label === label);
-                                if (snap) total += calcPnl(snap.change);
-                            });
-                            return { label, total };
-                        });
-
-                        let totalPnl = 0;
-                        const trades = candidates.map((c: ShortCandidate) => {
-                            const change = c.actualChange24h || 0;
-                            const pnl = calcPnl(change);
-                            totalPnl += pnl;
-                            const snaps = allLabels.map(label => {
-                                const snap = c.snapshots?.find(s => s.label === label);
-                                return snap ? calcPnl(snap.change) : null;
-                            });
-                            return { symbol: c.symbol, pnl, stopped: -change < -(STOP_LOSS_PCT), snaps };
-                        });
-
-                        const totalInvested = candidates.length * BET;
-
-                        return (
-                            <div className="mt-4 bg-brand-card border border-gray-800 rounded-xl p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
-                                </div>
-
-                                {/* Calculator inputs */}
-                                <div className="grid grid-cols-3 gap-3 mb-4">
-                                    <div>
-                                        <label className="text-sm text-gray-500 block mb-1">Ставка ($)</label>
-                                        <input type="number" value={betSize} onChange={e => setBetSize(Number(e.target.value))} 
-                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm text-gray-500 block mb-1">Плечо (x)</label>
-                                        <input type="number" value={leverage} onChange={e => setLeverage(Number(e.target.value))} 
-                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm text-gray-500 block mb-1">Стоп-лосс (%)</label>
-                                        <input type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} 
-                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
-                                    </div>
-                                </div>
-
-                                <div className="text-sm text-gray-500 mb-3">
-                                    Позиция: ${BET * LEVERAGE} на монету • Комиссия: {COMMISSION_PCT}% • {candidates.length} монет
-                                </div>
-
-                                {/* Table with 6h snapshots */}
-                                {allLabels.length > 0 && (
-                                    <div className="overflow-x-auto mb-3">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="text-gray-500 border-b border-gray-700">
-                                                    <th className="text-left py-1 pr-2">Монета</th>
-                                                    {allLabels.map(l => <th key={l} className="text-center px-1 py-1">{l}</th>)}
-                                                    <th className="text-right pl-2 py-1">Итого</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {trades.map(t => (
-                                                    <tr key={t.symbol} className="border-b border-gray-800/50">
-                                                        <td className="py-1 pr-2 font-bold text-white">{t.symbol}</td>
-                                                        {t.snaps.map((s, i) => (
-                                                            <td key={i} className={`text-center px-1 py-1 font-mono ${s === null ? 'text-gray-700' : s >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                                {s === null ? '—' : `${s >= 0 ? '+' : ''}${s.toFixed(0)}`}
-                                                            </td>
-                                                        ))}
-                                                        <td className={`text-right pl-2 py-1 font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                            {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(0)}$
-                                                            {t.stopped && <span className="text-yellow-400 ml-1 text-[9px]">SL</span>}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                                <tr className="border-t border-gray-600 font-bold">
-                                                    <td className="py-1.5 pr-2 text-gray-400">ВСЕГО</td>
-                                                    {snapshotTotals.map((st, i) => (
-                                                        <td key={i} className={`text-center px-1 py-1.5 font-mono ${st.total >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                            {st.total >= 0 ? '+' : ''}{st.total.toFixed(0)}
-                                                        </td>
-                                                    ))}
-                                                    <td className={`text-right pl-2 py-1.5 font-mono text-base ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                        {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-
-                                <div className="flex items-center justify-between pt-2 border-t border-gray-700">
-                                    <span className="text-sm text-gray-400">Маржа: ${totalInvested} ({candidates.length} монет)</span>
-                                    <span className={`text-lg font-bold ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$ ({totalInvested > 0 ? ((totalPnl / totalInvested) * 100).toFixed(0) : 0}%)
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })()}
                 </div>
             )}
 
