@@ -459,11 +459,14 @@ const HypothesisV2: React.FC = () => {
                         const BET = 100;
                         const LEVERAGE = 10;
                         const STOP_LOSS_PCT = 3;
+                        const COMMISSION_PCT = 0.1; // 0.05% open + 0.05% close = 0.1% total
 
                         const calcPnl = (change: number) => {
                             const shortChange = -change;
                             const eff = shortChange < -(STOP_LOSS_PCT) ? -(STOP_LOSS_PCT) : shortChange;
-                            return BET * LEVERAGE * (eff / 100);
+                            const gross = BET * LEVERAGE * (eff / 100);
+                            const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
+                            return gross - commission;
                         };
 
                         // Get all unique snapshot labels across all candidates
@@ -505,7 +508,7 @@ const HypothesisV2: React.FC = () => {
                             <div className="mt-4 bg-brand-card border border-gray-800 rounded-xl p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="text-sm font-bold text-gray-400 uppercase">💰 Симуляция P&L</span>
-                                    <span className="text-sm text-gray-500">${BET} × {LEVERAGE}x, SL {STOP_LOSS_PCT}%</span>
+                                    <span className="text-sm text-gray-500">${BET} × {LEVERAGE}x, SL {STOP_LOSS_PCT}%, комиссия {COMMISSION_PCT}%</span>
                                 </div>
 
                                 {/* Table with 6h snapshots */}
@@ -591,7 +594,9 @@ const HypothesisV2: React.FC = () => {
                                             sc.forEach((c: ShortCandidate) => {
                                                 const shortChange = -(c.actualChange24h || 0);
                                                 const eff = shortChange < -3 ? -3 : shortChange;
-                                                pnl += 100 * 10 * (eff / 100);
+                                                const gross = 100 * 10 * (eff / 100);
+                                                const commission = 100 * 10 * (0.1 / 100);
+                                                pnl += gross - commission;
                                             });
                                             return (
                                                 <span className={`text-sm px-2 py-0.5 rounded font-bold font-mono ${pnl >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
