@@ -10,10 +10,6 @@ import { CombinedAnalysisResponse, RedditPost, Tweet, CMCCoinData, TelegramMessa
 import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
-import AnalysisHistory from './components/AnalysisHistory';
-import PolymarketTracker from './components/PolymarketTracker';
-import StatsTracker from './components/StatsTracker';
-import AltcoinWeekly from './components/AltcoinWeekly';
 import SourcesCheck from './components/SourcesCheck';
 import MentionsTracker from './components/MentionsTracker';
 import ShitcoinTracker from './components/ShitcoinTracker';
@@ -49,7 +45,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'main' | 'history' | 'polymarket' | 'stats' | 'altcoins' | 'sources' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
+  const [activeTab, setActiveTab] = useState<'main' | 'sources' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -502,28 +498,10 @@ const App: React.FC = () => {
                 📉 Гипотеза
               </button>
               <button
-                onClick={() => setActiveTab('history')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'history' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setActiveTab('sources')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'sources' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                📊 История
-              </button>
-              <button
-                onClick={() => setActiveTab('polymarket')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'polymarket' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🎯 Прогноз vs Polymarket
-              </button>
-              <button
-                onClick={() => setActiveTab('stats')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'stats' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📈 Статистика
-              </button>
-              <button
-                onClick={() => setActiveTab('altcoins')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'altcoins' ? 'bg-purple-700/50 text-purple-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🔮 Альткоины
+                📡 Источники
               </button>
               <button
                 onClick={() => setActiveTab('shitcoins')}
@@ -576,15 +554,7 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {activeTab === 'history' ? (
-          <AnalysisHistory />
-        ) : activeTab === 'polymarket' ? (
-          <PolymarketTracker />
-        ) : activeTab === 'stats' ? (
-          <StatsTracker />
-        ) : activeTab === 'altcoins' ? (
-          <AltcoinWeekly />
-        ) : activeTab === 'shitcoins' ? (
+        {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
         ) : activeTab === 'sources' ? (
           <MentionsTracker />
