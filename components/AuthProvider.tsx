@@ -1,24 +1,33 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { checkAuth, verifyToken, logout as logoutService, AuthState } from '../services/authService';
+import { checkAuth, verifyToken, logout as logoutService, AuthState, getSessionToken } from '../services/authService';
+import { checkSubscription } from '../services/paymentService';
 
 interface AuthContextValue {
   isAuthenticated: boolean;
   isDemo: boolean;
+  hasSubscription: boolean;
+  subscriptionPlan: string | null;
+  subscriptionExpires: string | null;
   email: string | null;
   loading: boolean;
   enterDemo: () => void;
   exitDemo: () => void;
   logout: () => void;
+  refreshSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   isAuthenticated: false,
   isDemo: false,
+  hasSubscription: false,
+  subscriptionPlan: null,
+  subscriptionExpires: null,
   email: null,
   loading: true,
   enterDemo: () => {},
   exitDemo: () => {},
   logout: () => {},
+  refreshSubscription: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -26,6 +35,25 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, email: null, loading: true });
   const [isDemo, setIsDemo] = useState(false);
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
+  const [subscriptionExpires, setSubscriptionExpires] = useState<string | null>(null);
+
+  const refreshSubscription = useCallback(async () => {
+    const token = getSessionToken();
+    if (!token) {
+      setHasSubscription(false);
+      return;
+    }
+    try {
+      const status = await checkSubscription(token);
+      setHasSubscription(status.has_subscription);
+      setSubscriptionPlan(status.plan || null);
+      setSubscriptionExpires(status.expires_at || null);
+    } catch {
+      setHasSubscription(false);
+    }
+  }, []);
 
   // Check for magic link token in URL on mount
   useEffect(() => {
@@ -40,17 +68,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAuthState({ isAuthenticated: true, email: result.email, loading: false });
           // Clean URL
           window.history.replaceState({}, '', window.location.pathname);
+          // Check subscription
+          setTimeout(refreshSubscription, 500);
           return;
         } catch (err) {
           console.error('Token verification failed:', err);
-          // Clean URL and continue to normal auth check
           window.history.replaceState({}, '', window.location.pathname);
         }
+      }
+
+      // Check for payment result in URL
+      const paymentResult = params.get('payment');
+      if (paymentResult) {
+        window.history.replaceState({}, '', window.location.pathname);
       }
 
       // Normal auth check
       const state = await checkAuth();
       setAuthState(state);
+
+      // If authenticated, check subscription
+      if (state.isAuthenticated) {
+        const token = getSessionToken();
+        if (token) {
+          try {
+            const status = await checkSubscription(token);
+            setHasSubscription(status.has_subscription);
+            setSubscriptionPlan(status.plan || null);
+            setSubscriptionExpires(status.expires_at || null);
+          } catch {}
+        }
+      }
     };
 
     init();
@@ -63,6 +111,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logoutService();
     setAuthState({ isAuthenticated: false, email: null, loading: false });
     setIsDemo(false);
+    setHasSubscription(false);
+    setSubscriptionPlan(null);
+    setSubscriptionExpires(null);
   }, []);
 
   return (
@@ -70,11 +121,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         isAuthenticated: authState.isAuthenticated,
         isDemo,
+        hasSubscription,
+        subscriptionPlan,
+        subscriptionExpires,
         email: authState.email,
         loading: authState.loading,
         enterDemo,
         exitDemo,
         logout,
+        refreshSubscription,
       }}
     >
       {children}

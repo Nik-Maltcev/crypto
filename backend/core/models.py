@@ -177,6 +177,28 @@ class MagicToken(Base):
         return f"<MagicToken(email='{self.email}', used={self.used})>"
 
 
+class Subscription(Base):
+    """User subscription tracking (PayAnyWay payments)."""
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    plan: Mapped[str] = mapped_column(String(20), nullable=False)  # week, month
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    transaction_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, active, expired
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<Subscription(email='{self.email}', plan='{self.plan}', status='{self.status}')>"
+
+
 class ShitcoinDetection(Base):
     """Tracks shitcoin detections from Telegram caller channels."""
 

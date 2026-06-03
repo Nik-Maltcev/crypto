@@ -46,7 +46,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
-  const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email } = useAuth();
+  const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
   const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -529,6 +529,9 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3">
               {isAuthenticated && email && (
                 <span className="text-xs text-gray-500 hidden sm:inline">{email}</span>
+              )}
+              {isAuthenticated && hasSubscription && (
+                <span className="text-xs text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded font-medium">PRO</span>
               )}
               {isDemo && (
                 <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded font-medium">DEMO</span>

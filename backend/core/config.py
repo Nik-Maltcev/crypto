@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     SESSION_EXPIRE_DAYS: int = 30
     FRONTEND_URL: str = "https://dexflow.xyz"
 
+    # PayAnyWay (Moneta.ru) Payments
+    PAW_MNT_ID: str = "50276032"
+    PAW_INTEGRITY_CODE: str = "12345"
+    PAW_TEST_MODE: str = "1"  # 1=test, 0=production
+
     # Worker settings
     PARSE_DAYS: int = 2  # Today + yesterday
     REQUEST_DELAY_SEC: float = 3.5  # Increased from 1.5 to 3.5 for safety
