@@ -674,6 +674,35 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                         logger.warning(f"[HYP_V2] Price mismatch {sym}: model={model_price}, CMC={real_price}. Using CMC.")
                     c["currentPrice"] = real_price
 
+            # Validate picks: verify each coin exists on MEXC with matching price
+            validated_candidates = []
+            async with httpx.AsyncClient(timeout=10) as client:
+                for c in deepseek_result.get("shortCandidates", []):
+                    sym = c.get("symbol", "").upper()
+                    cmc_price = c.get("currentPrice", 0)
+                    if not cmc_price or cmc_price <= 0:
+                        logger.warning(f"[HYP_V2] {sym}: no price, removing")
+                        continue
+                    try:
+                        resp = await client.get(
+                            "https://api.mexc.com/api/v3/ticker/price",
+                            params={"symbol": f"{sym}USDT"}
+                        )
+                        if resp.status_code == 200:
+                            mexc_price = float(resp.json().get("price", 0))
+                            if mexc_price > 0 and abs(mexc_price - cmc_price) / cmc_price > 0.5:
+                                logger.warning(f"[HYP_V2] {sym}: CMC=${cmc_price:.4f} vs MEXC=${mexc_price:.4f} — likely wrong token, removing")
+                                continue
+                        # If MEXC doesn't have the pair, keep it (can't validate)
+                    except:
+                        pass
+                    validated_candidates.append(c)
+            
+            removed = len(deepseek_result.get("shortCandidates", [])) - len(validated_candidates)
+            if removed > 0:
+                logger.info(f"[HYP_V2] Removed {removed} invalid picks after MEXC validation")
+            deepseek_result["shortCandidates"] = validated_candidates
+
             # Fetch exchanges for all picked symbols
             all_picks = []
             for c in deepseek_result.get("shortCandidates", []):
