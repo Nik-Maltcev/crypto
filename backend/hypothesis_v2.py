@@ -730,12 +730,7 @@ async def verify_hypothesis_v2_results() -> None:
     - Adds a snapshot with timestamp and change from start
     - After 24h marks as fully verified with final stats
     """
-    logger.info("[HYP_V2] Verifying predictions (6h snapshot)...")
-
-    cmc_key = os.environ.get("CMC_API_KEY", "")
-    if not cmc_key:
-        logger.warning("[HYP_V2] CMC_API_KEY not set, skipping verification")
-        return
+    logger.info("[HYP_V2] Verifying predictions (hourly snapshot)...")
 
     async_session = get_async_session()
     async with async_session() as session:
@@ -779,28 +774,63 @@ async def verify_hypothesis_v2_results() -> None:
             if not all_symbols:
                 continue
 
-            # Fetch current prices
+            # Fetch prices: MEXC first, CoinGecko fallback
             prices = {}
-            async with httpx.AsyncClient(timeout=30) as client:
-                headers = {"X-CMC_PRO_API_KEY": cmc_key, "Accept": "application/json"}
-                symbols_str = ",".join(list(all_symbols)[:100])
-                try:
-                    resp = await client.get(
-                        f"{CMC_BASE}/v1/cryptocurrency/quotes/latest",
-                        headers=headers,
-                        params={"symbol": symbols_str, "convert": "USD"}
-                    )
-                    if resp.status_code == 200:
-                        resp_data = resp.json().get("data", {})
-                        for sym, coin_data in resp_data.items():
-                            price = coin_data.get("quote", {}).get("USD", {}).get("price", 0)
-                            prices[sym.upper()] = price
-                except Exception as e:
-                    logger.warning(f"[HYP_V2] Price fetch error: {e}")
-                    continue
+            async with httpx.AsyncClient(timeout=15) as client:
+                # MEXC — try each symbol
+                for sym in all_symbols:
+                    try:
+                        resp = await client.get(
+                            f"https://api.mexc.com/api/v3/ticker/price",
+                            params={"symbol": f"{sym}USDT"}
+                        )
+                        if resp.status_code == 200:
+                            data_resp = resp.json()
+                            price = float(data_resp.get("price", 0))
+                            if price > 0:
+                                prices[sym] = price
+                    except:
+                        pass
+                
+                # CoinGecko fallback for missing symbols
+                missing = [s for s in all_symbols if s not in prices]
+                if missing:
+                    logger.info(f"[HYP_V2] MEXC missing {len(missing)} symbols, trying CoinGecko...")
+                    # Get coin list for ID mapping
+                    try:
+                        resp = await client.get("https://api.coingecko.com/api/v3/coins/list")
+                        if resp.status_code == 200:
+                            coin_list = resp.json()
+                            sym_to_id = {}
+                            for coin in coin_list:
+                                s = coin.get("symbol", "").upper()
+                                if s in missing and s not in sym_to_id:
+                                    sym_to_id[s] = coin.get("id", "")
+                            
+                            for sym in missing:
+                                coin_id = sym_to_id.get(sym)
+                                if not coin_id:
+                                    continue
+                                try:
+                                    resp2 = await client.get(
+                                        f"https://api.coingecko.com/api/v3/simple/price",
+                                        params={"ids": coin_id, "vs_currencies": "usd"}
+                                    )
+                                    if resp2.status_code == 200:
+                                        price = resp2.json().get(coin_id, {}).get("usd", 0)
+                                        if price > 0:
+                                            prices[sym] = price
+                                    await asyncio.sleep(2)  # CoinGecko rate limit
+                                except:
+                                    pass
+                    except:
+                        pass
 
             if not prices:
+                logger.warning(f"[HYP_V2] No prices fetched for entry {entry.id}")
                 continue
+
+            logger.info(f"[HYP_V2] Got prices for {len(prices)}/{len(all_symbols)} symbols")
 
             # Calculate hours since analysis
             hours_elapsed = (datetime.utcnow() - entry.created_at).total_seconds() / 3600
