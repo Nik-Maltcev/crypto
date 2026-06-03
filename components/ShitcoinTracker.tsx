@@ -5,19 +5,36 @@ const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8
 interface TokenData {
     contract: string;
     caller: string;
-    message: string;
+    message?: string;
     detected_at: string;
     safety: string;
     price_at_call: number;
     mcap_at_call: number;
-    rug_check: {
+    current_price?: number;
+    current_change?: number;
+    peak_price?: number;
+    peak_change?: number;
+    status?: string;
+    // Flat fields from new DB format
+    symbol?: string;
+    name?: string;
+    rug_score?: number;
+    lp_locked_pct?: number;
+    creator_pct?: number;
+    liquidity_usd?: number;
+    dexscreener_url?: string;
+    website?: string;
+    twitter?: string;
+    telegram?: string;
+    // Legacy nested format (backward compat)
+    rug_check?: {
         score?: number;
         lp_locked_pct?: number;
         creator_pct?: number;
         top_holders_pct?: number;
         is_safe?: boolean;
     };
-    dex_data: {
+    dex_data?: {
         name?: string;
         symbol?: string;
         price_usd?: number;
@@ -27,6 +44,9 @@ interface TokenData {
         price_change_5m?: number;
         price_change_1h?: number;
         dexscreener_url?: string;
+        website?: string;
+        twitter?: string;
+        telegram?: string;
     };
     price_history: { time: string; price: number; change_from_call: number; mcap: number }[];
 }
@@ -62,12 +82,14 @@ const ShitcoinTracker: React.FC = () => {
 
     const getSafetyColor = (safety: string) => {
         if (safety === 'SAFE') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        if (safety === 'PUMPING') return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
         if (safety === 'DANGER') return 'bg-red-500/20 text-red-400 border-red-500/30';
         return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
     };
 
     const getSafetyIcon = (safety: string) => {
         if (safety === 'SAFE') return '✅';
+        if (safety === 'PUMPING') return '⚠️';
         if (safety === 'DANGER') return '❌';
         return '⚠️';
     };
@@ -96,16 +118,26 @@ const ShitcoinTracker: React.FC = () => {
     };
 
     const getCurrentChange = (token: TokenData) => {
-        if (token.price_history.length > 0) {
-            return token.price_history[token.price_history.length - 1].change_from_call;
+        // New format: direct field
+        if (token.current_change !== undefined && token.current_change !== 0) {
+            return token.current_change;
         }
-        const currentPrice = token.dex_data?.price_usd || 0;
-        const callPrice = token.price_at_call || 0;
-        if (callPrice > 0 && currentPrice > 0) {
-            return ((currentPrice - callPrice) / callPrice) * 100;
+        if (token.price_history && token.price_history.length > 0) {
+            return token.price_history[token.price_history.length - 1].change_from_call;
         }
         return 0;
     };
+
+    const getSymbol = (t: TokenData) => t.symbol || t.dex_data?.symbol || '???';
+    const getName = (t: TokenData) => t.name || t.dex_data?.name || 'Unknown';
+    const getMcap = (t: TokenData) => t.mcap_at_call || t.dex_data?.market_cap || 0;
+    const getLpPct = (t: TokenData) => t.lp_locked_pct ?? t.rug_check?.lp_locked_pct ?? 0;
+    const getCreatorPct = (t: TokenData) => t.creator_pct ?? t.rug_check?.creator_pct ?? 0;
+    const getLiquidity = (t: TokenData) => t.liquidity_usd || t.dex_data?.liquidity_usd || 0;
+    const getDexUrl = (t: TokenData) => t.dexscreener_url || t.dex_data?.dexscreener_url || '';
+    const getWebsite = (t: TokenData) => t.website || t.dex_data?.website || '';
+    const getTwitter = (t: TokenData) => t.twitter || t.dex_data?.twitter || '';
+    const getTelegram = (t: TokenData) => t.telegram || t.dex_data?.telegram || '';
 
     if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Загрузка...</div>;
 
@@ -171,15 +203,15 @@ const ShitcoinTracker: React.FC = () => {
                                             {getSafetyIcon(token.safety)} {token.safety}
                                         </span>
                                         <div>
-                                            <span className="text-lg font-bold text-white">{token.dex_data?.symbol || '???'}</span>
-                                            <span className="text-xs text-gray-500 ml-2">{token.dex_data?.name || 'Unknown'}</span>
+                                            <span className="text-lg font-bold text-white">{getSymbol(token)}</span>
+                                            <span className="text-xs text-gray-500 ml-2">{getName(token)}</span>
                                         </div>
                                         <span className="text-[10px] text-gray-600 font-mono">{token.contract.slice(0, 6)}...{token.contract.slice(-4)}</span>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="text-right">
                                             <div className="text-[10px] text-gray-500">MCap</div>
-                                            <div className="text-sm font-bold text-white">{formatMcap(token.dex_data?.market_cap || token.mcap_at_call)}</div>
+                                            <div className="text-sm font-bold text-white">{formatMcap(getMcap(token))}</div>
                                         </div>
                                         <div className="text-right">
                                             <div className="text-[10px] text-gray-500">С момента колла</div>
@@ -189,23 +221,23 @@ const ShitcoinTracker: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500">
+                                <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 flex-wrap">
                                     <span>📡 @{token.caller}</span>
                                     <span>⏰ {getTimeSince(token.detected_at)}</span>
-                                    <span>💧 LP: {(token.rug_check?.lp_locked_pct || 0).toFixed(0)}%</span>
-                                    <span>👤 Creator: {(token.rug_check?.creator_pct || 0).toFixed(1)}%</span>
-                                    <span>💰 Liq: {formatMcap(token.dex_data?.liquidity_usd || 0)}</span>
-                                    {token.dex_data?.website && (
-                                        <a href={token.dex_data.website} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🌐 Сайт</a>
+                                    <span>💧 LP: {getLpPct(token).toFixed(0)}%</span>
+                                    <span>👤 Creator: {getCreatorPct(token).toFixed(1)}%</span>
+                                    <span>💰 Liq: {formatMcap(getLiquidity(token))}</span>
+                                    {getWebsite(token) && (
+                                        <a href={getWebsite(token)} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🌐 Сайт</a>
                                     )}
-                                    {token.dex_data?.twitter && (
-                                        <a href={token.dex_data.twitter} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🐦 Twitter</a>
+                                    {getTwitter(token) && (
+                                        <a href={getTwitter(token)} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">🐦 Twitter</a>
                                     )}
-                                    {token.dex_data?.telegram && (
-                                        <a href={token.dex_data.telegram} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">✈️ TG</a>
+                                    {getTelegram(token) && (
+                                        <a href={getTelegram(token)} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">✈️ TG</a>
                                     )}
-                                    {token.dex_data?.dexscreener_url && (
-                                        <a href={token.dex_data.dexscreener_url} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">
+                                    {getDexUrl(token) && (
+                                        <a href={getDexUrl(token)} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">
                                             📊 Dexscreener
                                         </a>
                                     )}
