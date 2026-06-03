@@ -82,6 +82,7 @@ Message:
 
 # In-memory storage for detected tokens (will be replaced with DB later)
 _detected_tokens: list[dict] = []
+_processed_contracts: set[str] = set()  # Quick dedup cache
 _monitor_running: bool = False
 
 
@@ -146,6 +147,10 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     logger.info(f"[SHITCOIN] New token detected from @{caller_channel}: {contract[:12]}...")
     
     # Check if already processed
+    if contract in _processed_contracts:
+        return None
+    _processed_contracts.add(contract)
+    
     if any(t["contract"] == contract for t in _detected_tokens):
         logger.info(f"[SHITCOIN] Already tracked: {contract[:12]}...")
         return None
@@ -155,6 +160,11 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     dex_task = check_dexscreener(contract)
     
     rug_result, dex_result = await asyncio.gather(rug_task, dex_task)
+    
+    # Skip if Dexscreener found nothing (not a real token)
+    if not dex_result or not dex_result.get("price_usd"):
+        logger.info(f"[SHITCOIN] {contract[:12]}... not found on Dexscreener, skipping")
+        return None
     
     token_data = {
         "contract": contract,
