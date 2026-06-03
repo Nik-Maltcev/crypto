@@ -26,16 +26,16 @@ SOLANA_ADDRESS_RE = re.compile(r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b')
 
 # Caller channels from the PDF guide
 CALLER_CHANNELS = [
-    "GEMSCALLS_6868", "earlysolplays", "SOL_AVAXChainCalls", "doctoreclub",
-    "mad_apes", "GodsCryptoReviews", "PapasCall", "DegenShoots", "FullofEth",
+    "GEMSCALLS_6868", "doctoreclub",
+    "mad_apes", "GodsCryptoReviews", "PapasCall", "FullofEth",
     "whalevomitcalls", "Paradoxes1", "ghastlygems", "nocturnalcalls96",
-    "duffyscalls", "NagatoGemCalls", "PirateGemsCall", "Baymaxcallsx",
-    "LionCALL", "CsDucks_MoveCall", "MarkDegens", "MarkGems", "Zorrogems",
-    "ottergamble", "marketingguyycall", "thorcaller", "MaybachCalls",
-    "CryptoFrogsGems", "TheDonsCalls", "degenalertstg", "memecoindegen",
-    "eslamcrypto", "dialgacalls", "KnightCall", "TrafalgarLawCalls",
-    "waldosalpha", "mackcalls", "Blindercalls", "DemonicMayan",
-    "MrpredatorCall", "Marshmellow100xCalls", "eyecrosschain", "fiiyacalls",
+    "duffyscalls", "NagatoGemCalls", "PirateGemsCall",
+    "LionCALL", "MarkDegens", "MarkGems", "Zorrogems",
+    "ottergamble", "marketingguyycall", "MaybachCalls",
+    "CryptoFrogsGems", "TheDonsCalls", "degenalertstg",
+    "KnightCall", "TrafalgarLawCalls",
+    "waldosalpha", "mackcalls",
+    "MrpredatorCall", "Marshmellow100xCalls", "eyecrosschain",
     "yummycalls", "UnicornCryptoX1000", "CryptoDeusGems", "TBGgambLes",
     "TheBlockchainGods", "spacemandifferentchaincallz",
 ]
