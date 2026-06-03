@@ -1232,6 +1232,12 @@ async def backfill_hypothesis_snapshots():
                             errors_list.append(f"{symbol}: no klines")
                             continue
                         
+                        # Sanity check: first candle price should be close to currentPrice
+                        first_close = float(klines[0][4])
+                        if start_price > 0 and abs(first_close - start_price) / start_price > 0.5:
+                            errors_list.append(f"{symbol}: price mismatch (model={start_price}, MEXC={first_close}), likely different token")
+                            continue
+                        
                         # Build 5-minute snapshots
                         new_snapshots = []
                         prev_price = start_price
