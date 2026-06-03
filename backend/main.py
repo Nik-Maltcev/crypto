@@ -1176,7 +1176,7 @@ async def fix_hypothesis_v2_prices():
 
 @app.post("/api/hypothesis_v2/backfill_snapshots")
 async def backfill_hypothesis_snapshots():
-    """Backfill hourly snapshots from Binance klines for all hypothesis_v2 entries."""
+    """Backfill hourly snapshots from MEXC klines for all hypothesis_v2 entries."""
     import httpx
     from datetime import datetime, timedelta
     
@@ -1192,9 +1192,10 @@ async def backfill_hypothesis_snapshots():
         entries = result.scalars().all()
         
         filled_total = 0
+        errors_list = []
         details = {}
         
-        async with httpx.AsyncClient(timeout=30, proxy=BINANCE_PROXY) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             for entry in entries:
                 if not entry.result_json or not entry.created_at:
                     continue
@@ -1212,26 +1213,26 @@ async def backfill_hypothesis_snapshots():
                     if not start_price or start_price <= 0:
                         continue
                     
-                    # Try SYMBOLUSDT pair on Binance
                     pair = f"{symbol}USDT"
-                    
-                    # Fetch hourly klines from analysis time to +24h
                     start_ms = int(analysis_time.timestamp() * 1000)
                     end_ms = start_ms + (24 * 3600 * 1000)
                     
                     try:
+                        # MEXC klines API (same format as Binance)
                         resp = await client.get(
-                            "https://api.binance.com/api/v3/klines",
+                            "https://api.mexc.com/api/v3/klines",
                             params={"symbol": pair, "interval": "1h", "startTime": start_ms, "endTime": end_ms, "limit": 25}
                         )
                         if resp.status_code != 200:
+                            errors_list.append(f"{symbol}: MEXC {resp.status_code}")
                             continue
                         
                         klines = resp.json()
                         if not klines:
+                            errors_list.append(f"{symbol}: no klines")
                             continue
                         
-                        # Build complete hourly snapshots
+                        # Build hourly snapshots
                         new_snapshots = []
                         prev_price = start_price
                         for kline in klines:
@@ -1274,16 +1275,17 @@ async def backfill_hypothesis_snapshots():
                                 filled_total += 1
                     
                     except Exception as e:
+                        errors_list.append(f"{symbol}: {e}")
                         continue
                     
-                    await asyncio.sleep(0.2)  # Rate limit
+                    await asyncio.sleep(0.3)
                 
                 if entry_fills:
                     details[str(entry.id)] = entry_fills
                     entry.result_json = json.dumps(data, ensure_ascii=False)
         
         await session.commit()
-        return {"success": True, "filled": filled_total, "details": details}
+        return {"success": True, "filled": filled_total, "details": details, "errors": errors_list[:20]}
 
 
 @app.post("/api/shitcoins/start")
