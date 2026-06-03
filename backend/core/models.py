@@ -140,3 +140,52 @@ class AltcoinTracking(Base):
 
     def __repr__(self) -> str:
         return f"<AltcoinTracking({self.symbol}, target={self.target_change_7d}%, actual={self.actual_change_7d}%)>"
+
+
+class ShitcoinDetection(Base):
+    """Tracks shitcoin detections from Telegram caller channels."""
+
+    __tablename__ = "shitcoin_detections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    contract: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    symbol: Mapped[str] = mapped_column(String(30), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=True)
+    caller: Mapped[str] = mapped_column(String(100), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Price at detection
+    price_at_call: Mapped[float] = mapped_column(Float, default=0)
+    mcap_at_call: Mapped[float] = mapped_column(Float, default=0)
+    liquidity_usd: Mapped[float] = mapped_column(Float, default=0)
+
+    # RugCheck data
+    rug_score: Mapped[int] = mapped_column(Integer, default=0)
+    lp_locked_pct: Mapped[float] = mapped_column(Float, default=0)
+    creator_pct: Mapped[float] = mapped_column(Float, default=0)
+    safety: Mapped[str] = mapped_column(String(20), default="UNKNOWN")  # SAFE, CAUTION, DANGER, PUMPING
+
+    # Links
+    dexscreener_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    twitter: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    telegram_link: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # Price tracking (JSON: [{"time": "...", "price": 0.01, "change_from_call": +50.2, "mcap": 100000}])
+    price_history_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Peak tracking
+    peak_price: Mapped[float] = mapped_column(Float, default=0)
+    peak_change: Mapped[float] = mapped_column(Float, default=0)
+    current_price: Mapped[float] = mapped_column(Float, default=0)
+    current_change: Mapped[float] = mapped_column(Float, default=0)
+
+    # Status
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active, rugged, dead, completed
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<ShitcoinDetection({self.symbol}, safety={self.safety}, change={self.current_change}%)>"
