@@ -221,7 +221,7 @@ const HypothesisV2: React.FC = () => {
                     <div className="text-sm text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {modelData.shortCandidates?.map((c, idx) => (
-                        <div key={c.symbol} className={`rounded-xl p-4 border ${
+                        <div key={c.symbol} className={`data-card rounded-xl p-4 border ${
                             c.strongHit ? 'bg-emerald-500/10 border-emerald-500/30' :
                             c.hit === true ? 'bg-emerald-500/5 border-emerald-500/20' :
                             c.hit === false ? 'bg-red-500/5 border-red-500/20' :

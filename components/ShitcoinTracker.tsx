@@ -275,7 +275,7 @@ const ShitcoinTracker: React.FC = () => {
                     {tokens.map((token, idx) => {
                         const change = getCurrentChange(token);
                         return (
-                            <div key={token.contract} className="bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
+                            <div key={token.contract} className="data-card bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className={`text-xs px-2 py-1 rounded border font-bold ${getSafetyColor(token.safety)}`}>
