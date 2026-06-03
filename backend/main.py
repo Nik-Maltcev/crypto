@@ -1304,6 +1304,43 @@ async def backfill_hypothesis_snapshots():
         return {"success": True, "filled": filled_total, "details": details, "errors": errors_list[:20]}
 
 
+@app.post("/api/hypothesis_v2/cleanup_old")
+async def cleanup_old_hypothesis():
+    """Delete all hypothesis_v2 entries except today's successful one."""
+    from datetime import datetime, timedelta
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Delete old entries (before today)
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.created_at < today_start)
+        )
+        old_entries = result.scalars().all()
+        
+        # Also delete stuck 'running' entries from today
+        result2 = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "running")
+        )
+        stuck_entries = result2.scalars().all()
+        
+        deleted = 0
+        for entry in old_entries:
+            await session.delete(entry)
+            deleted += 1
+        for entry in stuck_entries:
+            await session.delete(entry)
+            deleted += 1
+        
+        await session.commit()
+        return {"success": True, "deleted": deleted}
+
+
 @app.post("/api/shitcoins/start")
 async def start_shitcoin_monitor():
     """Manually start the shitcoin monitor if not running."""
