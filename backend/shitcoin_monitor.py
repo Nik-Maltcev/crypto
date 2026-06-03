@@ -80,9 +80,8 @@ Message:
     
     return None
 
-# In-memory storage for detected tokens (will be replaced with DB later)
-_detected_tokens: list[dict] = []
-_processed_contracts: set[str] = set()  # Quick dedup cache
+# In-memory dedup cache (persists during runtime, resets on deploy)
+_processed_contracts: set[str] = set()
 _monitor_running: bool = False
 
 
@@ -143,40 +142,36 @@ async def check_dexscreener(contract: str) -> dict:
 
 
 async def process_new_token(contract: str, caller_channel: str, message_text: str) -> dict | None:
-    """Process a newly detected token: check rug, get market data."""
+    """Process a newly detected token: check rug, get market data, save to DB."""
+    from core.models import ShitcoinDetection
+    from sqlalchemy import select as sa_select
+    
     logger.info(f"[SHITCOIN] New token detected from @{caller_channel}: {contract[:12]}...")
     
-    # Check if already processed
+    # Check if already processed (in-memory fast check)
     if contract in _processed_contracts:
         return None
     _processed_contracts.add(contract)
     
-    if any(t["contract"] == contract for t in _detected_tokens):
-        logger.info(f"[SHITCOIN] Already tracked: {contract[:12]}...")
-        return None
+    # Check DB for existing
+    async_session = get_async_session()
+    async with async_session() as session:
+        existing = await session.execute(
+            sa_select(ShitcoinDetection).where(ShitcoinDetection.contract == contract)
+        )
+        if existing.scalars().first():
+            logger.info(f"[SHITCOIN] Already in DB: {contract[:12]}...")
+            return None
     
     # Parallel checks
     rug_task = check_rugcheck(contract)
     dex_task = check_dexscreener(contract)
-    
     rug_result, dex_result = await asyncio.gather(rug_task, dex_task)
     
-    # Skip if Dexscreener found nothing (not a real token)
+    # Skip if Dexscreener found nothing
     if not dex_result or not dex_result.get("price_usd"):
         logger.info(f"[SHITCOIN] {contract[:12]}... not found on Dexscreener, skipping")
         return None
-    
-    token_data = {
-        "contract": contract,
-        "caller": caller_channel,
-        "message": message_text[:300],
-        "detected_at": datetime.utcnow().isoformat() + "Z",
-        "rug_check": rug_result,
-        "dex_data": dex_result,
-        "price_at_call": dex_result.get("price_usd", 0),
-        "mcap_at_call": dex_result.get("market_cap", 0),
-        "price_history": [],  # Will be updated every 5 min
-    }
     
     # Determine safety
     lp_locked = rug_result.get("lp_locked_pct", 0)
@@ -184,64 +179,114 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     is_safe = rug_result.get("is_safe")
     
     if is_safe is True and lp_locked >= 95 and creator_pct < 5:
-        token_data["safety"] = "SAFE"
+        safety = "SAFE"
     elif lp_locked < 50 or creator_pct > 20:
-        token_data["safety"] = "DANGER"
+        safety = "DANGER"
     else:
-        token_data["safety"] = "CAUTION"
+        safety = "CAUTION"
     
-    _detected_tokens.insert(0, token_data)
+    price_at_call = dex_result.get("price_usd", 0)
     
-    # Keep only last 100 tokens
-    if len(_detected_tokens) > 100:
-        _detected_tokens.pop()
+    # Save to DB
+    async with async_session() as session:
+        detection = ShitcoinDetection(
+            contract=contract,
+            symbol=dex_result.get("symbol", "???"),
+            name=dex_result.get("name", "Unknown"),
+            caller=caller_channel,
+            message=message_text[:300],
+            price_at_call=price_at_call,
+            mcap_at_call=dex_result.get("market_cap", 0),
+            liquidity_usd=dex_result.get("liquidity_usd", 0),
+            rug_score=rug_result.get("score", 0),
+            lp_locked_pct=lp_locked,
+            creator_pct=creator_pct,
+            safety=safety,
+            dexscreener_url=dex_result.get("dexscreener_url", ""),
+            website=dex_result.get("website", ""),
+            twitter=dex_result.get("twitter", ""),
+            telegram_link=dex_result.get("telegram", ""),
+            peak_price=price_at_call,
+            peak_change=0,
+            current_price=price_at_call,
+            current_change=0,
+            price_history_json=json.dumps([{
+                "time": datetime.utcnow().isoformat() + "Z",
+                "price": price_at_call,
+                "change_from_call": 0,
+                "mcap": dex_result.get("market_cap", 0),
+            }]),
+        )
+        session.add(detection)
+        await session.commit()
     
     logger.info(
         f"[SHITCOIN] {dex_result.get('symbol', '???')} | "
-        f"Safety: {token_data['safety']} | "
-        f"MCap: ${dex_result.get('market_cap', 0):,.0f} | "
-        f"LP: {lp_locked:.0f}% | "
-        f"Creator: {creator_pct:.1f}%"
+        f"Safety: {safety} | MCap: ${dex_result.get('market_cap', 0):,.0f} | "
+        f"LP: {lp_locked:.0f}% | Creator: {creator_pct:.1f}%"
     )
-    
-    return token_data
+    return {"contract": contract, "symbol": dex_result.get("symbol"), "safety": safety}
 
 
 async def update_price_tracking():
-    """Update prices for all tracked tokens (runs every 5 min)."""
-    if not _detected_tokens:
-        return
+    """Update prices for all active tokens in DB (runs every 5 min)."""
+    from core.models import ShitcoinDetection
+    from sqlalchemy import select as sa_select
     
-    now = datetime.utcnow()
-    
-    for token in _detected_tokens[:20]:  # Only track last 20
-        # Skip if older than 24h
-        detected_at = datetime.fromisoformat(token["detected_at"].replace("Z", ""))
-        if (now - detected_at).total_seconds() > 86400:
-            continue
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            sa_select(ShitcoinDetection)
+            .where(ShitcoinDetection.status == "active")
+            .where(ShitcoinDetection.detected_at >= datetime.utcnow() - timedelta(hours=24))
+            .order_by(ShitcoinDetection.detected_at.desc())
+            .limit(30)
+        )
+        tokens = result.scalars().all()
         
-        contract = token["contract"]
-        dex_data = await check_dexscreener(contract)
+        if not tokens:
+            return
         
-        if dex_data and dex_data.get("price_usd"):
-            current_price = dex_data["price_usd"]
-            call_price = token.get("price_at_call", 0)
+        for token in tokens:
+            dex_data = await check_dexscreener(token.contract)
             
-            change_pct = 0
-            if call_price > 0:
-                change_pct = ((current_price - call_price) / call_price) * 100
+            if dex_data and dex_data.get("price_usd"):
+                current_price = dex_data["price_usd"]
+                call_price = token.price_at_call or 0
+                
+                change_pct = 0
+                if call_price > 0:
+                    change_pct = ((current_price - call_price) / call_price) * 100
+                
+                # Update price history
+                history = json.loads(token.price_history_json or "[]")
+                history.append({
+                    "time": datetime.utcnow().isoformat() + "Z",
+                    "price": current_price,
+                    "change_from_call": round(change_pct, 2),
+                    "mcap": dex_data.get("market_cap", 0),
+                })
+                token.price_history_json = json.dumps(history)
+                
+                # Update current/peak
+                token.current_price = current_price
+                token.current_change = round(change_pct, 2)
+                if current_price > token.peak_price:
+                    token.peak_price = current_price
+                    token.peak_change = round(change_pct, 2)
+                
+                # Update safety status based on performance
+                if change_pct >= 50:
+                    token.safety = "PUMPING"
+                elif change_pct <= -80:
+                    token.status = "rugged"
+                elif change_pct <= -95:
+                    token.status = "dead"
             
-            token["price_history"].append({
-                "time": now.isoformat() + "Z",
-                "price": current_price,
-                "change_from_call": round(change_pct, 2),
-                "mcap": dex_data.get("market_cap", 0),
-            })
-            
-            # Update current data
-            token["dex_data"] = dex_data
+            await asyncio.sleep(0.5)
         
-        await asyncio.sleep(0.5)  # Rate limit
+        await session.commit()
+        logger.info(f"[SHITCOIN] Updated prices for {len(tokens)} tokens")
 
 
 async def start_monitor():
@@ -325,8 +370,50 @@ async def start_monitor():
 
 
 def get_detected_tokens() -> list[dict]:
-    """Get all detected tokens (for API endpoint)."""
-    return _detected_tokens
+    """Get all detected tokens from DB (sync wrapper for API endpoint)."""
+    # This is called from sync context in main.py — return empty, 
+    # actual data served via async endpoint
+    return []
+
+
+async def get_detected_tokens_async() -> list[dict]:
+    """Get detected tokens from DB."""
+    from core.models import ShitcoinDetection
+    from sqlalchemy import select as sa_select
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            sa_select(ShitcoinDetection)
+            .order_by(ShitcoinDetection.detected_at.desc())
+            .limit(50)
+        )
+        tokens = result.scalars().all()
+        
+        return [{
+            "contract": t.contract,
+            "symbol": t.symbol,
+            "name": t.name,
+            "caller": t.caller,
+            "detected_at": t.detected_at.isoformat() + "Z" if t.detected_at else None,
+            "price_at_call": t.price_at_call,
+            "mcap_at_call": t.mcap_at_call,
+            "liquidity_usd": t.liquidity_usd,
+            "safety": t.safety,
+            "rug_score": t.rug_score,
+            "lp_locked_pct": t.lp_locked_pct,
+            "creator_pct": t.creator_pct,
+            "current_price": t.current_price,
+            "current_change": t.current_change,
+            "peak_price": t.peak_price,
+            "peak_change": t.peak_change,
+            "status": t.status,
+            "dexscreener_url": t.dexscreener_url,
+            "website": t.website,
+            "twitter": t.twitter,
+            "telegram": t.telegram_link,
+            "price_history": json.loads(t.price_history_json or "[]"),
+        } for t in tokens]
 
 
 def is_monitor_running() -> bool:

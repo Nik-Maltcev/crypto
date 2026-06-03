@@ -987,13 +987,14 @@ async def fix_verified_flags():
 
 @app.get("/api/shitcoins/list")
 async def get_shitcoins():
-    """Get all detected shitcoins from caller channels."""
-    tokens = get_detected_tokens()
+    """Get all detected shitcoins from caller channels (from DB)."""
+    from shitcoin_monitor import get_detected_tokens_async
+    tokens = await get_detected_tokens_async()
     return {
         "success": True,
         "monitor_running": is_monitor_running(),
         "total": len(tokens),
-        "tokens": tokens[:50],  # Last 50
+        "tokens": tokens,
     }
 
 
