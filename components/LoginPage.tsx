@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { sendMagicLink } from '../services/authService';
+import { sendMagicLink, verifyToken } from '../services/authService';
 
 interface LoginPageProps {
   onDemoMode: () => void;
@@ -17,7 +17,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode }) => {
     setLoading(true);
 
     try {
-      await sendMagicLink(email);
+      const result = await sendMagicLink(email);
+      // Bypass: instant auth with token
+      if (result.message === '__bypass__' && result.bypassToken) {
+        await verifyToken(result.bypassToken);
+        window.location.reload();
+        return;
+      }
       setSent(true);
     } catch (err: any) {
       setError(err.message || 'Ошибка отправки ссылки');

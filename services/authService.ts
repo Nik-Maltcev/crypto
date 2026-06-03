@@ -12,8 +12,8 @@ export interface AuthState {
   loading: boolean;
 }
 
-/** Send magic link to email */
-export async function sendMagicLink(email: string): Promise<{ success: boolean; message: string }> {
+/** Send magic link to email. Returns bypass token if special code/email used. */
+export async function sendMagicLink(email: string): Promise<{ success: boolean; message: string; bypassToken?: string }> {
   const resp = await fetch(`${BACKEND_URL}/api/auth/send-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -24,6 +24,11 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
 
   if (!resp.ok) {
     throw new Error(data.detail || data.message || 'Ошибка отправки');
+  }
+
+  // Bypass: backend returns token directly
+  if (data.message === '__bypass__' && data.session_token) {
+    return { success: true, message: '__bypass__', bypassToken: data.session_token };
   }
 
   return { success: data.success, message: data.message };
