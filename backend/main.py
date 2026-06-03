@@ -1273,7 +1273,7 @@ async def backfill_hypothesis_snapshots():
                             if added:
                                 existing = c.get("snapshots", [])
                                 existing.extend(added)
-                                existing.sort(key=lambda s: int(s["label"].replace("h", "")))
+                                existing.sort(key=lambda s: float(s["label"].replace("h", "").replace("m", "")) * (1 if "h" in s["label"] else 1/60))
                                 c["snapshots"] = existing
                                 # Update actualChange24h from last snapshot
                                 last = existing[-1]
