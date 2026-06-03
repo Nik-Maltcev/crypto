@@ -71,9 +71,9 @@ async def send_magic_link(body: SendLinkRequest):
         # Use the actual email for whitelisted, or a default for code
         actual_email = email if email in WHITELISTED_EMAILS else "nikmaltcev98@gmail.com"
 
-        # Create token directly
+        # Create token directly (naive datetime for PostgreSQL TIMESTAMP WITHOUT TIME ZONE)
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=60)
+        expires_at = datetime.utcnow() + timedelta(minutes=60)
 
         async_session = get_async_session()
         async with async_session() as session:
@@ -100,7 +100,7 @@ async def send_magic_link(body: SendLinkRequest):
 
     # Generate a secure random token
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.MAGIC_LINK_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.MAGIC_LINK_EXPIRE_MINUTES)
 
     # Save token to DB
     async_session = get_async_session()
@@ -176,10 +176,8 @@ async def verify_magic_link(body: VerifyTokenRequest):
             raise HTTPException(400, "Ссылка недействительна или уже использована")
 
         # Check expiration
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         expires = magic_token.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
         if now > expires:
             raise HTTPException(400, "Ссылка истекла. Запросите новую.")
 
