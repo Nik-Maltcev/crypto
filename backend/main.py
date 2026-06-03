@@ -1174,6 +1174,118 @@ async def fix_hypothesis_v2_prices():
         return {"success": True, "fixed": fixed_count, "recalculated": len(entries), "details": fixes}
 
 
+@app.post("/api/hypothesis_v2/backfill_snapshots")
+async def backfill_hypothesis_snapshots():
+    """Backfill hourly snapshots from Binance klines for all hypothesis_v2 entries."""
+    import httpx
+    from datetime import datetime, timedelta
+    
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "success")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(10)
+        )
+        entries = result.scalars().all()
+        
+        filled_total = 0
+        details = {}
+        
+        async with httpx.AsyncClient(timeout=30, proxy=BINANCE_PROXY) as client:
+            for entry in entries:
+                if not entry.result_json or not entry.created_at:
+                    continue
+                data = json.loads(entry.result_json)
+                ds = data.get("deepseek_v4")
+                if not ds:
+                    continue
+                
+                analysis_time = entry.created_at
+                entry_fills = []
+                
+                for c in ds.get("shortCandidates", []):
+                    symbol = c.get("symbol", "").upper()
+                    start_price = c.get("currentPrice", 0)
+                    if not start_price or start_price <= 0:
+                        continue
+                    
+                    # Try SYMBOLUSDT pair on Binance
+                    pair = f"{symbol}USDT"
+                    
+                    # Fetch hourly klines from analysis time to +24h
+                    start_ms = int(analysis_time.timestamp() * 1000)
+                    end_ms = start_ms + (24 * 3600 * 1000)
+                    
+                    try:
+                        resp = await client.get(
+                            "https://api.binance.com/api/v3/klines",
+                            params={"symbol": pair, "interval": "1h", "startTime": start_ms, "endTime": end_ms, "limit": 25}
+                        )
+                        if resp.status_code != 200:
+                            continue
+                        
+                        klines = resp.json()
+                        if not klines:
+                            continue
+                        
+                        # Build complete hourly snapshots
+                        new_snapshots = []
+                        prev_price = start_price
+                        for kline in klines:
+                            close_time = kline[6]  # Close time ms
+                            close_price = float(kline[4])  # Close price
+                            hours_elapsed = int((close_time - start_ms) / 3600000)
+                            
+                            if hours_elapsed <= 0:
+                                continue
+                            
+                            label = f"{hours_elapsed}h"
+                            change_from_start = ((close_price - start_price) / start_price) * 100
+                            change_from_prev = ((close_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
+                            
+                            new_snapshots.append({
+                                "label": label,
+                                "time": datetime.utcfromtimestamp(close_time / 1000).isoformat(),
+                                "price": close_price,
+                                "change": round(change_from_prev, 2),
+                                "changeFromStart": round(change_from_start, 2),
+                            })
+                            prev_price = close_price
+                        
+                        if new_snapshots:
+                            # Only add missing hours, keep existing snapshots
+                            existing_labels = set(s.get("label") for s in c.get("snapshots", []))
+                            added = [s for s in new_snapshots if s["label"] not in existing_labels]
+                            if added:
+                                existing = c.get("snapshots", [])
+                                existing.extend(added)
+                                existing.sort(key=lambda s: int(s["label"].replace("h", "")))
+                                c["snapshots"] = existing
+                                # Update actualChange24h from last snapshot
+                                last = existing[-1]
+                                c["actualPrice24h"] = last["price"]
+                                c["actualChange24h"] = last["changeFromStart"]
+                                c["hit"] = last["changeFromStart"] < 0
+                                c["strongHit"] = last["changeFromStart"] <= -5
+                                entry_fills.append(f"{symbol}: +{len(added)} snapshots (total {len(existing)})")
+                                filled_total += 1
+                    
+                    except Exception as e:
+                        continue
+                    
+                    await asyncio.sleep(0.2)  # Rate limit
+                
+                if entry_fills:
+                    details[str(entry.id)] = entry_fills
+                    entry.result_json = json.dumps(data, ensure_ascii=False)
+        
+        await session.commit()
+        return {"success": True, "filled": filled_total, "details": details}
+
+
 @app.post("/api/shitcoins/start")
 async def start_shitcoin_monitor():
     """Manually start the shitcoin monitor if not running."""
