@@ -3,13 +3,17 @@ import { sendMagicLink, verifyToken } from '../services/authService';
 
 interface LoginPageProps {
   onDemoMode: () => void;
+  onAdminBypass: () => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode, onAdminBypass }) => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminPass, setAdminPass] = useState('');
+  const [adminError, setAdminError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +22,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode }) => {
 
     try {
       const result = await sendMagicLink(email);
-      // Bypass: instant auth with token
       if (result.message === '__bypass__' && result.bypassToken) {
         await verifyToken(result.bypassToken);
         window.location.reload();
@@ -29,6 +32,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode }) => {
       setError(err.message || 'Ошибка отправки ссылки');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = () => {
+    if (adminPass === 'Amx50100%') {
+      localStorage.setItem('cryptopulse_admin', '1');
+      onAdminBypass();
+    } else {
+      setAdminError('Неверный пароль');
     }
   };
 
@@ -92,13 +104,38 @@ const LoginPage: React.FC<LoginPageProps> = ({ onDemoMode }) => {
                 </button>
               </form>
 
-              <div className="mt-6 pt-6 border-t border-gray-800 text-center">
+              <div className="mt-6 pt-6 border-t border-gray-800 text-center space-y-3">
                 <button
                   onClick={onDemoMode}
-                  className="text-sm text-gray-400 hover:text-brand-accent transition-colors"
+                  className="text-sm text-gray-400 hover:text-brand-accent transition-colors block mx-auto"
                 >
                   Посмотреть демо без авторизации →
                 </button>
+                <button
+                  onClick={() => setShowAdmin(!showAdmin)}
+                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                >
+                  Админ
+                </button>
+                {showAdmin && (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      type="password"
+                      value={adminPass}
+                      onChange={(e) => { setAdminPass(e.target.value); setAdminError(''); }}
+                      placeholder="Пароль"
+                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-brand-accent"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+                    />
+                    {adminError && <p className="text-red-400 text-xs">{adminError}</p>}
+                    <button
+                      onClick={handleAdminLogin}
+                      className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg transition-all"
+                    >
+                      Войти
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           ) : (

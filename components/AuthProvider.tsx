@@ -58,6 +58,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for magic link token in URL on mount
   useEffect(() => {
     const init = async () => {
+      // Admin bypass: if admin flag is set, skip all auth
+      if (localStorage.getItem('cryptopulse_admin') === '1') {
+        setAuthState({ isAuthenticated: true, email: 'admin@dexflow.xyz', loading: false });
+        setHasSubscription(true);
+        return;
+      }
+
       // Check URL for auth_token (magic link callback)
       const params = new URLSearchParams(window.location.search);
       const authToken = params.get('auth_token');
@@ -109,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     logoutService();
+    localStorage.removeItem('cryptopulse_admin');
     setAuthState({ isAuthenticated: false, email: null, loading: false });
     setIsDemo(false);
     setHasSubscription(false);

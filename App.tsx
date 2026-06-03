@@ -491,7 +491,7 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated && !isDemo) {
-    return <LoginPage onDemoMode={enterDemo} />;
+    return <LoginPage onDemoMode={enterDemo} onAdminBypass={() => window.location.reload()} />;
   }
 
   return (
