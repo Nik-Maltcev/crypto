@@ -527,17 +527,7 @@ const App: React.FC = () => {
                   <span>Стоп</span>
                 </button>
               ) : (
-                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 items-center">
-
-                  {/* Standard Trigger (frontend pipeline, 16h) */}
-                  <button
-                    onClick={() => executeAnalysisPipeline('simple', true)}
-                    className="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold bg-brand-accent hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all"
-                  >
-                    <RefreshIcon />
-                    <span>Сбор + Анализ (16ч)</span>
-                  </button>
-                </div>
+                <div></div>
               )}
             </div>
           </div>

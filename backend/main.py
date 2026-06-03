@@ -1218,10 +1218,10 @@ async def backfill_hypothesis_snapshots():
                     end_ms = start_ms + (24 * 3600 * 1000)
                     
                     try:
-                        # MEXC klines API (same format as Binance)
+                        # MEXC klines API (5m candles for precise SL detection)
                         resp = await client.get(
                             "https://api.mexc.com/api/v3/klines",
-                            params={"symbol": pair, "interval": "1h", "startTime": start_ms, "endTime": end_ms, "limit": 25}
+                            params={"symbol": pair, "interval": "5m", "startTime": start_ms, "endTime": end_ms, "limit": 288}
                         )
                         if resp.status_code != 200:
                             errors_list.append(f"{symbol}: MEXC {resp.status_code}")
@@ -1232,27 +1232,37 @@ async def backfill_hypothesis_snapshots():
                             errors_list.append(f"{symbol}: no klines")
                             continue
                         
-                        # Build hourly snapshots
+                        # Build 5-minute snapshots
                         new_snapshots = []
                         prev_price = start_price
                         for kline in klines:
                             close_time = kline[6]  # Close time ms
                             close_price = float(kline[4])  # Close price
-                            hours_elapsed = int((close_time - start_ms) / 3600000)
+                            high_price = float(kline[2])  # High price (for SL detection)
+                            minutes_elapsed = int((close_time - start_ms) / 60000)
                             
-                            if hours_elapsed <= 0:
+                            if minutes_elapsed <= 0:
                                 continue
                             
-                            label = f"{hours_elapsed}h"
+                            # Label: show hours for readability
+                            hours = minutes_elapsed / 60
+                            if hours >= 1:
+                                label = f"{hours:.1f}h" if hours % 1 != 0 else f"{int(hours)}h"
+                            else:
+                                label = f"{minutes_elapsed}m"
+                            
                             change_from_start = ((close_price - start_price) / start_price) * 100
+                            high_change_from_start = ((high_price - start_price) / start_price) * 100
                             change_from_prev = ((close_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
                             
                             new_snapshots.append({
                                 "label": label,
                                 "time": datetime.utcfromtimestamp(close_time / 1000).isoformat(),
                                 "price": close_price,
+                                "high": high_price,
                                 "change": round(change_from_prev, 2),
                                 "changeFromStart": round(change_from_start, 2),
+                                "highChangeFromStart": round(high_change_from_start, 2),
                             })
                             prev_price = close_price
                         
