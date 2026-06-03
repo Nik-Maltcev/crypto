@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
     # Auth (Magic Link via Resend)
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "info@dexflow.xyz"
+    RESEND_FROM_EMAIL: str = "auth@dexflow.xyz"
     JWT_SECRET: str = "cryptopulse-jwt-secret-change-me"
     MAGIC_LINK_EXPIRE_MINUTES: int = 15
     SESSION_EXPIRE_DAYS: int = 30
