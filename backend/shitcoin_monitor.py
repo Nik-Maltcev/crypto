@@ -42,6 +42,43 @@ CALLER_CHANNELS = [
 
 RUGCHECK_API = "https://api.rugcheck.xyz/v1/tokens"
 DEXSCREENER_API = "https://api.dexscreener.com/latest/dex/tokens"
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
+
+
+async def _extract_token_with_ai(text: str) -> str | None:
+    """Use DeepSeek to extract Solana contract address from message text."""
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not api_key or len(text.strip()) < 10:
+        return None
+    
+    prompt = f"""Extract the Solana token contract address from this crypto caller message. 
+If there's no Solana contract address, respond with just "NONE".
+If you find one, respond with ONLY the contract address (32-44 character base58 string), nothing else.
+
+Message:
+{text[:500]}"""
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                DEEPSEEK_API_URL,
+                headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                json={
+                    "model": "deepseek-chat",
+                    "max_tokens": 60,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+            if resp.status_code == 200:
+                result = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                if result and result != "NONE" and len(result) >= 32 and len(result) <= 44:
+                    # Validate it looks like a base58 address
+                    if SOLANA_ADDRESS_RE.match(result):
+                        return result
+    except Exception as e:
+        logger.warning(f"[SHITCOIN] AI extraction error: {e}")
+    
+    return None
 
 # In-memory storage for detected tokens (will be replaced with DB later)
 _detected_tokens: list[dict] = []
@@ -236,15 +273,23 @@ async def start_monitor():
         # Find Solana addresses in message
         addresses = SOLANA_ADDRESS_RE.findall(text)
         
-        for addr in addresses:
-            # Filter out common non-token addresses (too short or known patterns)
-            if len(addr) < 32 or len(addr) > 44:
-                continue
-            
-            try:
-                await process_new_token(addr, sender, text)
-            except Exception as e:
-                logger.error(f"[SHITCOIN] Error processing token {addr[:12]}: {e}")
+        if addresses:
+            for addr in addresses:
+                if len(addr) < 32 or len(addr) > 44:
+                    continue
+                try:
+                    await process_new_token(addr, sender, text)
+                except Exception as e:
+                    logger.error(f"[SHITCOIN] Error processing token {addr[:12]}: {e}")
+        else:
+            # No address found by regex — ask AI to extract
+            extracted = await _extract_token_with_ai(text)
+            if extracted:
+                logger.info(f"[SHITCOIN] AI extracted: {extracted} from @{sender}")
+                try:
+                    await process_new_token(extracted, sender, text)
+                except Exception as e:
+                    logger.error(f"[SHITCOIN] Error processing AI-extracted token {extracted[:12]}: {e}")
     
     await client.connect()
     if not await client.is_user_authorized():
