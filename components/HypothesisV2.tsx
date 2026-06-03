@@ -437,12 +437,26 @@ const HypothesisV2: React.FC = () => {
                 const STOP_LOSS_PCT = stopLoss;
                 const COMMISSION_PCT = 0.1;
 
-                const calcPnl = (change: number) => {
+                // Calculate P&L for a single change value (no SL tracking)
+                const calcRawPnl = (change: number, stopped: boolean) => {
                     const shortChange = -change;
-                    const eff = shortChange < -(STOP_LOSS_PCT) ? -(STOP_LOSS_PCT) : shortChange;
+                    const eff = stopped ? -(STOP_LOSS_PCT) : shortChange;
                     const gross = BET * LEVERAGE * (eff / 100);
                     const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
                     return gross - commission;
+                };
+
+                // Check if stop-loss was hit by scanning snapshots in order
+                const findStopPoint = (c: ShortCandidate): { stopped: boolean; stoppedAtLabel: string | null } => {
+                    const snaps = c.snapshots || [];
+                    for (const snap of snaps) {
+                        const changeFromStart = snap.changeFromStart ?? snap.change;
+                        // For short: price going UP = bad. If price rose > SL% from start, SL triggered
+                        if (changeFromStart > STOP_LOSS_PCT) {
+                            return { stopped: true, stoppedAtLabel: snap.label };
+                        }
+                    }
+                    return { stopped: false, stoppedAtLabel: null };
                 };
 
                 const allLabels: string[] = [];
@@ -453,25 +467,38 @@ const HypothesisV2: React.FC = () => {
                 });
                 allLabels.sort((a, b) => parseInt(a) - parseInt(b));
 
-                const snapshotTotals = allLabels.map(label => {
-                    let total = 0;
-                    candidates.forEach((c: ShortCandidate) => {
-                        const snap = c.snapshots?.find(s => s.label === label);
-                        if (snap) total += calcPnl(snap.changeFromStart ?? snap.change);
-                    });
-                    return { label, total };
-                });
-
+                // Build trades with proper SL logic
                 let totalPnl = 0;
                 const trades = candidates.map((c: ShortCandidate) => {
-                    const change = c.actualChange24h || 0;
-                    const pnl = calcPnl(change);
+                    const { stopped, stoppedAtLabel } = findStopPoint(c);
+                    const finalChange = c.actualChange24h || 0;
+                    const pnl = calcRawPnl(finalChange, stopped);
                     totalPnl += pnl;
+
+                    // For each snapshot column: show P&L up to that point (or SL if already stopped)
+                    let alreadyStopped = false;
                     const snaps = allLabels.map(label => {
                         const snap = c.snapshots?.find(s => s.label === label);
-                        return snap ? calcPnl(snap.changeFromStart ?? snap.change) : null;
+                        if (!snap) return null;
+                        if (alreadyStopped) return calcRawPnl(0, true); // already stopped, show SL loss
+                        const changeFromStart = snap.changeFromStart ?? snap.change;
+                        if (changeFromStart > STOP_LOSS_PCT) {
+                            alreadyStopped = true;
+                            return calcRawPnl(0, true); // SL hit at this point
+                        }
+                        return calcRawPnl(changeFromStart, false);
                     });
-                    return { symbol: c.symbol, pnl, stopped: -change < -(STOP_LOSS_PCT), snaps };
+
+                    return { symbol: c.symbol, pnl, stopped, stoppedAtLabel, snaps };
+                });
+
+                // Recalculate snapshot totals
+                const snapshotTotals = allLabels.map((label, colIdx) => {
+                    let total = 0;
+                    trades.forEach(t => {
+                        if (t.snaps[colIdx] !== null) total += t.snaps[colIdx]!;
+                    });
+                    return { label, total };
                 });
 
                 const totalInvested = candidates.length * BET;
@@ -612,9 +639,16 @@ const HypothesisV2: React.FC = () => {
                                             const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined) || [];
                                             if (sc.length === 0) return null;
                                             let pnl = 0;
+                                            const slPct = 3;
                                             sc.forEach((c: ShortCandidate) => {
+                                                // Check if SL was hit in snapshots
+                                                let stopped = false;
+                                                for (const snap of (c.snapshots || [])) {
+                                                    const cfs = snap.changeFromStart ?? snap.change;
+                                                    if (cfs > slPct) { stopped = true; break; }
+                                                }
                                                 const shortChange = -(c.actualChange24h || 0);
-                                                const eff = shortChange < -3 ? -3 : shortChange;
+                                                const eff = stopped ? -slPct : shortChange;
                                                 const gross = 100 * 10 * (eff / 100);
                                                 const commission = 100 * 10 * (0.1 / 100);
                                                 pnl += gross - commission;
