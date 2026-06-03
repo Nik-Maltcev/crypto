@@ -86,13 +86,10 @@ const HypothesisV2: React.FC = () => {
     useEffect(() => {
         const calcNext = () => {
             const now = new Date();
-            const utcH = now.getUTCHours();
             const utcM = now.getUTCMinutes();
-            // Verification runs every hour at XX:30
-            const minutesUntil = utcM < 30 ? 30 - utcM : 90 - utcM;
-            const h = Math.floor(minutesUntil / 60);
-            const m = minutesUntil % 60;
-            setNextVerify(h > 0 ? `${h}ч ${m}м` : `${m}м`);
+            // Verification runs every 5 minutes
+            const minutesUntil = 5 - (utcM % 5);
+            setNextVerify(`${minutesUntil}м`);
         };
         calcNext();
         const interval = setInterval(calcNext, 60000);
@@ -424,7 +421,7 @@ const HypothesisV2: React.FC = () => {
                     <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">⏰</div>
                     <div>
                         <p className="text-sm text-red-300 font-semibold">Авто-запуск: 1 раз в день (08:00 МСК)</p>
-                        <p className="text-sm text-gray-400 mt-0.5">Pipeline: CMC (losers+pumped+volatile) + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro</p>
+                        <p className="text-sm text-gray-400 mt-0.5">Pipeline: CMC + Reddit (16ч) + Twitter (16ч) → DeepSeek v4 Pro • Обновление цен каждые 5 мин (MEXC)</p>
                     </div>
                 </div>
                 <div className="text-right flex-shrink-0 ml-4">
