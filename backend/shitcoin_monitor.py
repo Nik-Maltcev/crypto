@@ -272,11 +272,11 @@ async def start_monitor():
         
         # Find Solana addresses in message
         addresses = SOLANA_ADDRESS_RE.findall(text)
+        # Deduplicate
+        addresses = list(dict.fromkeys(addr for addr in addresses if 32 <= len(addr) <= 44))
         
         if addresses:
             for addr in addresses:
-                if len(addr) < 32 or len(addr) > 44:
-                    continue
                 try:
                     await process_new_token(addr, sender, text)
                 except Exception as e:
