@@ -142,6 +142,41 @@ class AltcoinTracking(Base):
         return f"<AltcoinTracking({self.symbol}, target={self.target_change_7d}%, actual={self.actual_change_7d}%)>"
 
 
+class AuthUser(Base):
+    """Registered users (email-based magic link auth)."""
+
+    __tablename__ = "auth_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Integer, default=1)
+
+    def __repr__(self) -> str:
+        return f"<AuthUser(id={self.id}, email='{self.email}')>"
+
+
+class MagicToken(Base):
+    """One-time magic link tokens for email auth."""
+
+    __tablename__ = "magic_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used: Mapped[bool] = mapped_column(Integer, default=0)
+
+    def __repr__(self) -> str:
+        return f"<MagicToken(email='{self.email}', used={self.used})>"
+
+
 class ShitcoinDetection(Base):
     """Tracks shitcoin detections from Telegram caller channels."""
 

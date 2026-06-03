@@ -12,6 +12,9 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisV2 from './components/HypothesisV2';
+import LoginPage from './components/LoginPage';
+import DemoOverlay from './components/DemoOverlay';
+import { useAuth } from './components/AuthProvider';
 
 // Icons
 const RefreshIcon = () => (
@@ -43,6 +46,7 @@ const ClockIcon = () => (
 );
 
 const App: React.FC = () => {
+  const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email } = useAuth();
   const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -472,6 +476,24 @@ const App: React.FC = () => {
     }
   }, [selectedSubreddits, selectedTwitterIds, selectedTelegramChats, sourcePosts, tweets, telegramMessages]);
 
+  // Auth gate: show loading spinner, login page, or main app
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-brand-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-accent to-blue-600 flex items-center justify-center text-white font-bold text-lg mx-auto mb-4 animate-pulse">
+            CP
+          </div>
+          <p className="text-gray-400 text-sm">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && !isDemo) {
+    return <LoginPage onDemoMode={enterDemo} />;
+  }
+
   return (
     <div className="min-h-screen bg-brand-dark text-gray-200 font-sans selection:bg-brand-accent selection:text-white pb-20">
 
@@ -501,6 +523,32 @@ const App: React.FC = () => {
               >
                 🎯 Щитки
               </button>
+            </div>
+
+            {/* User info / Logout */}
+            <div className="flex items-center gap-3">
+              {isAuthenticated && email && (
+                <span className="text-xs text-gray-500 hidden sm:inline">{email}</span>
+              )}
+              {isDemo && (
+                <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded font-medium">DEMO</span>
+              )}
+              {isAuthenticated ? (
+                <button
+                  onClick={logout}
+                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                  title="Выход"
+                >
+                  Выйти
+                </button>
+              ) : isDemo ? (
+                <button
+                  onClick={exitDemo}
+                  className="text-xs text-brand-accent hover:text-emerald-300 transition-colors"
+                >
+                  Войти
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -535,7 +583,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
+        <DemoOverlay>
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
         ) : activeTab === 'hypothesis_v2' ? (
@@ -803,6 +851,7 @@ const App: React.FC = () => {
             )}
           </>
         )}
+        </DemoOverlay>
       </main>
 
 

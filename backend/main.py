@@ -16,6 +16,7 @@ from sqlalchemy import select
 from core.config import get_settings, load_chats_config
 from core.database import get_async_session, init_db
 from core.models import ParseLog, AnalysisLog, ForecastTracking, AltcoinTracking
+from auth import router as auth_router
 # Telethon disabled — lazy import only when telegram endpoints are called
 # from worker.jobs.parser import ChatParser
 # from worker.telethon_client import get_telethon_client, close_telethon_client
@@ -215,6 +216,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Telegram Crypto Parser", lifespan=lifespan)
+
+# Auth routes
+app.include_router(auth_router)
 
 # CORS - allow all origins for frontend access
 app.add_middleware(

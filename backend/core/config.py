@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     TWITTER_RAPID_API_KEY: str = ""
     TWITTER_HOST: str = "twitter241.p.rapidapi.com"
 
+    # Auth (Magic Link via Resend)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "info@dexflow.xyz"
+    JWT_SECRET: str = "cryptopulse-jwt-secret-change-me"
+    MAGIC_LINK_EXPIRE_MINUTES: int = 15
+    SESSION_EXPIRE_DAYS: int = 30
+    FRONTEND_URL: str = "https://dexflow.xyz"
+
     # Worker settings
     PARSE_DAYS: int = 2  # Today + yesterday
     REQUEST_DELAY_SEC: float = 3.5  # Increased from 1.5 to 3.5 for safety
