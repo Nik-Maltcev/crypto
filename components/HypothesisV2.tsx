@@ -665,6 +665,76 @@ const HypothesisV2: React.FC = () => {
                             </summary>
                             <div className="mt-2">
                                 {renderModelCard(item.result?.deepseek_v4 || null, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
+                                
+                                {/* Per-item P&L table */}
+                                {(() => {
+                                    const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.snapshots && c.snapshots.length > 0) || [];
+                                    if (sc.length === 0) return null;
+                                    
+                                    const BET = betSize, LEV = leverage, SL = stopLoss, COM = 0.1;
+                                    const allL: string[] = [];
+                                    sc.forEach((c: ShortCandidate) => c.snapshots?.forEach(s => { if (!allL.includes(s.label)) allL.push(s.label); }));
+                                    allL.sort((a, b) => parseInt(a) - parseInt(b));
+
+                                    const trades = sc.map((c: ShortCandidate) => {
+                                        let stopped = false;
+                                        const snaps = allL.map(label => {
+                                            const snap = c.snapshots?.find(s => s.label === label);
+                                            if (!snap) return null;
+                                            if (stopped) return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100));
+                                            const cfs = snap.changeFromStart ?? snap.change;
+                                            if (cfs > SL) { stopped = true; return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)); }
+                                            const gross = BET * LEV * (-cfs / 100);
+                                            return gross - (BET * LEV * (COM / 100));
+                                        });
+                                        const finalPnl = stopped ? -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) : 
+                                            (c.actualChange24h !== undefined ? (BET * LEV * (-(c.actualChange24h) / 100)) - (BET * LEV * (COM / 100)) : (snaps.filter(s => s !== null).pop() ?? 0));
+                                        return { symbol: c.symbol, snaps, pnl: finalPnl, stopped };
+                                    });
+
+                                    const totals = allL.map((_, i) => trades.reduce((sum, t) => sum + (t.snaps[i] ?? 0), 0));
+                                    const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
+
+                                    return (
+                                        <div className="mt-3 bg-gray-900/50 border border-gray-800 rounded-lg p-3 overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="text-gray-500 border-b border-gray-700">
+                                                        <th className="text-left py-1 pr-2">Монета</th>
+                                                        {allL.map(l => <th key={l} className="text-center px-1 py-1">{l}</th>)}
+                                                        <th className="text-right pl-2 py-1">Итого</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {trades.map(t => (
+                                                        <tr key={t.symbol} className="border-b border-gray-800/50">
+                                                            <td className="py-1 pr-2 font-bold text-white">{t.symbol}{t.stopped && <span className="text-yellow-400 ml-1 text-[9px]">SL</span>}</td>
+                                                            {t.snaps.map((s, i) => (
+                                                                <td key={i} className={`text-center px-1 py-1 font-mono ${s === null ? 'text-gray-700' : s >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                    {s === null ? '—' : `${s >= 0 ? '+' : ''}${s.toFixed(0)}`}
+                                                                </td>
+                                                            ))}
+                                                            <td className={`text-right pl-2 py-1 font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(0)}$
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    <tr className="border-t border-gray-600 font-bold">
+                                                        <td className="py-1.5 text-gray-400">ВСЕГО</td>
+                                                        {totals.map((t, i) => (
+                                                            <td key={i} className={`text-center px-1 py-1.5 font-mono ${t >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                {t >= 0 ? '+' : ''}{t.toFixed(0)}
+                                                            </td>
+                                                        ))}
+                                                        <td className={`text-right pl-2 py-1.5 font-mono ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                            {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </details>
                     ))}
