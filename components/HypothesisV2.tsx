@@ -288,19 +288,53 @@ const HypothesisV2: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Snapshots (6h price tracking) */}
-                            {c.snapshots && c.snapshots.length > 0 && (
-                                <div className="flex gap-1 mb-2 overflow-x-auto">
-                                    {c.snapshots.map((s, i) => (
-                                        <div key={i} className="flex-shrink-0 text-center px-1.5 py-0.5 rounded bg-gray-800/50 border border-gray-700/50">
-                                            <div className="text-sm text-gray-500">{s.label}</div>
-                                            <div className={`text-sm font-bold ${s.change < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
-                                            </div>
+                            {/* Sparkline chart */}
+                            {c.snapshots && c.snapshots.length > 1 && (() => {
+                                const snaps = c.snapshots!;
+                                const values = snaps.map(s => s.changeFromStart ?? s.change);
+                                const minV = Math.min(0, ...values);
+                                const maxV = Math.max(0, ...values);
+                                const range = maxV - minV || 1;
+                                const W = 200, H = 40, pad = 2;
+                                
+                                // Find SL point
+                                const slIdx = values.findIndex(v => v > stopLoss);
+                                
+                                // Build path
+                                const points = values.map((v, i) => {
+                                    const x = pad + (i / (values.length - 1)) * (W - pad * 2);
+                                    const y = pad + (1 - (v - minV) / range) * (H - pad * 2);
+                                    return { x, y, v };
+                                });
+                                const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+                                
+                                // Zero line Y
+                                const zeroY = pad + (1 - (0 - minV) / range) * (H - pad * 2);
+                                // SL line Y  
+                                const slY = pad + (1 - (stopLoss - minV) / range) * (H - pad * 2);
+                                
+                                return (
+                                    <div className="mb-2">
+                                        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="rounded bg-gray-800/30">
+                                            {/* Zero line */}
+                                            <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="2,2" />
+                                            {/* SL line */}
+                                            <line x1={pad} y1={slY} x2={W - pad} y2={slY} stroke="#f59e0b" strokeWidth="0.5" strokeDasharray="3,2" />
+                                            {/* Price line */}
+                                            <path d={pathD} fill="none" stroke={values[values.length - 1] < 0 ? '#10b981' : '#ef4444'} strokeWidth="1.5" />
+                                            {/* SL hit marker */}
+                                            {slIdx >= 0 && (
+                                                <circle cx={points[slIdx].x} cy={points[slIdx].y} r="3" fill="#ef4444" stroke="#fff" strokeWidth="0.5" />
+                                            )}
+                                        </svg>
+                                        <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
+                                            <span>{snaps[0].label}</span>
+                                            {slIdx >= 0 && <span className="text-yellow-400">SL @ {snaps[slIdx].label}</span>}
+                                            <span>{snaps[snaps.length - 1].label}</span>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                    </div>
+                                );
+                            })()}
 
                             {/* Catalyst */}
                             <div className="mb-1">
