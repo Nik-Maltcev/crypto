@@ -81,7 +81,7 @@ async def send_magic_link(body: SendLinkRequest):
                 email=actual_email,
                 token=token,
                 expires_at=expires_at,
-                used=False,
+                used=0,
             )
             session.add(magic_token)
             await session.commit()
@@ -109,7 +109,7 @@ async def send_magic_link(body: SendLinkRequest):
             email=email,
             token=token,
             expires_at=expires_at,
-            used=False,
+            used=0,
         )
         session.add(magic_token)
         await session.commit()
@@ -166,7 +166,7 @@ async def verify_magic_link(body: VerifyTokenRequest):
         result = await session.execute(
             select(MagicToken).where(
                 MagicToken.token == body.token,
-                MagicToken.used == False,
+                MagicToken.used == 0,
             )
         )
         magic_token = result.scalar_one_or_none()
@@ -181,7 +181,7 @@ async def verify_magic_link(body: VerifyTokenRequest):
             raise HTTPException(400, "Ссылка истекла. Запросите новую.")
 
         # Mark token as used
-        magic_token.used = True
+        magic_token.used = 1
         await session.commit()
 
         email = magic_token.email
