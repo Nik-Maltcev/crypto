@@ -343,7 +343,6 @@ const HypothesisV2: React.FC = () => {
                                 {c.reasoning}
                             </p>
 
-                            <div className="text-sm text-gray-600 mt-1">⏱ {c.timeframe}</div>
                         </div>
                     ))}
                     </div>
