@@ -386,7 +386,6 @@ async def get_detected_tokens_async() -> list[dict]:
         result = await session.execute(
             sa_select(ShitcoinDetection)
             .order_by(ShitcoinDetection.detected_at.desc())
-            .limit(50)
         )
         tokens = result.scalars().all()
         
