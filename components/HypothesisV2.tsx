@@ -385,6 +385,8 @@ const HypothesisV2: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
+                    {localStorage.getItem('cryptopulse_admin') === '1' && (
+                    <>
                     <button
                         onClick={triggerVerify}
                         className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/50 rounded-lg text-sm font-medium transition"
@@ -411,6 +413,8 @@ const HypothesisV2: React.FC = () => {
                             <>📉 Запустить анализ</>
                         )}
                     </button>
+                    </>
+                    )}
                 </div>
             </div>
 
