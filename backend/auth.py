@@ -123,27 +123,26 @@ async def send_magic_link(body: SendLinkRequest):
         resend.Emails.send({
             "from": f"CryptoPulse AI <{settings.RESEND_FROM_EMAIL}>",
             "to": [email],
-            "subject": "🔐 Ваша ссылка для входа в CryptoPulse AI",
+            "subject": "Ваша ссылка для входа в CryptoPulse AI",
+            "text": f"Вход в CryptoPulse AI\n\nПерейдите по ссылке для входа в дашборд:\n{magic_link}\n\nСсылка действительна {settings.MAGIC_LINK_EXPIRE_MINUTES} минут.\nЕсли вы не запрашивали вход — проигнорируйте это письмо.\n\n— CryptoPulse AI (dexflow.xyz)",
             "html": f"""
-            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; background: #0B0F19; color: #e5e7eb;">
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #10B981; font-size: 24px; margin: 0;">CryptoPulse AI</h1>
-                    <p style="color: #9ca3af; font-size: 14px;">dexflow.xyz</p>
-                </div>
-                <div style="background: #161B28; border: 1px solid #374151; border-radius: 12px; padding: 30px; text-align: center;">
-                    <p style="color: #e5e7eb; font-size: 16px; margin-bottom: 24px;">
-                        Нажмите кнопку ниже для входа в дашборд:
-                    </p>
-                    <a href="{magic_link}" 
-                       style="display: inline-block; background: #10B981; color: white; text-decoration: none; 
-                              padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                        Войти в CryptoPulse AI →
-                    </a>
-                    <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">
-                        Ссылка действительна {settings.MAGIC_LINK_EXPIRE_MINUTES} минут.<br>
-                        Если вы не запрашивали вход — просто проигнорируйте это письмо.
-                    </p>
-                </div>
+            <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+                <h2 style="color: #333; font-size: 20px; margin-bottom: 20px;">Вход в CryptoPulse AI</h2>
+                <p style="color: #555; font-size: 15px; margin-bottom: 24px;">
+                    Нажмите кнопку ниже для входа в дашборд:
+                </p>
+                <a href="{magic_link}" 
+                   style="display: inline-block; background: #10B981; color: white; text-decoration: none; 
+                          padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                    Войти в CryptoPulse AI
+                </a>
+                <p style="color: #999; font-size: 12px; margin-top: 24px;">
+                    Ссылка действительна {settings.MAGIC_LINK_EXPIRE_MINUTES} минут.
+                    Если вы не запрашивали вход — просто проигнорируйте это письмо.
+                </p>
+                <p style="color: #bbb; font-size: 11px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">
+                    CryptoPulse AI — dexflow.xyz
+                </p>
             </div>
             """,
         })
