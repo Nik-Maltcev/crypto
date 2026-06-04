@@ -188,7 +188,7 @@ const ShitcoinTracker: React.FC = () => {
 
             {/* Top performers & Worst */}
             {tokens.length > 0 && (
-                <div className="data-card grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Best */}
                     <div className="bg-brand-card border border-emerald-800/30 rounded-xl p-4">
                         <div className="text-xs font-bold text-emerald-400 uppercase mb-3">🏆 Лучшие выстрелы</div>
@@ -196,7 +196,7 @@ const ShitcoinTracker: React.FC = () => {
                             {[...tokens].sort((a, b) => (b.peak_change || getCurrentChange(b)) - (a.peak_change || getCurrentChange(a))).slice(0, 5).map(t => (
                                 <div key={t.contract} className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold text-white">{getSymbol(t)}</span>
+                                        <span className="data-secret text-sm font-bold text-white">{getSymbol(t)}</span>
                                         <span className="text-xs text-gray-500">{getTimeSince(t.detected_at)}</span>
                                     </div>
                                     <div className="text-right">
@@ -216,7 +216,7 @@ const ShitcoinTracker: React.FC = () => {
                             {[...tokens].sort((a, b) => getCurrentChange(a) - getCurrentChange(b)).slice(0, 5).map(t => (
                                 <div key={t.contract} className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold text-white">{getSymbol(t)}</span>
+                                        <span className="data-secret text-sm font-bold text-white">{getSymbol(t)}</span>
                                         <span className="text-xs text-gray-500">{getTimeSince(t.detected_at)}</span>
                                     </div>
                                     <span className="text-sm font-bold text-red-400">{getCurrentChange(t).toFixed(0)}%</span>
@@ -229,7 +229,7 @@ const ShitcoinTracker: React.FC = () => {
 
             {/* Buy Signals — tokens with +50%+ */}
             {tokens.filter(t => getCurrentChange(t) >= 50).length > 0 && (
-                <div className="data-card bg-gradient-to-r from-emerald-900/20 to-green-900/20 border border-emerald-500/30 rounded-xl p-4">
+                <div className="bg-gradient-to-r from-emerald-900/20 to-green-900/20 border border-emerald-500/30 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
                         <span className="text-sm font-bold text-emerald-400 uppercase">🚀 Покупать (+50%+)</span>
                         <span className="text-xs text-gray-500">{tokens.filter(t => getCurrentChange(t) >= 50).length} токенов</span>
@@ -240,7 +240,7 @@ const ShitcoinTracker: React.FC = () => {
                             return (
                                 <div key={token.contract} className="bg-gray-900/50 border border-emerald-700/30 rounded-lg p-3">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-base font-bold text-white">{getSymbol(token)}</span>
+                                        <span className="data-secret text-base font-bold text-white">{getSymbol(token)}</span>
                                         <span className="text-lg font-bold text-emerald-400">+{change.toFixed(0)}%</span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
@@ -275,17 +275,17 @@ const ShitcoinTracker: React.FC = () => {
                     {tokens.map((token, idx) => {
                         const change = getCurrentChange(token);
                         return (
-                            <div key={token.contract} className="data-card bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
+                            <div key={token.contract} className="bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className={`text-xs px-2 py-1 rounded border font-bold ${getSafetyColor(token.safety)}`}>
                                             {getSafetyIcon(token.safety)} {token.safety}
                                         </span>
                                         <div>
-                                            <span className="text-lg font-bold text-white">{getSymbol(token)}</span>
+                                            <span className="data-secret text-lg font-bold text-white">{getSymbol(token)}</span>
                                             <span className="text-xs text-gray-500 ml-2">{getName(token)}</span>
                                         </div>
-                                        <span className="text-[10px] text-gray-600 font-mono cursor-pointer hover:text-gray-400 transition"
+                                        <span className="data-secret text-[10px] text-gray-600 font-mono cursor-pointer hover:text-gray-400 transition"
                                             onClick={() => {navigator.clipboard.writeText(token.contract); }}
                                             title="Нажми чтобы скопировать адрес">
                                             📋 {token.contract.slice(0, 6)}...{token.contract.slice(-4)}

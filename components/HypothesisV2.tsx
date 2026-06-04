@@ -191,7 +191,7 @@ const HypothesisV2: React.FC = () => {
         );
 
         return (
-            <div className="data-card bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                 {/* Model header */}
                 <div className={`px-5 py-3 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r ${color}`}>
                     <div className="flex items-center gap-2">
@@ -221,7 +221,7 @@ const HypothesisV2: React.FC = () => {
                     <div className="text-sm text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {modelData.shortCandidates?.map((c, idx) => (
-                        <div key={c.symbol} className={`data-card rounded-xl p-4 border ${
+                        <div key={c.symbol} className={`rounded-xl p-4 border ${
                             c.strongHit ? 'bg-emerald-500/10 border-emerald-500/30' :
                             c.hit === true ? 'bg-emerald-500/5 border-emerald-500/20' :
                             c.hit === false ? 'bg-red-500/5 border-red-500/20' :
@@ -230,7 +230,7 @@ const HypothesisV2: React.FC = () => {
                             {/* Header: Symbol + confidence */}
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-1.5">
-                                    <span className="text-lg font-bold text-white">{c.symbol}</span>
+                                    <span className="data-secret text-lg font-bold text-white">{c.symbol}</span>
                                     <span className={`text-sm px-1.5 py-0.5 rounded border font-bold ${getRiskColor(c.riskLevel)}`}>
                                         {c.riskLevel}
                                     </span>
@@ -357,7 +357,7 @@ const HypothesisV2: React.FC = () => {
                         <div className="space-y-1">
                             {modelData.avoidShorting.map((a, i) => (
                                 <div key={i} className="flex items-start gap-2 text-sm">
-                                    <span className="text-yellow-400 font-bold">{a.symbol}</span>
+                                    <span className="data-secret text-yellow-400 font-bold">{a.symbol}</span>
                                     <span className="text-gray-500">{a.reason}</span>
                                 </div>
                             ))}
@@ -575,7 +575,7 @@ const HypothesisV2: React.FC = () => {
                                     <tbody>
                                         {trades.map(t => (
                                             <tr key={t.symbol} className="border-b border-gray-800/50">
-                                                <td className="py-1 pr-2 font-bold text-white">{t.symbol}</td>
+                                                <td className="py-1 pr-2 font-bold text-white"><span className="data-secret">{t.symbol}</span></td>
                                                 {t.snaps.map((s, i) => (
                                                     <td key={i} className={`text-center px-1 py-1 font-mono ${s === null ? 'text-gray-700' : s >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                         {s === null ? '—' : `${s >= 0 ? '+' : ''}${s.toFixed(0)}`}
@@ -739,7 +739,7 @@ const HypothesisV2: React.FC = () => {
                                                 <tbody>
                                                     {trades.map(t => (
                                                         <tr key={t.symbol} className="border-b border-gray-800/50">
-                                                            <td className="py-1 pr-2 font-bold text-white">{t.symbol}{t.stopped && <span className="text-yellow-400 ml-1 text-[9px]">SL</span>}</td>
+                                                            <td className="py-1 pr-2 font-bold text-white"><span className="data-secret">{t.symbol}</span>{t.stopped && <span className="text-yellow-400 ml-1 text-[9px]">SL</span>}</td>
                                                             {t.snaps.map((s, i) => (
                                                                 <td key={i} className={`text-center px-1 py-1 font-mono ${s === null ? 'text-gray-700' : s >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                                     {s === null ? '—' : `${s >= 0 ? '+' : ''}${s.toFixed(0)}`}
