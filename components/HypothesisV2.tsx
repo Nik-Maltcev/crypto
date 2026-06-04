@@ -191,7 +191,7 @@ const HypothesisV2: React.FC = () => {
         );
 
         return (
-            <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
+            <div className="data-card bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                 {/* Model header */}
                 <div className={`px-5 py-3 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r ${color}`}>
                     <div className="flex items-center gap-2">
@@ -535,7 +535,7 @@ const HypothesisV2: React.FC = () => {
                 const totalInvested = candidates.length * BET;
 
                 return (
-                    <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                    <div className="data-card bg-brand-card border border-gray-800 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
                         </div>

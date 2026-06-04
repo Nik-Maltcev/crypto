@@ -188,7 +188,7 @@ const ShitcoinTracker: React.FC = () => {
 
             {/* Top performers & Worst */}
             {tokens.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="data-card grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Best */}
                     <div className="bg-brand-card border border-emerald-800/30 rounded-xl p-4">
                         <div className="text-xs font-bold text-emerald-400 uppercase mb-3">🏆 Лучшие выстрелы</div>
@@ -229,7 +229,7 @@ const ShitcoinTracker: React.FC = () => {
 
             {/* Buy Signals — tokens with +50%+ */}
             {tokens.filter(t => getCurrentChange(t) >= 50).length > 0 && (
-                <div className="bg-gradient-to-r from-emerald-900/20 to-green-900/20 border border-emerald-500/30 rounded-xl p-4">
+                <div className="data-card bg-gradient-to-r from-emerald-900/20 to-green-900/20 border border-emerald-500/30 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
                         <span className="text-sm font-bold text-emerald-400 uppercase">🚀 Покупать (+50%+)</span>
                         <span className="text-xs text-gray-500">{tokens.filter(t => getCurrentChange(t) >= 50).length} токенов</span>
