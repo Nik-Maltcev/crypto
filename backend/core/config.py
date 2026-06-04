@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "cryptopulse-jwt-secret-change-me"
     MAGIC_LINK_EXPIRE_MINUTES: int = 15
     SESSION_EXPIRE_DAYS: int = 30
-    FRONTEND_URL: str = "https://dexflow.xyz"
+    FRONTEND_URL: str = "https://www.dexflow.xyz"
 
     # PayAnyWay (Moneta.ru) Payments
     PAW_MNT_ID: str = "50276032"
