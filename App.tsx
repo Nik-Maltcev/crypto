@@ -14,6 +14,7 @@ import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisV2 from './components/HypothesisV2';
 import LoginPage from './components/LoginPage';
 import DemoOverlay from './components/DemoOverlay';
+import PricingModal from './components/PricingModal';
 import { useAuth } from './components/AuthProvider';
 
 // Icons
@@ -50,6 +51,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
+  const [showPricing, setShowPricing] = useState(false);
 
   // Progress states for different phases
   const [redditProgress, setRedditProgress] = useState({ current: 0, total: 0 });
@@ -533,6 +535,14 @@ const App: React.FC = () => {
               {isAuthenticated && hasSubscription && (
                 <span className="text-xs text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded font-medium">PRO</span>
               )}
+              {isAuthenticated && !hasSubscription && (
+                <button
+                  onClick={() => setShowPricing(true)}
+                  className="text-xs px-2.5 py-1 bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-lg font-semibold hover:bg-brand-accent/30 transition-all"
+                >
+                  Подписка
+                </button>
+              )}
               {isDemo && (
                 <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded font-medium">DEMO</span>
               )}
@@ -857,6 +867,7 @@ const App: React.FC = () => {
         </DemoOverlay>
       </main>
 
+      {showPricing && <PricingModal onClose={() => setShowPricing(false)} />}
 
     </div>
   );
