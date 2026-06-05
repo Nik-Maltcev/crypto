@@ -121,21 +121,22 @@ async def lifespan(app: FastAPI):
             #     kwargs={"trigger": "scheduled"},
             #     replace_existing=True,
             # )
-            scheduler.add_job(
-                run_hourly_hypothesis,
-                trigger=CronTrigger(minute=50),  # Every hour at XX:50 (predict next hour)
-                id="hourly_hypothesis",
-                name="Hourly Hypothesis (predict next hour)",
-                kwargs={"trigger": "scheduled"},
-                replace_existing=True,
-            )
-            scheduler.add_job(
-                verify_hypothesis_results,
-                trigger=CronTrigger(minute=7),  # Same time as Polymarket tracker — right after candle closes
-                id="hourly_hypothesis_verify",
-                name="Hourly Hypothesis Verification",
-                replace_existing=True,
-            )
+            # Hourly hypothesis DISABLED — replaced by hypothesis_v2 (daily)
+            # scheduler.add_job(
+            #     run_hourly_hypothesis,
+            #     trigger=CronTrigger(minute=50),
+            #     id="hourly_hypothesis",
+            #     name="Hourly Hypothesis (predict next hour)",
+            #     kwargs={"trigger": "scheduled"},
+            #     replace_existing=True,
+            # )
+            # scheduler.add_job(
+            #     verify_hypothesis_results,
+            #     trigger=CronTrigger(minute=7),
+            #     id="hourly_hypothesis_verify",
+            #     name="Hourly Hypothesis Verification",
+            #     replace_existing=True,
+            # )
             scheduler.add_job(
                 update_forecast_tracking_job,
                 trigger=CronTrigger(minute=5),  # Every hour at XX:05 (after CMC data settles)
