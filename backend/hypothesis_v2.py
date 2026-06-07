@@ -680,9 +680,23 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                 for c in deepseek_result.get("shortCandidates", []):
                     sym = c.get("symbol", "").upper()
                     cmc_price = c.get("currentPrice", 0)
+                    target_price = c.get("targetPrice24h", 0)
                     if not cmc_price or cmc_price <= 0:
                         logger.warning(f"[HYP_V2] {sym}: no price, removing")
                         continue
+                    # Validate targetPrice — should be within 50% of currentPrice for 24h prediction
+                    if target_price and target_price > 0:
+                        change_pct = abs(target_price - cmc_price) / cmc_price
+                        if change_pct > 0.5:
+                            logger.warning(f"[HYP_V2] {sym}: insane targetPrice ${target_price} vs current ${cmc_price} ({change_pct*100:.0f}% diff), fixing")
+                            # Fix: set target to -15% from current (reasonable short target)
+                            c["targetPrice24h"] = round(cmc_price * 0.85, 6)
+                            c["expectedChange"] = -15.0
+                    # Validate stopLoss — should be above current price but not insane
+                    stop_loss = c.get("stopLoss", 0)
+                    if stop_loss and stop_loss > 0:
+                        if stop_loss < cmc_price * 0.5 or stop_loss > cmc_price * 1.5:
+                            c["stopLoss"] = round(cmc_price * 1.05, 6)
                     try:
                         resp = await client.get(
                             "https://api.mexc.com/api/v3/ticker/price",
@@ -715,6 +729,30 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                 # Add exchanges to each candidate
                 for c in deepseek_result.get("shortCandidates", []):
                     c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+
+            # Filter: keep only coins available on major exchanges accessible from Russia
+            RU_ACCESSIBLE_EXCHANGES = {
+                "Bybit", "MEXC", "OKX", "Bitget", "Gate.io", "KuCoin", "HTX", "Huobi",
+                "BingX", "CoinEx", "MEXC Global", "Bybit (Spot)", "OKX (Spot)",
+                "Bitget (Spot)", "Gate.io (Spot)", "KuCoin (Spot)", "HTX (Spot)",
+            }
+            # Normalize: check if any exchange name contains a known RU-accessible exchange
+            def _has_ru_exchange(exchange_list: list[str]) -> bool:
+                for ex in exchange_list:
+                    ex_lower = ex.lower()
+                    for ru_ex in RU_ACCESSIBLE_EXCHANGES:
+                        if ru_ex.lower() in ex_lower or ex_lower in ru_ex.lower():
+                            return True
+                return False
+
+            before_filter = len(deepseek_result.get("shortCandidates", []))
+            deepseek_result["shortCandidates"] = [
+                c for c in deepseek_result.get("shortCandidates", [])
+                if _has_ru_exchange(c.get("exchanges", []))
+            ]
+            filtered_out = before_filter - len(deepseek_result.get("shortCandidates", []))
+            if filtered_out > 0:
+                logger.info(f"[HYP_V2] Removed {filtered_out} picks not on RU-accessible exchanges")
 
             # Combine results
             combined = {
