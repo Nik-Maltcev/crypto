@@ -788,8 +788,8 @@ const HypothesisV2: React.FC = () => {
                 </div>
             )}
 
-            {/* Errors */}
-            {items.filter(i => i.status === 'failed').length > 0 && (
+            {/* Errors — admin only */}
+            {localStorage.getItem('cryptopulse_admin') === '1' && items.filter(i => i.status === 'failed').length > 0 && (
                 <div className="bg-brand-card border border-gray-800 rounded-xl p-5">
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Ошибки</h3>
                     <div className="space-y-2">
