@@ -401,6 +401,57 @@ Pick from the provided market data list."""
     return system_prompt, user_prompt
 
 
+async def _call_claude_opus(system_prompt: str, user_prompt: str, base_url: str, auth_token: str) -> dict:
+    """Call Claude Opus 4.6 via proxy API."""
+    logger.info("[HYP_V2] Claude Opus 4.6: sending request...")
+    
+    async with httpx.AsyncClient(timeout=600) as client:
+        resp = await client.post(
+            f"{base_url}/v1/messages",
+            headers={
+                "x-api-key": auth_token,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-opus-4-6-20250610",
+                "max_tokens": 8192,
+                "system": system_prompt,
+                "messages": [
+                    {"role": "user", "content": user_prompt},
+                ],
+            },
+        )
+
+        if resp.status_code != 200:
+            raise RuntimeError(f"Claude Opus API error: {resp.status_code} - {resp.text[:500]}")
+
+        data = resp.json()
+        text = ""
+        for block in data.get("content", []):
+            if block.get("type") == "text":
+                text += block.get("text", "")
+
+        text = text.replace("```json", "").replace("```", "").strip()
+        
+        if not text.endswith("}"):
+            last_brace = text.rfind("}")
+            if last_brace != -1:
+                text = text[:last_brace + 1]
+
+        if not text:
+            raise RuntimeError("Empty response from Claude Opus 4.6")
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("[HYP_V2] Claude JSON invalid, attempting repair...")
+            repaired = _repair_json(text)
+            if repaired:
+                return repaired
+            raise RuntimeError("Claude Opus returned invalid JSON")
+
+
 async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) -> dict:
     """Call DeepSeek v4 Pro API. Dynamic multi-stage batching for large data."""
     
@@ -655,10 +706,31 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             # 4. Build prompts (same for both models)
             system_prompt, user_prompt = _build_prompt(cmc_coins, reddit_posts, twitter_posts)
 
-            # 5. Call DeepSeek v4 Pro
-            logger.info("[HYP_V2] Step 4/4: Calling DeepSeek v4 Pro...")
+            # 5. Call models in parallel: DeepSeek v4 Pro + Claude Opus 4.6
+            logger.info("[HYP_V2] Step 4/4: Calling AI models...")
             
-            deepseek_result = await _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
+            anthropic_base = os.environ.get("ANTHROPIC_BASE_URL", "")
+            anthropic_token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
+
+            deepseek_task = _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
+            
+            claude_result = None
+            if anthropic_base and anthropic_token:
+                try:
+                    claude_task = _call_claude_opus(system_prompt, user_prompt, anthropic_base, anthropic_token)
+                    deepseek_result, claude_result = await asyncio.gather(
+                        deepseek_task, claude_task, return_exceptions=True
+                    )
+                    if isinstance(deepseek_result, Exception):
+                        raise deepseek_result
+                    if isinstance(claude_result, Exception):
+                        logger.warning(f"[HYP_V2] Claude Opus failed: {claude_result}")
+                        claude_result = None
+                except Exception as e:
+                    logger.warning(f"[HYP_V2] Parallel call error: {e}")
+                    deepseek_result = await _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
+            else:
+                deepseek_result = await deepseek_task
 
             if not deepseek_result:
                 raise RuntimeError("DeepSeek returned empty result")
@@ -757,6 +829,7 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             # Combine results
             combined = {
                 "deepseek_v4": deepseek_result,
+                "claude_opus": claude_result,
                 "metadata": {
                     "reddit_posts": len(reddit_posts),
                     "twitter_tweets": len(twitter_posts),

@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     PAW_INTEGRITY_CODE: str = "12345"
     PAW_TEST_MODE: str = "1"  # 1=test, 0=production
 
+    # Claude Opus 4.6 (via proxy)
+    ANTHROPIC_BASE_URL: str = "https://aiprimetech.io"
+    ANTHROPIC_AUTH_TOKEN: str = ""
+
     # Worker settings
     PARSE_DAYS: int = 2  # Today + yesterday
     REQUEST_DELAY_SEC: float = 3.5  # Increased from 1.5 to 3.5 for safety
