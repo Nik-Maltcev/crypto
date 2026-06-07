@@ -1110,6 +1110,44 @@ async def enrich_hypothesis_v2_exchanges():
         return {"success": True, "enriched": len(all_symbols), "exchanges": exchanges_map}
 
 
+@app.delete("/api/hypothesis_v2/remove/{symbol}")
+async def remove_hypothesis_v2_candidate(symbol: str):
+    """Remove a coin from the latest hypothesis_v2 result."""
+    symbol = symbol.upper()
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "success")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(1)
+        )
+        entry = result.scalars().first()
+        if not entry or not entry.result_json:
+            raise HTTPException(404, "No hypothesis_v2 results found")
+
+        data = json.loads(entry.result_json)
+        model_data = data.get("deepseek_v4")
+        if not model_data:
+            raise HTTPException(404, "No deepseek_v4 data")
+
+        before = len(model_data.get("shortCandidates", []))
+        model_data["shortCandidates"] = [
+            c for c in model_data.get("shortCandidates", [])
+            if c.get("symbol", "").upper() != symbol
+        ]
+        removed = before - len(model_data["shortCandidates"])
+
+        if removed == 0:
+            return {"success": False, "message": f"{symbol} not found in current picks"}
+
+        entry.result_json = json.dumps(data, ensure_ascii=False)
+        await session.commit()
+
+        return {"success": True, "message": f"{symbol} removed", "remaining": len(model_data["shortCandidates"])}
+
+
 @app.post("/api/hypothesis_v2/fix_prices")
 async def fix_hypothesis_v2_prices():
     """Fix hallucinated prices and recalculate all snapshots with proper deltas."""
