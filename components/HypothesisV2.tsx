@@ -77,7 +77,7 @@ const HypothesisV2: React.FC = () => {
     // P&L Calculator settings
     const [betSize, setBetSize] = useState(100);
     const [leverage, setLeverage] = useState(10);
-    const [stopLoss, setStopLoss] = useState(3);
+    const [stopLoss, setStopLoss] = useState(1);
 
     // Exchanges available in Russia (verified May 2026)
     const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'Gate', 'CoinEx', 'LBank', 'XT.COM', 'BitMart', 'Pionex', 'BTCC', 'BYDFi', 'CoinTR', 'DigiFinex', 'Bitrue', 'AscendEX (BitMax)', 'BloFin', 'WEEX']);
