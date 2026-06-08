@@ -652,7 +652,7 @@ const HypothesisV2: React.FC = () => {
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">📊 История</h3>
                     {items.filter(i => i.status === 'success' && i !== latestSuccess).map(item => (
-                        <details key={item.id} className="group">
+                        <details key={`${item.id}-${betSize}-${leverage}-${stopLoss}`} className="group">
                             <summary className="bg-brand-card border border-gray-800 rounded-xl p-4 cursor-pointer list-none hover:border-gray-700 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
