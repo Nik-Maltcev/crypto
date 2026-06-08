@@ -238,9 +238,7 @@ async def update_price_tracking():
         result = await session.execute(
             sa_select(ShitcoinDetection)
             .where(ShitcoinDetection.status == "active")
-            .where(ShitcoinDetection.detected_at >= datetime.utcnow() - timedelta(hours=24))
             .order_by(ShitcoinDetection.detected_at.desc())
-            .limit(30)
         )
         tokens = result.scalars().all()
         
