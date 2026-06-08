@@ -1007,6 +1007,19 @@ async def get_shitcoins():
     }
 
 
+@app.get("/api/shitcoins/logs")
+async def get_shitcoin_logs():
+    """Get real-time shitcoin monitor logs (last 500 entries)."""
+    from shitcoin_monitor import get_shitcoin_logs
+    logs = get_shitcoin_logs()
+    return {
+        "success": True,
+        "monitor_running": is_monitor_running(),
+        "total": len(logs),
+        "logs": logs,
+    }
+
+
 # ==================== HYPOTHESIS V2 ====================
 
 @app.post("/api/hypothesis_v2/run")

@@ -55,6 +55,8 @@ const ShitcoinTracker: React.FC = () => {
     const [tokens, setTokens] = useState<TokenData[]>([]);
     const [monitorRunning, setMonitorRunning] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [showLogs, setShowLogs] = useState(false);
+    const [logs, setLogs] = useState<string[]>([]);
 
     const fetchTokens = async () => {
         try {
@@ -161,6 +163,14 @@ const ShitcoinTracker: React.FC = () => {
                     <button onClick={fetchTokens} className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">
                         🔄
                     </button>
+                    {localStorage.getItem('cryptopulse_admin') === '1' && (
+                        <button onClick={async () => {
+                            const resp = await fetch(`${BACKEND_URL}/api/shitcoins/logs`);
+                            if (resp.ok) { const data = await resp.json(); setLogs(data.logs || []); setShowLogs(!showLogs); }
+                        }} className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">
+                            📋 Логи
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -185,6 +195,27 @@ const ShitcoinTracker: React.FC = () => {
                     <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
                 </div>
             </div>
+
+            {/* Live Logs (admin only) */}
+            {showLogs && (
+                <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 max-h-[400px] overflow-y-auto font-mono text-xs">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-400 font-bold uppercase text-[10px]">Логи монитора (последние {logs.length})</span>
+                        <button onClick={() => setShowLogs(false)} className="text-gray-500 hover:text-white text-sm">✕</button>
+                    </div>
+                    {logs.length === 0 ? (
+                        <p className="text-gray-500">Пусто — монитор ещё не писал логи с последнего деплоя</p>
+                    ) : (
+                        <div className="space-y-0.5">
+                            {logs.slice().reverse().map((line, i) => (
+                                <div key={i} className={`py-0.5 ${line.includes('ERROR') ? 'text-red-400' : line.includes('WARN') ? 'text-yellow-400' : line.includes('New token') ? 'text-emerald-400' : 'text-gray-400'}`}>
+                                    {line}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Top performers & Worst */}
             {tokens.length > 0 && (

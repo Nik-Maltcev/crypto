@@ -21,6 +21,22 @@ from core.models import AnalysisLog
 
 logger = logging.getLogger(__name__)
 
+# ========== LIVE LOG BUFFER ==========
+from collections import deque
+_shitcoin_logs: deque = deque(maxlen=500)
+
+def _log(msg: str):
+    """Log to both logger and in-memory buffer."""
+    ts = datetime.utcnow().strftime("%H:%M:%S")
+    entry = f"[{ts}] {msg}"
+    _shitcoin_logs.append(entry)
+    logger.info(f"[SHITCOIN] {msg}")
+
+def get_shitcoin_logs() -> list[str]:
+    """Return last 500 log entries."""
+    return list(_shitcoin_logs)
+# ======================================
+
 # Solana address regex (base58, 32-44 chars)
 SOLANA_ADDRESS_RE = re.compile(r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b')
 
@@ -146,7 +162,7 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     from core.models import ShitcoinDetection
     from sqlalchemy import select as sa_select
     
-    logger.info(f"[SHITCOIN] New token detected from @{caller_channel}: {contract[:12]}...")
+    _log(f"New token detected from @{caller_channel}: {contract[:12]}...")
     
     # Check if already processed (in-memory fast check)
     if contract in _processed_contracts:
@@ -160,7 +176,7 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
             sa_select(ShitcoinDetection).where(ShitcoinDetection.contract == contract)
         )
         if existing.scalars().first():
-            logger.info(f"[SHITCOIN] Already in DB: {contract[:12]}...")
+            _log(f"Already in DB: {contract[:12]}...")
             return None
     
     # Parallel checks
@@ -170,7 +186,7 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     
     # Skip if Dexscreener found nothing
     if not dex_result or not dex_result.get("price_usd"):
-        logger.info(f"[SHITCOIN] {contract[:12]}... not found on Dexscreener, skipping")
+        _log(f"{contract[:12]}... not found on Dexscreener, skipping")
         return None
     
     # Determine safety
@@ -284,7 +300,7 @@ async def update_price_tracking():
             await asyncio.sleep(0.5)
         
         await session.commit()
-        logger.info(f"[SHITCOIN] Updated prices for {len(tokens)} tokens")
+        _log(f"Updated prices for {len(tokens)} tokens")
 
 
 async def start_monitor():
@@ -304,7 +320,7 @@ async def start_monitor():
         return
     
     _monitor_running = True
-    logger.info(f"[SHITCOIN] Starting monitor for {len(CALLER_CHANNELS)} channels...")
+    _log(f"Starting monitor for {len(CALLER_CHANNELS)} channels...")
     
     client = TelegramClient(
         StringSession(session_string),
@@ -323,34 +339,40 @@ async def start_monitor():
         except:
             pass
         
+        _log(f"MSG from @{sender}: {text[:80]}...")
+        
         # Find Solana addresses in message
         addresses = SOLANA_ADDRESS_RE.findall(text)
         # Deduplicate
         addresses = list(dict.fromkeys(addr for addr in addresses if 32 <= len(addr) <= 44))
         
         if addresses:
+            _log(f"REGEX found {len(addresses)} addresses from @{sender}: {[a[:8] for a in addresses]}")
             for addr in addresses:
                 try:
                     await process_new_token(addr, sender, text)
                 except Exception as e:
-                    logger.error(f"[SHITCOIN] Error processing token {addr[:12]}: {e}")
+                    _log(f"ERROR processing {addr[:12]}: {e}")
         else:
+            _log(f"No regex match from @{sender}, trying AI...")
             # No address found by regex — ask AI to extract
             extracted = await _extract_token_with_ai(text)
             if extracted:
-                logger.info(f"[SHITCOIN] AI extracted: {extracted} from @{sender}")
+                _log(f"AI extracted: {extracted} from @{sender}")
                 try:
                     await process_new_token(extracted, sender, text)
                 except Exception as e:
-                    logger.error(f"[SHITCOIN] Error processing AI-extracted token {extracted[:12]}: {e}")
+                    _log(f"ERROR processing AI-extracted {extracted[:12]}: {e}")
+            else:
+                _log(f"No contract found from @{sender} (regex=0, AI=none)")
     
     await client.connect()
     if not await client.is_user_authorized():
-        logger.error("[SHITCOIN] Telethon not authorized for monitor")
+        _log("ERROR: Telethon not authorized!")
         _monitor_running = False
         return
     
-    logger.info("[SHITCOIN] Monitor connected and listening!")
+    _log("Monitor connected and listening!")
     
     # Start price tracking loop
     async def price_loop():
@@ -358,7 +380,7 @@ async def start_monitor():
             try:
                 await update_price_tracking()
             except Exception as e:
-                logger.error(f"[SHITCOIN] Price tracking error: {e}")
+                _log(f"ERROR price tracking: {e}")
             await asyncio.sleep(300)  # Every 5 minutes
     
     asyncio.create_task(price_loop())
