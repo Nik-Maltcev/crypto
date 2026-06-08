@@ -673,18 +673,16 @@ const HypothesisV2: React.FC = () => {
                                             const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined) || [];
                                             if (sc.length === 0) return null;
                                             let pnl = 0;
-                                            const slPct = 3;
                                             sc.forEach((c: ShortCandidate) => {
-                                                // Check if SL was hit in snapshots
                                                 let stopped = false;
                                                 for (const snap of (c.snapshots || [])) {
                                                     const cfs = snap.changeFromStart ?? snap.change;
-                                                    if (cfs > slPct) { stopped = true; break; }
+                                                    if (cfs > stopLoss) { stopped = true; break; }
                                                 }
                                                 const shortChange = -(c.actualChange24h || 0);
-                                                const eff = stopped ? -slPct : shortChange;
-                                                const gross = 100 * 10 * (eff / 100);
-                                                const commission = 100 * 10 * (0.1 / 100);
+                                                const eff = stopped ? -stopLoss : shortChange;
+                                                const gross = betSize * leverage * (eff / 100);
+                                                const commission = betSize * leverage * (0.1 / 100);
                                                 pnl += gross - commission;
                                             });
                                             return (
