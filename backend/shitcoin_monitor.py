@@ -372,20 +372,15 @@ async def start_monitor():
         _monitor_running = False
         return
     
-    _log("Monitor connected! Resolving channels...")
+    _log("Monitor connected! Loading dialogs to cache channels...")
     
-    # Pre-resolve channels so Telethon knows their entity IDs
-    resolved = 0
-    failed_channels = []
-    for ch in CALLER_CHANNELS:
-        try:
-            entity = await client.get_entity(ch)
-            resolved += 1
-        except Exception as e:
-            failed_channels.append(ch)
-            _log(f"WARN: Cannot resolve @{ch}: {e}")
+    # Load dialogs — this caches all channel entities for event handling
+    try:
+        dialogs = await client.get_dialogs()
+        _log(f"Loaded {len(dialogs)} dialogs. Channels should be cached now.")
+    except Exception as e:
+        _log(f"WARN: get_dialogs failed: {e}")
     
-    _log(f"Resolved {resolved}/{len(CALLER_CHANNELS)} channels. Failed: {failed_channels[:10]}")
     _log("Listening for new messages...")
     
     # Start price tracking loop
