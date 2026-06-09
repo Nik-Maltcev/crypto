@@ -197,10 +197,14 @@ async def lifespan(app: FastAPI):
     
     logger.info("Ready. Call POST /api/telegram/parse to start parsing.")
     
-    # Start shitcoin monitor in background
+    # Start shitcoin monitor in background (delay 30s to avoid AuthKeyDuplicated on Railway zero-downtime deploy)
+    async def _delayed_monitor_start():
+        await asyncio.sleep(30)
+        await start_monitor()
+    
     try:
-        asyncio.create_task(start_monitor())
-        logger.info("Shitcoin monitor task started")
+        asyncio.create_task(_delayed_monitor_start())
+        logger.info("Shitcoin monitor task scheduled (30s delay for Railway)")
     except Exception as e:
         logger.warning(f"Failed to start shitcoin monitor: {e}")
     

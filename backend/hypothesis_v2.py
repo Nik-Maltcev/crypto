@@ -371,6 +371,9 @@ Response Format:
 
 RULES:
 - You MUST ALWAYS provide exactly 5-10 shortCandidates. NEVER return an empty list.
+- DO NOT HALLUCINATE OR INVENT EVENTS. Only reference facts from the provided data (Reddit posts, Twitter, CMC prices).
+- If you mention a token unlock, airdrop, or any event — it MUST be mentioned in the provided social data. Do NOT make up dates or events.
+- All dates must be relative to the current time provided in the user prompt.
 - shortCandidates: altcoins most likely to DROP 5-20%+ in the next 24 hours
 - Sort by confidence (highest first)
 - ONLY pick coins from the PROVIDED MARKET DATA list
