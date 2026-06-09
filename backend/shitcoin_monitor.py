@@ -372,7 +372,21 @@ async def start_monitor():
         _monitor_running = False
         return
     
-    _log("Monitor connected and listening!")
+    _log("Monitor connected! Resolving channels...")
+    
+    # Pre-resolve channels so Telethon knows their entity IDs
+    resolved = 0
+    failed_channels = []
+    for ch in CALLER_CHANNELS:
+        try:
+            entity = await client.get_entity(ch)
+            resolved += 1
+        except Exception as e:
+            failed_channels.append(ch)
+            _log(f"WARN: Cannot resolve @{ch}: {e}")
+    
+    _log(f"Resolved {resolved}/{len(CALLER_CHANNELS)} channels. Failed: {failed_channels[:10]}")
+    _log("Listening for new messages...")
     
     # Start price tracking loop
     async def price_loop():
