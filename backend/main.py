@@ -516,6 +516,45 @@ async def fetch_reddit_comments(subreddit: str, limit: int = 100):
     return resp.json()
 
 
+@app.get("/api/test/twitter")
+async def test_twitter_list():
+    """Test endpoint: calls Twitter list timeline once and returns raw response structure (no LLM costs)."""
+    import httpx
+    settings = get_settings()
+    api_key = settings.TWITTER_RAPID_API_KEY or "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058"
+    twitter_host = settings.TWITTER_HOST or "twitter-api45.p.rapidapi.com"
+    list_id = settings.TWITTER_LIST_ID or "1343798673386434560"
+
+    url = f"https://{twitter_host}/listtimeline.php?list_id={list_id}"
+    headers_dict = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": twitter_host
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(url, headers=headers_dict)
+
+    if resp.status_code != 200:
+        return {"error": resp.status_code, "body": resp.text[:500]}
+
+    data = resp.json()
+    timeline = data.get("timeline", [])
+    top_keys = list(data.keys())
+
+    return {
+        "status": "ok",
+        "top_level_keys": top_keys,
+        "timeline_count": len(timeline),
+        "has_cursor": "cursor" in data,
+        "cursor_value": data.get("cursor"),
+        "has_next_cursor": "next_cursor" in data,
+        "next_cursor_value": data.get("next_cursor"),
+        "all_non_timeline_fields": {k: str(v)[:200] for k, v in data.items() if k != "timeline"},
+        "first_tweet": timeline[0] if timeline else None,
+        "last_tweet": timeline[-1] if timeline else None,
+    }
+
+
 @app.get("/api/proxy")
 async def proxy_request(url: str, headers: str | None = None):
     """Generic CORS proxy: forwards GET requests to external APIs server-side."""

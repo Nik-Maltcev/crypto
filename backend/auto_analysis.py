@@ -192,6 +192,10 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
                 data = resp.json()
                 timeline = data.get("timeline", [])
 
+                # Debug: log all top-level keys to find cursor field
+                top_keys = [k for k in data.keys() if k != "timeline"]
+                logger.info(f"[Twitter] Page {page+1}: {len(timeline)} tweets, keys: {top_keys}, raw cursor fields: cursor={data.get('cursor')}, next_cursor={data.get('next_cursor')}, cursor_bottom={data.get('cursor_bottom')}")
+
                 if not timeline:
                     break
 
