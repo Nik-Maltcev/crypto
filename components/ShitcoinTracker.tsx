@@ -303,9 +303,50 @@ const ShitcoinTracker: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {tokens.map((token, idx) => {
-                        const change = getCurrentChange(token);
-                        return (
+                    {(() => {
+                        // Group tokens by date
+                        const getDateKey = (isoDate: string) => {
+                            const d = new Date(isoDate);
+                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        };
+                        const formatDateLabel = (dateKey: string) => {
+                            const today = getDateKey(new Date().toISOString());
+                            const yesterday = getDateKey(new Date(Date.now() - 86400000).toISOString());
+                            if (dateKey === today) return 'Сегодня';
+                            if (dateKey === yesterday) return 'Вчера';
+                            const [y, m, d] = dateKey.split('-');
+                            const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+                            return `${parseInt(d)} ${months[parseInt(m) - 1]}`;
+                        };
+
+                        let lastDateKey = '';
+                        const elements: React.ReactNode[] = [];
+
+                        // Count tokens per day
+                        const dayCounts = new Map<string, number>();
+                        tokens.forEach(t => {
+                            const dk = getDateKey(t.detected_at);
+                            dayCounts.set(dk, (dayCounts.get(dk) || 0) + 1);
+                        });
+
+                        tokens.forEach((token, idx) => {
+                            const dateKey = getDateKey(token.detected_at);
+                            if (dateKey !== lastDateKey) {
+                                lastDateKey = dateKey;
+                                const count = dayCounts.get(dateKey) || 0;
+                                elements.push(
+                                    <div key={`date-${dateKey}`} className="flex items-center gap-3 pt-2 pb-1">
+                                        <div className="h-px flex-grow bg-gray-700"></div>
+                                        <span className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap">
+                                            📅 {formatDateLabel(dateKey)} — {count} {count === 1 ? 'монета' : count < 5 ? 'монеты' : 'монет'}
+                                        </span>
+                                        <div className="h-px flex-grow bg-gray-700"></div>
+                                    </div>
+                                );
+                            }
+
+                            const change = getCurrentChange(token);
+                            elements.push(
                             <div key={token.contract} className="bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
@@ -372,8 +413,11 @@ const ShitcoinTracker: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                        );
-                    })}
+                            );
+                        });
+
+                        return elements;
+                    })()}
                 </div>
             )}
         </div>
