@@ -144,7 +144,7 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
 
 
 async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) -> list[dict]:
-    """Fetch recent tweets from Twitter List using twitter-api45 listtimeline endpoint."""
+    """Fetch recent tweets from Twitter List using twitter-api45 listtimeline endpoint with pagination."""
     settings = get_settings()
     api_key = settings.TWITTER_RAPID_API_KEY or "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058"
     twitter_host = settings.TWITTER_HOST or "twitter-api45.p.rapidapi.com"
@@ -156,55 +156,84 @@ async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) ->
 
     all_tweets = []
     cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    max_pages = 10
+    cursor = None
 
     async with httpx.AsyncClient(timeout=60) as client:
-        try:
-            url = f"https://{twitter_host}/listtimeline.php?list_id={list_id}"
-            headers = {
-                "X-RapidAPI-Key": api_key,
-                "X-RapidAPI-Host": twitter_host
-            }
+        for page in range(max_pages):
+            try:
+                url = f"https://{twitter_host}/listtimeline.php?list_id={list_id}"
+                if cursor:
+                    url += f"&cursor={cursor}"
 
-            # Retry with backoff
-            resp = None
-            for attempt in range(4):
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == 429:
-                    backoff = min(5 * (2 ** attempt), 30)
-                    logger.warning(f"Twitter list timeline: 429 rate limited, retry {attempt+1}/3 in {backoff}s...")
-                    await asyncio.sleep(backoff)
-                    continue
+                headers = {
+                    "X-RapidAPI-Key": api_key,
+                    "X-RapidAPI-Host": twitter_host
+                }
+
+                # Retry with backoff
+                resp = None
+                for attempt in range(4):
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 429:
+                        backoff = min(5 * (2 ** attempt), 30)
+                        logger.warning(f"Twitter list timeline page {page+1}: 429 rate limited, retry {attempt+1}/3 in {backoff}s...")
+                        await asyncio.sleep(backoff)
+                        continue
+                    break
+
+                if resp is None or resp.status_code == 403:
+                    logger.warning("Twitter list timeline: 403 Forbidden")
+                    break
+                if resp.status_code != 200:
+                    logger.warning(f"Twitter list timeline page {page+1}: {resp.status_code}")
+                    break
+
+                data = resp.json()
+                timeline = data.get("timeline", [])
+
+                if not timeline:
+                    break
+
+                reached_cutoff = False
+                for tweet in timeline:
+                    created_at_str = tweet.get("created_at")
+                    if not created_at_str:
+                        continue
+
+                    created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                    if created_at < cutoff_date:
+                        reached_cutoff = True
+                        continue
+
+                    all_tweets.append({
+                        "text": tweet.get("text", ""),
+                        "user": tweet.get("screen_name", "unknown"),
+                        "created_at": created_at.isoformat(),
+                        "source": "Twitter"
+                    })
+
+                # If all tweets on this page are older than cutoff, stop
+                if reached_cutoff and not any(
+                    datetime.strptime(t.get("created_at", ""), "%a %b %d %H:%M:%S %z %Y") >= cutoff_date
+                    for t in timeline if t.get("created_at")
+                ):
+                    break
+
+                # Check for next cursor
+                next_cursor = data.get("cursor") or data.get("next_cursor") or data.get("cursor_bottom")
+                if not next_cursor or next_cursor == cursor:
+                    break
+                cursor = next_cursor
+
+                # Small delay between pages
+                await asyncio.sleep(0.5)
+
+            except Exception as e:
+                logger.warning(f"Twitter list timeline page {page+1} error: {e}")
                 break
 
-            if resp is None or resp.status_code == 403:
-                logger.warning("Twitter list timeline: 403 Forbidden")
-                return []
-            if resp.status_code != 200:
-                logger.warning(f"Twitter list timeline: {resp.status_code}")
-                return []
-
-            data = resp.json()
-            timeline = data.get("timeline", [])
-
-            for tweet in timeline:
-                created_at_str = tweet.get("created_at")
-                if not created_at_str:
-                    continue
-
-                created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
-                if created_at < cutoff_date:
-                    continue
-
-                all_tweets.append({
-                    "text": tweet.get("text", ""),
-                    "user": tweet.get("screen_name", "unknown"),
-                    "created_at": created_at.isoformat(),
-                    "source": "Twitter"
-                })
-
-        except Exception as e:
-            logger.warning(f"Twitter list timeline error: {e}")
-
+    logger.info(f"[Twitter] Fetched {len(all_tweets)} tweets from list (up to {max_pages} pages)")
     return all_tweets
 
 

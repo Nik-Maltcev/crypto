@@ -90,64 +90,93 @@ interface RawListTweet {
 
 /**
  * Fetch tweets from a Twitter List using twitter-api45 listtimeline endpoint.
- * One API call returns ~50 tweets from the entire list — no per-user fetching needed.
+ * Supports pagination via cursor — up to maxPages requests to collect more tweets.
  */
-export const fetchListTimeline = async (listId?: string): Promise<Tweet[]> => {
+export const fetchListTimeline = async (listId?: string, maxPages: number = 10): Promise<Tweet[]> => {
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
   const targetListId = listId || TWITTER_LIST_ID;
-  const targetUrl = `https://${TWITTER_HOST}/listtimeline.php?list_id=${targetListId}`;
-  const headersParam = encodeURIComponent(JSON.stringify({
-    'X-RapidAPI-Key': RAPID_API_KEY,
-    'X-RapidAPI-Host': TWITTER_HOST
-  }));
-  const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
+  const allTweets: Tweet[] = [];
+  let cursor: string | null = null;
 
-  const MAX_RETRIES = 3;
+  for (let page = 0; page < maxPages; page++) {
+    let targetUrl = `https://${TWITTER_HOST}/listtimeline.php?list_id=${targetListId}`;
+    if (cursor) {
+      targetUrl += `&cursor=${encodeURIComponent(cursor)}`;
+    }
 
-  try {
-    let response: Response | null = null;
+    const headersParam = encodeURIComponent(JSON.stringify({
+      'X-RapidAPI-Key': RAPID_API_KEY,
+      'X-RapidAPI-Host': TWITTER_HOST
+    }));
+    const proxyUrl = `${BACKEND_URL}/api/proxy?url=${encodeURIComponent(targetUrl)}&headers=${headersParam}`;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      response = await fetch(proxyUrl);
+    const MAX_RETRIES = 3;
 
-      if (response.status === 429) {
-        const backoff = Math.min(5000 * Math.pow(2, attempt), 30000);
-        console.warn(`Twitter list 429, retry ${attempt + 1}/${MAX_RETRIES} in ${backoff / 1000}s...`);
-        await sleep(backoff);
-        continue;
+    try {
+      let response: Response | null = null;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        response = await fetch(proxyUrl);
+
+        if (response.status === 429) {
+          const backoff = Math.min(5000 * Math.pow(2, attempt), 30000);
+          console.warn(`Twitter list 429 (page ${page + 1}), retry ${attempt + 1}/${MAX_RETRIES} in ${backoff / 1000}s...`);
+          await sleep(backoff);
+          continue;
+        }
+
+        if (response.status === 403) {
+          console.warn('Twitter list 403 (Forbidden), stopping');
+          return allTweets;
+        }
+
+        break;
       }
 
-      if (response.status === 403) {
-        console.warn('Twitter list 403 (Forbidden), skipping');
-        return [];
+      if (!response || !response.ok) {
+        console.warn(`Failed to fetch list timeline page ${page + 1}: ${response?.status}`);
+        break;
       }
 
+      const data = await response.json();
+      const rawTweets: RawListTweet[] = data?.timeline || [];
+
+      if (rawTweets.length === 0) {
+        // No more tweets
+        break;
+      }
+
+      // Convert to internal Tweet format
+      const pageTweets: Tweet[] = rawTweets.map(raw => ({
+        text: raw.text,
+        created_at: raw.created_at,
+        likes: raw.favorites,
+        retweets: raw.retweets,
+        views: undefined,
+        user: raw.screen_name
+      }));
+
+      allTweets.push(...pageTweets);
+
+      // Check for next cursor
+      const nextCursor = data?.cursor || data?.next_cursor || data?.cursor_bottom || null;
+      if (!nextCursor || nextCursor === cursor) {
+        // No more pages
+        break;
+      }
+      cursor = nextCursor;
+
+      // Small delay between pages to be respectful
+      await sleep(500);
+
+    } catch (error) {
+      console.warn(`Error fetching list timeline page ${page + 1}:`, error);
       break;
     }
-
-    if (!response || !response.ok) {
-      console.warn(`Failed to fetch list timeline: ${response?.status}`);
-      return [];
-    }
-
-    const data = await response.json();
-    const rawTweets: RawListTweet[] = data?.timeline || [];
-
-    // Convert to internal Tweet format
-    const tweets: Tweet[] = rawTweets.map(raw => ({
-      text: raw.text,
-      created_at: raw.created_at,
-      likes: raw.favorites,
-      retweets: raw.retweets,
-      views: undefined, // API doesn't provide views
-      user: raw.screen_name
-    }));
-
-    return tweets;
-  } catch (error) {
-    console.warn('Error fetching list timeline:', error);
-    return [];
   }
+
+  console.log(`Twitter list: fetched ${allTweets.length} tweets across ${Math.min(allTweets.length > 0 ? 1 : 0, 1)}+ pages`);
+  return allTweets;
 };
 
 /**
