@@ -644,6 +644,66 @@ const HypothesisV2: React.FC = () => {
                     <div>
                         {renderModelCard(latestSuccess.result.deepseek_v4, '🔮 DeepSeek v4 Pro', 'from-blue-900/30 to-cyan-900/30')}
                     </div>
+
+                    {/* Exchange coverage summary */}
+                    {(() => {
+                        const candidates = latestSuccess.result.deepseek_v4?.shortCandidates || [];
+                        const withExchanges = candidates.filter(c => c.exchanges && c.exchanges.length > 0);
+                        if (withExchanges.length === 0) return null;
+
+                        // Build map: exchange -> [symbols]
+                        const exchangeMap = new Map<string, string[]>();
+                        withExchanges.forEach(c => {
+                            c.exchanges!.forEach(ex => {
+                                if (!RU_EXCHANGES.has(ex)) return;
+                                const existing = exchangeMap.get(ex) || [];
+                                existing.push(c.symbol);
+                                exchangeMap.set(ex, existing);
+                            });
+                        });
+
+                        // Sort by coverage (most coins first)
+                        const sorted = [...exchangeMap.entries()].sort((a, b) => b[1].length - a[1].length);
+                        if (sorted.length === 0) return null;
+
+                        const totalCoins = withExchanges.length;
+
+                        return (
+                            <div className="mt-4 bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
+                                <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-r from-emerald-900/20 to-teal-900/20">
+                                    <span className="text-sm font-bold text-emerald-400">🇷🇺 Биржи для торговли (РФ)</span>
+                                    <span className="text-sm text-gray-500 ml-2">• {totalCoins} монет из анализа</span>
+                                </div>
+                                <div className="p-4 space-y-2">
+                                    {sorted.slice(0, 5).map(([exchange, coins]) => {
+                                        const coverage = Math.round((coins.length / totalCoins) * 100);
+                                        return (
+                                            <div key={exchange} className="flex items-center gap-3">
+                                                <div className="w-24 text-sm font-semibold text-white flex-shrink-0">{exchange}</div>
+                                                <div className="flex-grow h-5 bg-gray-800 rounded-full overflow-hidden relative">
+                                                    <div
+                                                        className="h-full bg-emerald-500/40 rounded-full transition-all"
+                                                        style={{ width: `${coverage}%` }}
+                                                    />
+                                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                                                        {coins.length}/{totalCoins} ({coverage}%)
+                                                    </span>
+                                                </div>
+                                                <div className="flex-shrink-0 text-sm text-gray-500 w-32 text-right truncate" title={coins.join(', ')}>
+                                                    <span className="data-secret">{coins.join(', ')}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {sorted.length > 5 && (
+                                        <div className="text-sm text-gray-600 text-center pt-1">
+                                            + ещё {sorted.length - 5} бирж
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
