@@ -517,8 +517,8 @@ async def fetch_reddit_comments(subreddit: str, limit: int = 100):
 
 
 @app.get("/api/test/twitter")
-async def test_twitter_list():
-    """Test endpoint: calls Twitter list timeline once and returns raw response structure (no LLM costs)."""
+async def test_twitter_list(cursor: str | None = None):
+    """Test endpoint: calls Twitter list timeline and returns raw response structure (no LLM costs)."""
     import httpx
     try:
         settings = get_settings()
@@ -527,6 +527,9 @@ async def test_twitter_list():
         list_id = getattr(settings, 'TWITTER_LIST_ID', '1343798673386434560')
 
         url = f"https://{twitter_host}/listtimeline.php?list_id={list_id}"
+        if cursor:
+            url += f"&cursor={cursor}"
+
         headers_dict = {
             "X-RapidAPI-Key": api_key,
             "X-RapidAPI-Host": twitter_host
@@ -544,15 +547,13 @@ async def test_twitter_list():
 
         return {
             "status": "ok",
+            "request_url": url,
             "top_level_keys": top_keys,
             "timeline_count": len(timeline),
             "has_cursor": "cursor" in data,
             "cursor_value": data.get("cursor"),
-            "has_next_cursor": "next_cursor" in data,
-            "next_cursor_value": data.get("next_cursor"),
-            "all_non_timeline_fields": {k: str(v)[:200] for k, v in data.items() if k != "timeline"},
-            "first_tweet": timeline[0] if timeline else None,
-            "last_tweet": timeline[-1] if timeline else None,
+            "first_tweet_date": timeline[0].get("created_at") if timeline else None,
+            "last_tweet_date": timeline[-1].get("created_at") if timeline else None,
         }
     except Exception as e:
         return {"error": str(e), "type": type(e).__name__}
