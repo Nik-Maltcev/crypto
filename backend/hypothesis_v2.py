@@ -698,10 +698,9 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                 reddit_posts = await _fetch_reddit_16h(reddit_id, reddit_secret)
             logger.info(f"[HYP_V2] Reddit: {len(reddit_posts)} posts")
 
-            # 3. Twitter (16h) — DISABLED temporarily to save API costs
-            logger.info("[HYP_V2] Step 3/4: Twitter DISABLED (saving API costs)")
-            twitter_posts = []
-            # twitter_posts = await _fetch_twitter_16h()
+            # 3. Twitter (16h) — via twitter-api45 list timeline
+            logger.info("[HYP_V2] Step 3/4: Fetching Twitter (list timeline)...")
+            twitter_posts = await _fetch_twitter_16h()
             logger.info(f"[HYP_V2] Twitter: {len(twitter_posts)} tweets")
 
             if not cmc_coins and not reddit_posts:

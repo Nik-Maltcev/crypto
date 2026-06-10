@@ -1,9 +1,9 @@
-import { RAPID_API_KEY, TWITTER_HOST } from '../constants';
+import { RAPID_API_KEY, TWITTER_HOST, TWITTER_LIST_ID } from '../constants';
 import { Tweet, TwitterUserMap } from '../types';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Keep existing helpers if needed for legacy tools, but we focus on ID fetching now
+// Keep existing helpers for legacy tools
 export const extractUsername = (url: string): string => {
   try {
     const urlObj = new URL(url);
@@ -15,11 +15,10 @@ export const extractUsername = (url: string): string => {
   }
 };
 
-// Simplified ID fetcher for tools (not used in main flow anymore)
+// Legacy ID fetcher (kept for TwitterTools component)
 export const fetchTwitterUserId = async (username: string): Promise<string | null> => {
-  // Use our own backend as CORS proxy
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
-  const targetUrl = `https://${TWITTER_HOST}/user?username=${username}`;
+  const targetUrl = `https://${TWITTER_HOST}/screenname.php?screenname=${username}`;
   const headersParam = encodeURIComponent(JSON.stringify({
     'X-RapidAPI-Key': RAPID_API_KEY,
     'X-RapidAPI-Host': TWITTER_HOST
@@ -28,16 +27,9 @@ export const fetchTwitterUserId = async (username: string): Promise<string | nul
 
   try {
     const response = await fetch(proxyUrl);
-
     if (!response.ok) return null;
     const data = await response.json();
-
-    if (data?.result?.data?.user?.result?.rest_id) return data.result.data.user.result.rest_id;
-    if (data?.result?.rest_id) return data.result.rest_id;
-    if (data?.data?.user?.result?.rest_id) return data.data.user.result.rest_id;
-    if (data?.rest_id) return data.rest_id;
-
-    return null;
+    return data?.rest_id || data?.id || null;
   } catch (error) {
     return null;
   }
@@ -48,7 +40,6 @@ export const resolveTwitterIds = async (
   onProgress: (current: number, total: number, lastResult: TwitterUserMap) => void,
   shouldStop: () => boolean
 ): Promise<TwitterUserMap[]> => {
-  // Legacy tool implementation
   const results: TwitterUserMap[] = [];
   for (let i = 0; i < urls.length; i++) {
     if (shouldStop()) break;
@@ -78,14 +69,33 @@ export const downloadCsv = (data: TwitterUserMap[]) => {
 };
 
 
-// --- NEW FUNCTIONALITY FOR APP FLOW ---
+// --- NEW: twitter-api45 List Timeline ---
+
+interface RawListTweet {
+  tweet_id: string;
+  text: string;
+  created_at: string;
+  favorites: number;
+  retweets: number;
+  replies: number;
+  quotes: number;
+  bookmarks: number;
+  screen_name: string;
+  lang: string;
+  media?: {
+    photo?: { media_url_https: string }[];
+    video?: { media_url_https: string; variants: { bitrate?: number; content_type: string; url: string }[] }[];
+  } | [];
+}
 
 /**
- * Fetch Tweets for a specific User ID with exponential backoff
+ * Fetch tweets from a Twitter List using twitter-api45 listtimeline endpoint.
+ * One API call returns ~50 tweets from the entire list — no per-user fetching needed.
  */
-export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet[]> => {
-  const targetUrl = `https://${TWITTER_HOST}/user-tweets?user=${userId}&count=${count}`;
+export const fetchListTimeline = async (listId?: string): Promise<Tweet[]> => {
   const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+  const targetListId = listId || TWITTER_LIST_ID;
+  const targetUrl = `https://${TWITTER_HOST}/listtimeline.php?list_id=${targetListId}`;
   const headersParam = encodeURIComponent(JSON.stringify({
     'X-RapidAPI-Key': RAPID_API_KEY,
     'X-RapidAPI-Host': TWITTER_HOST
@@ -101,106 +111,70 @@ export const fetchUserTweets = async (userId: string, count = 10): Promise<Tweet
       response = await fetch(proxyUrl);
 
       if (response.status === 429) {
-        const backoff = Math.min(5000 * Math.pow(2, attempt), 30000); // 5s, 10s, 20s, 30s
-        console.warn(`Twitter 429 for ${userId}, retry ${attempt + 1}/${MAX_RETRIES} in ${backoff / 1000}s...`);
+        const backoff = Math.min(5000 * Math.pow(2, attempt), 30000);
+        console.warn(`Twitter list 429, retry ${attempt + 1}/${MAX_RETRIES} in ${backoff / 1000}s...`);
         await sleep(backoff);
         continue;
       }
 
-      // 403 means the API key is blocked or account issue — no point retrying
       if (response.status === 403) {
-        console.warn(`Twitter 403 (Forbidden) for ${userId}, skipping`);
+        console.warn('Twitter list 403 (Forbidden), skipping');
         return [];
       }
 
-      break; // success or non-retryable error
+      break;
     }
 
     if (!response || !response.ok) {
-      console.warn(`Failed to fetch tweets for ${userId}: ${response?.status}`);
+      console.warn(`Failed to fetch list timeline: ${response?.status}`);
       return [];
     }
 
     const data = await response.json();
-    // Parse response based on typical Twitter241 structure
-    // Often: result -> timeline -> instructions -> entries -> content -> itemContent -> tweet_results -> result -> legacy
+    const rawTweets: RawListTweet[] = data?.timeline || [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const instructions = data?.result?.timeline?.instructions || data?.data?.user?.result?.timeline_v2?.timeline?.instructions;
-    if (!instructions) return [];
-
-    const tweets: Tweet[] = [];
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    instructions.forEach((instr: any) => {
-      if (instr.type === "TimelineAddEntries" && instr.entries) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        instr.entries.forEach((entry: any) => {
-          const tweetData = entry?.content?.itemContent?.tweet_results?.result?.legacy;
-          const user = entry?.content?.itemContent?.tweet_results?.result?.core?.user_results?.result?.legacy?.screen_name;
-
-          if (tweetData) {
-            tweets.push({
-              text: tweetData.full_text || tweetData.text,
-              created_at: tweetData.created_at,
-              likes: tweetData.favorite_count,
-              retweets: tweetData.retweet_count,
-              views: entry?.content?.itemContent?.tweet_results?.result?.views?.count,
-              user: user || userId // Fallback to ID if screen_name not found
-            });
-          }
-        });
-      }
-    });
+    // Convert to internal Tweet format
+    const tweets: Tweet[] = rawTweets.map(raw => ({
+      text: raw.text,
+      created_at: raw.created_at,
+      likes: raw.favorites,
+      retweets: raw.retweets,
+      views: undefined, // API doesn't provide views
+      user: raw.screen_name
+    }));
 
     return tweets;
-
   } catch (error) {
-    console.warn(`Error fetching tweets for ${userId}`, error);
+    console.warn('Error fetching list timeline:', error);
     return [];
   }
 };
 
 /**
- * Fetch tweets for specific IDs with rate-limit-safe delays
+ * Fetch tweets from the configured Twitter list.
+ * Replaces the old per-user fetchBatchTweets approach.
+ * 
+ * Parameters kept compatible: ids[] is ignored (we fetch from the list),
+ * limitPerUser is ignored, onProgress still works for UI.
  */
 export const fetchBatchTweets = async (
-  ids: string[],
-  limitPerUser: number,
+  _ids: string[],
+  _limitPerUser: number,
   onProgress: (current: number, total: number) => void
 ): Promise<Tweet[]> => {
 
-  const allTweets: Tweet[] = [];
-  let consecutiveErrors = 0;
+  onProgress(0, 1);
 
-  for (let i = 0; i < ids.length; i++) {
-    const id = ids[i];
+  const tweets = await fetchListTimeline();
 
-    // Base delay 2s, increase to 5s if we're getting rate limited
-    const delay = consecutiveErrors >= 2 ? 5000 : 2000;
-    await sleep(delay);
+  // Filter for recent tweets (last 16h, consistent with pipeline)
+  const cutoffTime = Date.now() - (16 * 60 * 60 * 1000);
+  const recentTweets = tweets.filter(t => {
+    const tweetTime = new Date(t.created_at).getTime();
+    return tweetTime > cutoffTime;
+  });
 
-    const tweets = await fetchUserTweets(id, limitPerUser);
+  onProgress(1, 1);
 
-    if (tweets.length === 0) {
-      consecutiveErrors++;
-      // If 5+ consecutive failures, pause longer to let rate limit reset
-      if (consecutiveErrors >= 5) {
-        console.warn('Too many consecutive Twitter failures, pausing 30s...');
-        await sleep(30000);
-        consecutiveErrors = 0;
-      }
-    } else {
-      consecutiveErrors = 0;
-    }
-
-    // Filter for recent tweets (last 16h, consistent with backend pipeline)
-    const cutoffTime = Date.now() - (16 * 60 * 60 * 1000);
-    const recentTweets = tweets.filter(t => new Date(t.created_at).getTime() > cutoffTime);
-
-    allTweets.push(...recentTweets);
-    onProgress(i + 1, ids.length);
-  }
-
-  return allTweets;
+  return recentTweets;
 };

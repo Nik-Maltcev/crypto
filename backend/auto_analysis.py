@@ -144,87 +144,66 @@ async def _fetch_reddit_posts(subreddits: list[str], reddit_token: str, lookback
 
 
 async def _fetch_twitter_posts(accounts: list[str], lookback_hours: int = 16) -> list[dict]:
-    """Fetch recent tweets using RapidAPI with rate-limit-safe backoff."""
+    """Fetch recent tweets from Twitter List using twitter-api45 listtimeline endpoint."""
     settings = get_settings()
     api_key = settings.TWITTER_RAPID_API_KEY or "3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058"
-    twitter_host = settings.TWITTER_HOST or "twitter241.p.rapidapi.com"
+    twitter_host = settings.TWITTER_HOST or "twitter-api45.p.rapidapi.com"
+    list_id = settings.TWITTER_LIST_ID or "1343798673386434560"
+
     if not api_key:
         logger.warning("TWITTER_RAPID_API_KEY not set, skipping Twitter fetch")
         return []
 
     all_tweets = []
-    count_per_user = 50
     cutoff_date = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
-    consecutive_errors = 0
 
     async with httpx.AsyncClient(timeout=60) as client:
-        for i, username in enumerate(accounts):
-            try:
-                url = f"https://{twitter_host}/user-tweets?user={username}&count={count_per_user}"
-                headers = {
-                    "X-RapidAPI-Key": api_key,
-                    "X-RapidAPI-Host": twitter_host
-                }
-                
-                # Exponential backoff retry loop
-                resp = None
-                for attempt in range(4):  # up to 3 retries
-                    resp = await client.get(url, headers=headers)
-                    if resp.status_code == 429:
-                        backoff = min(5 * (2 ** attempt), 30)  # 5s, 10s, 20s, 30s
-                        logger.warning(f"Twitter @{username}: 429 rate limited, retry {attempt+1}/3 in {backoff}s...")
-                        await asyncio.sleep(backoff)
-                        continue
-                    break  # success or non-retryable error
+        try:
+            url = f"https://{twitter_host}/listtimeline.php?list_id={list_id}"
+            headers = {
+                "X-RapidAPI-Key": api_key,
+                "X-RapidAPI-Host": twitter_host
+            }
 
-                if resp is None or resp.status_code == 403:
-                    logger.warning(f"Twitter @{username}: 403 Forbidden, skipping")
-                    consecutive_errors += 1
-                    await asyncio.sleep(2)
+            # Retry with backoff
+            resp = None
+            for attempt in range(4):
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 429:
+                    backoff = min(5 * (2 ** attempt), 30)
+                    logger.warning(f"Twitter list timeline: 429 rate limited, retry {attempt+1}/3 in {backoff}s...")
+                    await asyncio.sleep(backoff)
                     continue
-                if resp.status_code != 200:
-                    logger.warning(f"Twitter @{username}: {resp.status_code}")
-                    consecutive_errors += 1
-                    await asyncio.sleep(2)
+                break
+
+            if resp is None or resp.status_code == 403:
+                logger.warning("Twitter list timeline: 403 Forbidden")
+                return []
+            if resp.status_code != 200:
+                logger.warning(f"Twitter list timeline: {resp.status_code}")
+                return []
+
+            data = resp.json()
+            timeline = data.get("timeline", [])
+
+            for tweet in timeline:
+                created_at_str = tweet.get("created_at")
+                if not created_at_str:
                     continue
 
-                consecutive_errors = 0
-                data = resp.json()
-                instructions = data.get("result", {}).get("timeline", {}).get("instructions", [])
-                if not instructions:
-                    instructions = data.get("data", {}).get("user", {}).get("result", {}).get("timeline_v2", {}).get("timeline", {}).get("instructions", [])
+                created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                if created_at < cutoff_date:
+                    continue
 
-                for instr in instructions:
-                    if instr.get("type") == "TimelineAddEntries":
-                        for entry in instr.get("entries", []):
-                            tweet_data = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {}).get("legacy", {})
-                            if not tweet_data: continue
-                            
-                            created_at_str = tweet_data.get("created_at")
-                            if created_at_str:
-                                created_at = datetime.strptime(created_at_str, "%a %b %d %H:%M:%S %z %Y")
-                                if created_at < cutoff_date:
-                                    continue
-                                
-                                all_tweets.append({
-                                    "text": tweet_data.get("full_text") or tweet_data.get("text"),
-                                    "user": username,
-                                    "created_at": created_at.isoformat(),
-                                    "source": "Twitter"
-                                })
-                
-                # 2s delay between users to respect rate limits
-                await asyncio.sleep(2)
+                all_tweets.append({
+                    "text": tweet.get("text", ""),
+                    "user": tweet.get("screen_name", "unknown"),
+                    "created_at": created_at.isoformat(),
+                    "source": "Twitter"
+                })
 
-                # If many consecutive errors, pause longer
-                if consecutive_errors >= 5:
-                    logger.warning("Too many consecutive Twitter errors, pausing 30s...")
-                    await asyncio.sleep(30)
-                    consecutive_errors = 0
-
-            except Exception as e:
-                logger.warning(f"Twitter @{username} error: {e}")
-                consecutive_errors += 1
+        except Exception as e:
+            logger.warning(f"Twitter list timeline error: {e}")
 
     return all_tweets
 

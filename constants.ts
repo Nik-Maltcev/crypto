@@ -2,7 +2,8 @@ import { SubredditOption, TwitterAccountOption } from './types';
 
 export const CMC_API_KEY = 'f55086eb50a8426591f8d930dc7f6e63';
 export const RAPID_API_KEY = '3fa1808794msh4889848f150da1ep1e822ejsnd21a6ca25058';
-export const TWITTER_HOST = 'twitter241.p.rapidapi.com';
+export const TWITTER_HOST = 'twitter-api45.p.rapidapi.com';
+export const TWITTER_LIST_ID = '1343798673386434560';
 
 export const SYSTEM_INSTRUCTION = `
 You are a Crypto Market Analyst.

@@ -70,7 +70,8 @@ class Settings(BaseSettings):
 
     # Twitter RapidAPI (for auto-analysis)
     TWITTER_RAPID_API_KEY: str = ""
-    TWITTER_HOST: str = "twitter241.p.rapidapi.com"
+    TWITTER_HOST: str = "twitter-api45.p.rapidapi.com"
+    TWITTER_LIST_ID: str = "1343798673386434560"
 
     # Auth (Magic Link via Resend)
     RESEND_API_KEY: str = ""
