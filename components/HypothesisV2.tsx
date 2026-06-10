@@ -658,61 +658,146 @@ const HypothesisV2: React.FC = () => {
                 if (allCandidates.length === 0) return null;
 
                 // Unique coins that appeared
-                const uniqueCoins = new Set(allCandidates.map(c => c.symbol));
+                const uniqueCoins = [...new Set(allCandidates.map(c => c.symbol))];
+
+                // Focus on 4 exchanges
+                const COMPARE_EXCHANGES = ['Gate.io', 'MEXC', 'BingX', 'KuCoin'] as const;
 
                 // Build map: exchange -> Set of unique symbols
-                const exchangeMap = new Map<string, Set<string>>();
+                const exchangeCoins = new Map<string, Set<string>>();
+                COMPARE_EXCHANGES.forEach(ex => exchangeCoins.set(ex, new Set()));
+
                 allCandidates.forEach(c => {
                     c.exchanges!.forEach(ex => {
-                        if (!RU_EXCHANGES.has(ex)) return;
-                        if (!exchangeMap.has(ex)) exchangeMap.set(ex, new Set());
-                        exchangeMap.get(ex)!.add(c.symbol);
+                        // Normalize Gate variants
+                        const normalized = ex === 'Gate' ? 'Gate.io' : ex;
+                        if (exchangeCoins.has(normalized)) {
+                            exchangeCoins.get(normalized)!.add(c.symbol);
+                        }
                     });
                 });
 
-                // Sort by coverage
-                const sorted = [...exchangeMap.entries()]
-                    .map(([ex, coins]) => ({ exchange: ex, coins: [...coins], count: coins.size }))
-                    .sort((a, b) => b.count - a.count);
-                if (sorted.length === 0) return null;
+                const totalUniqueCoins = uniqueCoins.length;
 
-                const totalUniqueCoins = uniqueCoins.size;
+                // Build comparison: for each exchange, coins ONLY available there (not in any of the other 3)
+                const exclusives = new Map<string, string[]>();
+                COMPARE_EXCHANGES.forEach(ex => {
+                    const myCoins = exchangeCoins.get(ex)!;
+                    const othersCoins = new Set<string>();
+                    COMPARE_EXCHANGES.forEach(other => {
+                        if (other !== ex) exchangeCoins.get(other)!.forEach(c => othersCoins.add(c));
+                    });
+                    const onlyHere = [...myCoins].filter(c => !othersCoins.has(c));
+                    exclusives.set(ex, onlyHere);
+                });
+
+                // Coins available on ALL 4
+                const onAll = uniqueCoins.filter(coin => 
+                    COMPARE_EXCHANGES.every(ex => exchangeCoins.get(ex)!.has(coin))
+                );
+
+                // Coins NOT on any of the 4
+                const onNone = uniqueCoins.filter(coin =>
+                    COMPARE_EXCHANGES.every(ex => !exchangeCoins.get(ex)!.has(coin))
+                );
 
                 return (
                     <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-r from-emerald-900/20 to-teal-900/20 flex items-center justify-between">
                             <div>
-                                <span className="text-sm font-bold text-emerald-400">🇷🇺 Биржи для торговли (РФ)</span>
-                                <span className="text-sm text-gray-500 ml-2">• {totalUniqueCoins} уникальных монет из всех анализов</span>
+                                <span className="text-sm font-bold text-emerald-400">🇷🇺 Сравнение бирж (РФ)</span>
+                                <span className="text-sm text-gray-500 ml-2">• {totalUniqueCoins} уникальных монет из {items.filter(i => i.status === 'success').length} анализов</span>
                             </div>
-                            <span className="text-sm text-gray-600">{items.filter(i => i.status === 'success').length} анализов</span>
                         </div>
-                        <div className="p-4 space-y-2">
-                            {sorted.slice(0, 6).map(({ exchange, coins, count }) => {
-                                const coverage = Math.round((count / totalUniqueCoins) * 100);
-                                return (
-                                    <div key={exchange} className="flex items-center gap-3">
-                                        <div className="w-24 text-sm font-semibold text-white flex-shrink-0">{exchange}</div>
-                                        <div className="flex-grow h-5 bg-gray-800 rounded-full overflow-hidden relative">
-                                            <div
-                                                className="h-full bg-emerald-500/40 rounded-full transition-all"
-                                                style={{ width: `${coverage}%` }}
-                                            />
-                                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
-                                                {count}/{totalUniqueCoins} ({coverage}%)
-                                            </span>
+                        <div className="p-4 space-y-4">
+                            {/* Coverage bars */}
+                            <div className="space-y-2">
+                                {COMPARE_EXCHANGES.map(ex => {
+                                    const coins = exchangeCoins.get(ex)!;
+                                    const count = coins.size;
+                                    const coverage = Math.round((count / totalUniqueCoins) * 100);
+                                    return (
+                                        <div key={ex} className="flex items-center gap-3">
+                                            <div className="w-20 text-sm font-semibold text-white flex-shrink-0">{ex}</div>
+                                            <div className="flex-grow h-6 bg-gray-800 rounded-full overflow-hidden relative">
+                                                <div
+                                                    className="h-full bg-emerald-500/40 rounded-full transition-all"
+                                                    style={{ width: `${coverage}%` }}
+                                                />
+                                                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white">
+                                                    {count}/{totalUniqueCoins} ({coverage}%)
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex-shrink-0 text-sm text-gray-500 w-40 text-right truncate" title={coins.join(', ')}>
-                                            <span className="data-secret">{coins.slice(0, 5).join(', ')}{coins.length > 5 ? ` +${coins.length - 5}` : ''}</span>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Coin presence matrix */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-700">
+                                            <th className="text-left py-2 pr-3 text-gray-500">Монета</th>
+                                            {COMPARE_EXCHANGES.map(ex => (
+                                                <th key={ex} className="text-center px-2 py-2 text-gray-400 font-semibold">{ex.replace('.io', '')}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {uniqueCoins.sort().map(coin => (
+                                            <tr key={coin} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+                                                <td className="py-1.5 pr-3 font-bold text-white"><span className="data-secret">{coin}</span></td>
+                                                {COMPARE_EXCHANGES.map(ex => {
+                                                    const has = exchangeCoins.get(ex)!.has(coin);
+                                                    return (
+                                                        <td key={ex} className="text-center px-2 py-1.5">
+                                                            <span className={has ? 'text-emerald-400' : 'text-red-400/60'}>
+                                                                {has ? '✓' : '✗'}
+                                                            </span>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Exclusives section */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-800">
+                                {COMPARE_EXCHANGES.map(ex => {
+                                    const excl = exclusives.get(ex) || [];
+                                    return (
+                                        <div key={ex} className="bg-gray-800/30 rounded-lg p-3">
+                                            <div className="text-sm font-bold text-white mb-1">Только {ex.replace('.io', '')}</div>
+                                            {excl.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {excl.map(c => (
+                                                        <span key={c} className="data-secret text-sm px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">{c}</span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-gray-600">Нет эксклюзивов</span>
+                                            )}
                                         </div>
-                                    </div>
-                                );
-                            })}
-                            {sorted.length > 6 && (
-                                <div className="text-sm text-gray-600 text-center pt-1">
-                                    + ещё {sorted.length - 6} бирж
-                                </div>
-                            )}
+                                    );
+                                })}
+                            </div>
+
+                            {/* Summary line */}
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-800 text-sm">
+                                {onAll.length > 0 && (
+                                    <span className="text-gray-400">
+                                        На всех 4: <span className="data-secret text-emerald-400 font-semibold">{onAll.join(', ')}</span>
+                                    </span>
+                                )}
+                                {onNone.length > 0 && (
+                                    <span className="text-gray-500">
+                                        Нет ни на одной: <span className="data-secret text-red-400">{onNone.join(', ')}</span>
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 );
