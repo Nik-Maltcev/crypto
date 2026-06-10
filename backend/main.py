@@ -539,9 +539,17 @@ async def test_twitter_list(cursor: str | None = None):
             resp = await client.get(url, headers=headers_dict)
 
         if resp.status_code != 200:
-            return {"error": resp.status_code, "body": resp.text[:500]}
+            return {"error": resp.status_code, "body": resp.text[:500], "request_url": url}
 
-        data = resp.json()
+        # Check if response is valid JSON
+        raw_text = resp.text
+        if not raw_text or not raw_text.strip():
+            return {"error": "empty_response", "status_code": resp.status_code, "request_url": url, "raw_body": raw_text[:200]}
+
+        try:
+            data = resp.json()
+        except Exception as je:
+            return {"error": str(je), "type": "JSONDecodeError", "request_url": url, "raw_body": raw_text[:500]}
         timeline = data.get("timeline", [])
         top_keys = list(data.keys())
 
