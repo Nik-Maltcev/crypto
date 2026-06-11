@@ -414,7 +414,6 @@ const ShitcoinTracker: React.FC = () => {
                                                     title={`От колла: ${ph.change_from_call >= 0 ? '+' : ''}${ph.change_from_call.toFixed(1)}% | ${direction >= 0 ? '↑' : '↓'}${Math.abs(direction).toFixed(1)}%`}></div>
                                             );
                                         })}
-                                        ))}
                                     </div>
                                 )}
                             </div>
