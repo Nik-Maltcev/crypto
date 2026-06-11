@@ -83,22 +83,15 @@ async def _send_pump_alert(token, change_pct: float, dex_data: dict):
     liquidity = dex_data.get("liquidity_usd", 0)
     dex_url = token.dexscreener_url or f"https://dexscreener.com/solana/{contract}"
 
-    subject = f"🚀 {symbol} +{change_pct:.0f}% — щиток выстрелил!"
-    html_body = f"""
-    <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; background: #111; color: #eee; padding: 24px; border-radius: 12px;">
-        <h2 style="color: #10b981; margin: 0 0 16px;">🚀 {symbol} +{change_pct:.0f}%</h2>
-        <p style="color: #999; margin: 0 0 16px;">{name} — вырос на {change_pct:.1f}% от цены колла</p>
-        <table style="width: 100%; font-size: 14px; color: #ccc;">
-            <tr><td style="padding: 4px 0; color: #888;">Коллер:</td><td>@{caller}</td></tr>
-            <tr><td style="padding: 4px 0; color: #888;">MCap:</td><td>${mcap:,.0f}</td></tr>
-            <tr><td style="padding: 4px 0; color: #888;">Ликвидность:</td><td>${liquidity:,.0f}</td></tr>
-            <tr><td style="padding: 4px 0; color: #888;">Контракт:</td><td style="font-size: 11px;">{contract[:20]}...</td></tr>
-        </table>
-        <a href="{dex_url}" style="display: block; margin-top: 20px; padding: 12px; background: #10b981; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-weight: bold;">
-            📊 Открыть Dexscreener
-        </a>
-    </div>
-    """
+    subject = f"{symbol} +{change_pct:.0f}% — shitcoin pump alert"
+    text_body = (
+        f"{symbol} ({name}) +{change_pct:.1f}% from call\n\n"
+        f"Caller: @{caller}\n"
+        f"MCap: ${mcap:,.0f}\n"
+        f"Liquidity: ${liquidity:,.0f}\n"
+        f"Contract: {contract}\n"
+        f"Dexscreener: {dex_url}\n"
+    )
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -109,7 +102,7 @@ async def _send_pump_alert(token, change_pct: float, dex_data: dict):
                     "from": from_email,
                     "to": [ALERT_EMAIL],
                     "subject": subject,
-                    "html": html_body,
+                    "text": text_body,
                 },
             )
             if resp.status_code in (200, 201):
