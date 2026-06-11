@@ -79,8 +79,19 @@ const HypothesisV2: React.FC = () => {
     const [leverage, setLeverage] = useState(10);
     const [stopLoss, setStopLoss] = useState(1);
 
+    // Exchange filter toggle
+    const [onlyMyExchanges, setOnlyMyExchanges] = useState(false);
+    const MY_EXCHANGES = new Set(['MEXC', 'Gate.io', 'Gate']);
+
     // Exchanges available in Russia (verified May 2026)
     const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'Gate', 'CoinEx', 'LBank', 'XT.COM', 'BitMart', 'Pionex', 'BTCC', 'BYDFi', 'CoinTR', 'DigiFinex', 'Bitrue', 'AscendEX (BitMax)', 'BloFin', 'WEEX']);
+
+    // Filter helper: check if candidate is on my exchanges
+    const isOnMyExchanges = (c: ShortCandidate) => {
+        if (!onlyMyExchanges) return true;
+        if (!c.exchanges || c.exchanges.length === 0) return false;
+        return c.exchanges.some(ex => MY_EXCHANGES.has(ex));
+    };
 
     // Timer: next verification countdown
     useEffect(() => {
@@ -171,12 +182,11 @@ const HypothesisV2: React.FC = () => {
     const getModelStats = (modelKey: 'claude_opus' | 'deepseek_v4') => {
         let totalHits = 0, totalPicks = 0, strongHits = 0;
         verifiedItems.forEach(item => {
-            const v = item.result?.[modelKey]?.verification;
-            if (v) {
-                totalHits += v.hits;
-                totalPicks += v.total;
-                strongHits += v.strong_hits;
-            }
+            const candidates = item.result?.[modelKey]?.shortCandidates?.filter(isOnMyExchanges) || [];
+            const verified = candidates.filter(c => c.hit !== undefined);
+            totalPicks += verified.length;
+            totalHits += verified.filter(c => c.hit).length;
+            strongHits += verified.filter(c => c.strongHit).length;
         });
         return { totalHits, totalPicks, strongHits, winrate: totalPicks > 0 ? Math.round((totalHits / totalPicks) * 100) : 0 };
     };
@@ -206,7 +216,7 @@ const HypothesisV2: React.FC = () => {
                             </span>
                         )}
                     </div>
-                    <span className="text-sm text-gray-400">{modelData.shortCandidates?.length || 0} shorts</span>
+                    <span className="text-sm text-gray-400">{modelData.shortCandidates?.filter(isOnMyExchanges).length || 0} shorts</span>
                 </div>
 
                 {/* Summary */}
@@ -220,7 +230,7 @@ const HypothesisV2: React.FC = () => {
                 <div className="p-4">
                     <div className="text-sm text-red-400 uppercase font-bold mb-3">📉 Шорт-кандидаты</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {modelData.shortCandidates?.map((c, idx) => (
+                    {modelData.shortCandidates?.filter(isOnMyExchanges).map((c, idx) => (
                         <div key={c.symbol} className={`rounded-xl p-4 border ${
                             c.strongHit ? 'bg-emerald-500/10 border-emerald-500/30' :
                             c.hit === true ? 'bg-emerald-500/5 border-emerald-500/20' :
@@ -418,6 +428,25 @@ const HypothesisV2: React.FC = () => {
                 </div>
             </div>
 
+            {/* Exchange filter toggle */}
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={() => setOnlyMyExchanges(!onlyMyExchanges)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+                        onlyMyExchanges
+                            ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40'
+                            : 'bg-gray-800/50 text-gray-400 border-gray-700 hover:border-gray-600'
+                    }`}
+                >
+                    {onlyMyExchanges ? '✓ ' : ''}Только MEXC + Gate
+                </button>
+                {onlyMyExchanges && (
+                    <span className="text-xs text-gray-500">
+                        Показаны только монеты доступные на MEXC или Gate.io
+                    </span>
+                )}
+            </div>
+
             {/* Schedule info */}
             <div className="bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 rounded-xl p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -463,7 +492,7 @@ const HypothesisV2: React.FC = () => {
 
             {/* P&L Calculator */}
             {latestSuccess?.result && (() => {
-                const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined || (c.snapshots && c.snapshots.length > 0)) || [];
+                const candidates = latestSuccess.result.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => isOnMyExchanges(c) && (c.actualChange24h !== undefined || (c.snapshots && c.snapshots.length > 0))) || [];
                 if (candidates.length === 0) return null;
 
                 const BET = betSize;
@@ -670,7 +699,7 @@ const HypothesisV2: React.FC = () => {
                                         )}
                                         {/* P&L in history summary */}
                                         {(() => {
-                                            const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.actualChange24h !== undefined) || [];
+                                            const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => isOnMyExchanges(c) && c.actualChange24h !== undefined) || [];
                                             if (sc.length === 0) return null;
                                             let pnl = 0;
                                             sc.forEach((c: ShortCandidate) => {
@@ -700,7 +729,7 @@ const HypothesisV2: React.FC = () => {
                                 
                                 {/* Per-item P&L table */}
                                 {(() => {
-                                    const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => c.snapshots && c.snapshots.length > 0) || [];
+                                    const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => isOnMyExchanges(c) && c.snapshots && c.snapshots.length > 0) || [];
                                     if (sc.length === 0) return null;
                                     
                                     const BET = betSize, LEV = leverage, SL = stopLoss, COM = 0.1;
