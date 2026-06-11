@@ -406,9 +406,14 @@ const ShitcoinTracker: React.FC = () => {
                                 </div>
                                 {token.price_history.length > 0 && (
                                     <div className="mt-2 flex items-center gap-1">
-                                        {token.price_history.slice(-12).map((ph, i) => (
-                                            <div key={i} className={`w-3 h-3 rounded-sm ${ph.change_from_call >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                                                title={`${ph.change_from_call >= 0 ? '+' : ''}${ph.change_from_call.toFixed(1)}%`}></div>
+                                        {token.price_history.slice(-12).map((ph, i, arr) => {
+                                            const prev = i > 0 ? arr[i - 1].change_from_call : 0;
+                                            const direction = ph.change_from_call - prev;
+                                            return (
+                                                <div key={i} className={`w-3 h-3 rounded-sm ${direction >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
+                                                    title={`От колла: ${ph.change_from_call >= 0 ? '+' : ''}${ph.change_from_call.toFixed(1)}% | ${direction >= 0 ? '↑' : '↓'}${Math.abs(direction).toFixed(1)}%`}></div>
+                                            );
+                                        })}
                                         ))}
                                     </div>
                                 )}
