@@ -653,42 +653,36 @@ async def _send_hypothesis_email(candidates: list[dict]) -> None:
     MY_EXCHANGES = {"MEXC", "Gate.io", "Gate"}
 
     lines = []
-    mexc_gate_coins = []
-    other_coins = []
+    mexc_coins = []
+    gate_coins = []
 
     for c in candidates:
         symbol = c.get("symbol", "???")
         change = c.get("expectedChange", 0)
         confidence = c.get("confidence", 0)
-        entry = c.get("entryZone", "")
-        stop = c.get("stopLoss", 0)
         exchanges = c.get("exchanges", [])
 
-        on_my = any(ex in MY_EXCHANGES or ex.startswith("Gate") for ex in exchanges)
-        marker = "[MEXC/Gate]" if on_my else ""
+        line = f"{symbol} {change:+.1f}% conf:{confidence}%"
 
-        line = f"{symbol} {change:+.1f}% conf:{confidence}% entry:{entry} SL:{stop} {marker}"
+        if "MEXC" in exchanges:
+            mexc_coins.append(line)
+        if any(ex in ("Gate.io", "Gate") for ex in exchanges):
+            gate_coins.append(line)
 
-        if on_my:
-            mexc_gate_coins.append(line)
-        else:
-            other_coins.append(line)
-
-    lines.append(f"Short candidates: {len(candidates)}")
-    lines.append(f"On MEXC/Gate: {len(mexc_gate_coins)}")
+    lines.append(f"MEXC ({len(mexc_coins)}):")
+    if mexc_coins:
+        lines.extend(mexc_coins)
+    else:
+        lines.append("—")
     lines.append("")
-
-    if mexc_gate_coins:
-        lines.append("-- MEXC / Gate (tradeable) --")
-        lines.extend(mexc_gate_coins)
-        lines.append("")
-
-    if other_coins:
-        lines.append("-- Other exchanges --")
-        lines.extend(other_coins)
+    lines.append(f"Gate ({len(gate_coins)}):")
+    if gate_coins:
+        lines.extend(gate_coins)
+    else:
+        lines.append("—")
 
     body = "\n".join(lines)
-    subject = f"Short {len(candidates)} coins ({len(mexc_gate_coins)} on MEXC/Gate)"
+    subject = f"Short: MEXC {len(mexc_coins)}, Gate {len(gate_coins)}"
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
