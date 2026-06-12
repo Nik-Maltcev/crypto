@@ -638,6 +638,78 @@ async def _call_deepseek_v4(system_prompt: str, user_prompt: str, api_key: str) 
             raise RuntimeError("DeepSeek returned invalid JSON, repair and retry both failed")
 
 
+async def _send_hypothesis_email(candidates: list[dict]) -> None:
+    """Send plain text email with short candidates after analysis completes."""
+    from core.config import get_settings
+    settings = get_settings()
+    resend_key = settings.RESEND_API_KEY
+    from_email = settings.RESEND_FROM_EMAIL or "alerts@dexflow.xyz"
+    to_email = "nikmaltcev98@gmail.com"
+
+    if not resend_key:
+        logger.warning("[HYP_V2] RESEND_API_KEY not set, skipping email")
+        return
+
+    MY_EXCHANGES = {"MEXC", "Gate.io", "Gate"}
+
+    lines = []
+    mexc_gate_coins = []
+    other_coins = []
+
+    for c in candidates:
+        symbol = c.get("symbol", "???")
+        change = c.get("expectedChange", 0)
+        confidence = c.get("confidence", 0)
+        entry = c.get("entryZone", "")
+        stop = c.get("stopLoss", 0)
+        exchanges = c.get("exchanges", [])
+
+        on_my = any(ex in MY_EXCHANGES or ex.startswith("Gate") for ex in exchanges)
+        marker = "[MEXC/Gate]" if on_my else ""
+
+        line = f"{symbol} {change:+.1f}% conf:{confidence}% entry:{entry} SL:{stop} {marker}"
+
+        if on_my:
+            mexc_gate_coins.append(line)
+        else:
+            other_coins.append(line)
+
+    lines.append(f"Short candidates: {len(candidates)}")
+    lines.append(f"On MEXC/Gate: {len(mexc_gate_coins)}")
+    lines.append("")
+
+    if mexc_gate_coins:
+        lines.append("-- MEXC / Gate (tradeable) --")
+        lines.extend(mexc_gate_coins)
+        lines.append("")
+
+    if other_coins:
+        lines.append("-- Other exchanges --")
+        lines.extend(other_coins)
+
+    body = "\n".join(lines)
+    subject = f"Short {len(candidates)} coins ({len(mexc_gate_coins)} on MEXC/Gate)"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": from_email,
+                    "to": [to_email],
+                    "subject": subject,
+                    "text": body,
+                },
+            )
+            if resp.status_code in (200, 201):
+                logger.info(f"[HYP_V2] Email sent: {subject}")
+            else:
+                logger.warning(f"[HYP_V2] Email failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[HYP_V2] Email send error: {e}")
+
+
 async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
     """Main entry: collect 16h data, predict 24h drops via two models."""
     logger.info(f"=== HYPOTHESIS V2: Starting (trigger: {trigger}) ===")
@@ -854,6 +926,8 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             logger.info(f"=== HYPOTHESIS V2 complete (ID: {log.id}) ===")
             if deepseek_result and deepseek_result.get("shortCandidates"):
                 logger.info(f"  DeepSeek picks: {[c['symbol'] for c in deepseek_result['shortCandidates']]}")
+                # Send email summary
+                await _send_hypothesis_email(deepseek_result["shortCandidates"])
 
         except Exception as e:
             import traceback
