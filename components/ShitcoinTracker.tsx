@@ -171,6 +171,37 @@ const ShitcoinTracker: React.FC = () => {
                             📋 Логи
                         </button>
                     )}
+                    {tokens.length > 0 && (
+                        <button onClick={() => {
+                            const headers = ['Symbol','Name','Caller','Detected','Safety','Price at Call','MCap at Call','Current Change %','Peak Change %','Liquidity','LP Locked %','Creator %','Contract','Dexscreener'];
+                            const rows = tokens.map(t => [
+                                getSymbol(t),
+                                getName(t),
+                                t.caller,
+                                t.detected_at ? new Date(t.detected_at).toLocaleString('ru-RU') : '',
+                                t.safety,
+                                t.price_at_call,
+                                getMcap(t),
+                                getCurrentChange(t).toFixed(1),
+                                (t.peak_change || 0).toFixed(1),
+                                getLiquidity(t),
+                                getLpPct(t).toFixed(0),
+                                getCreatorPct(t).toFixed(1),
+                                t.contract,
+                                getDexUrl(t),
+                            ].map(v => `"${v}"`).join(','));
+                            const csv = [headers.join(','), ...rows].join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `shitcoins_${new Date().toISOString().slice(0,10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }} className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">
+                            CSV
+                        </button>
+                    )}
                 </div>
             </div>
 
