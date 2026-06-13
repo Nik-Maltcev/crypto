@@ -548,21 +548,13 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">❌ {error}</div>
             )}
 
-            {/* Hourly P&L summary (1-4h, all history, short only) */}
-            {!isLong && (() => {
-                const allCandidates: ShortCandidate[] = [];
-                items.filter(i => i.status === 'success' && i.result?.deepseek_v4?.shortCandidates).forEach(item => {
-                    item.result!.deepseek_v4!.shortCandidates.filter(isOnMyExchanges).forEach(c => {
-                        if (c.snapshots && c.snapshots.length > 10) allCandidates.push(c);
-                    });
-                });
-                if (allCandidates.length < 3) return null;
+            {/* Hourly P&L table per day (1-4h, short only) */}
+            {!isLong && items.filter(i => i.status === 'success' && i.result?.deepseek_v4?.shortCandidates).map(item => {
+                const sc = item.result!.deepseek_v4!.shortCandidates.filter((c: ShortCandidate) => isOnMyExchanges(c) && c.snapshots && c.snapshots.length > 10);
+                if (sc.length === 0) return null;
 
-                const BET = betSize;
-                const LEV = leverage;
-                const SL = stopLoss;
-                const COM = 0.1;
-                const FUND = fundingRate * 3;
+                const BET = betSize, LEV = leverage, SL = stopLoss, COM = 0.1, FUND = fundingRate * 3;
+                const hours = [1, 2, 3, 4];
 
                 const labelToMinutes = (label: string): number => {
                     let mins = 0;
@@ -573,17 +565,9 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                     return mins;
                 };
 
-                // For each hour (1-4), calculate total P&L if all positions were closed at that hour
-                const hourlyPnl = [1, 2, 3, 4].map(hour => {
-                    const targetMin = hour * 60;
-                    let totalPnl = 0;
-                    let count = 0;
-
-                    allCandidates.forEach(c => {
-                        const startPrice = c.currentPrice;
-                        if (!startPrice || startPrice <= 0) return;
-
-                        // Check if SL was hit before this hour
+                const trades = sc.map((c: ShortCandidate) => {
+                    const hourPnls = hours.map(h => {
+                        const targetMin = h * 60;
                         let stopped = false;
                         for (const snap of (c.snapshots || [])) {
                             const mins = labelToMinutes(snap.label || '');
@@ -591,59 +575,60 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                             const cfs = snap.changeFromStart ?? snap.change;
                             if (cfs > SL) { stopped = true; break; }
                         }
-
-                        // Get change at this hour
+                        if (stopped) return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                         const snap = c.snapshots?.find(s => {
                             const mins = labelToMinutes(s.label || '');
                             return mins >= targetMin - 5 && mins <= targetMin + 5;
                         });
-
-                        if (!snap && !stopped) return;
-
-                        let pnl: number;
-                        if (stopped) {
-                            pnl = -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
-                        } else {
-                            const cfs = snap!.changeFromStart ?? snap!.change;
-                            const shortProfit = -cfs;
-                            pnl = (BET * LEV * (shortProfit / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
-                        }
-
-                        totalPnl += pnl;
-                        count++;
+                        if (!snap) return null;
+                        const cfs = snap.changeFromStart ?? snap.change;
+                        return (BET * LEV * (-cfs / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                     });
-
-                    return { hour, totalPnl, count, avgPnl: count > 0 ? totalPnl / count : 0 };
+                    return { symbol: c.symbol, hourPnls };
                 });
 
-                const bestHour = hourlyPnl.reduce((best, h) => h.totalPnl > best.totalPnl ? h : best, hourlyPnl[0]);
+                const totals = hours.map((_, i) => trades.reduce((sum, t) => sum + (t.hourPnls[i] ?? 0), 0));
+                const bestHourIdx = totals.indexOf(Math.max(...totals));
+
+                const dateLabel = item.created_at ? new Date(item.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
 
                 return (
-                    <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
-                        <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-r from-indigo-900/20 to-purple-900/20">
-                            <span className="text-sm font-bold text-indigo-400">P&L по часам (если закрыть все позиции)</span>
-                            <span className="text-sm text-gray-500 ml-2">• {allCandidates.length} монет из {items.filter(i => i.status === 'success').length} анализов</span>
+                    <div key={`hourly-${item.id}`} className="bg-brand-card border border-gray-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-gray-400">{dateLabel} — P&L по часам</span>
+                            <span className="text-xs text-gray-500">{sc.length} монет</span>
                         </div>
-                        <div className="p-4">
-                            <div className="grid grid-cols-4 gap-3">
-                                {hourlyPnl.map(({ hour, totalPnl, count, avgPnl }) => (
-                                    <div key={hour} className={`rounded-lg p-3 text-center border ${
-                                        hour === bestHour.hour ? 'border-indigo-500/50 bg-indigo-500/10' :
-                                        totalPnl >= 0 ? 'border-emerald-500/20 bg-emerald-500/5' :
-                                        'border-red-500/20 bg-red-500/5'
-                                    }`}>
-                                        <div className="text-xs text-gray-400 font-bold">{hour}ч {hour === bestHour.hour ? '⭐' : ''}</div>
-                                        <div className={`text-lg font-bold font-mono ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
-                                        </div>
-                                        <div className="text-[10px] text-gray-500">~{avgPnl >= 0 ? '+' : ''}{avgPnl.toFixed(0)}$/монета • n={count}</div>
-                                    </div>
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-gray-500 border-b border-gray-700">
+                                    <th className="text-left py-1 pr-3">Монета</th>
+                                    {hours.map(h => <th key={h} className={`text-center px-3 py-1 ${h - 1 === bestHourIdx ? 'text-indigo-400' : ''}`}>{h}ч</th>)}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {trades.map(t => (
+                                    <tr key={t.symbol} className="border-b border-gray-800/50">
+                                        <td className="py-1 pr-3 font-bold text-white"><span className="data-secret">{t.symbol}</span></td>
+                                        {t.hourPnls.map((pnl, i) => (
+                                            <td key={i} className={`text-center px-3 py-1 font-mono ${pnl === null ? 'text-gray-700' : pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {pnl === null ? '—' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}`}
+                                            </td>
+                                        ))}
+                                    </tr>
                                 ))}
-                            </div>
-                        </div>
+                                <tr className="border-t border-gray-600 font-bold">
+                                    <td className="py-1.5 pr-3 text-gray-400">ВСЕГО</td>
+                                    {totals.map((t, i) => (
+                                        <td key={i} className={`text-center px-3 py-1.5 font-mono ${i === bestHourIdx ? 'underline' : ''} ${t >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {t >= 0 ? '+' : ''}{t.toFixed(0)}$
+                                        </td>
+                                    ))}
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 );
-            })()}
+            })}
 
             {/* P&L Calculator */}
             {latestSuccess?.result && (() => {
