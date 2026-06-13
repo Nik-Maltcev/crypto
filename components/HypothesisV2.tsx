@@ -79,6 +79,7 @@ const HypothesisV2: React.FC = () => {
     const [leverage, setLeverage] = useState(10);
     const [stopLoss, setStopLoss] = useState(1);
     const [fundingRate, setFundingRate] = useState(0.01);
+    const [mirrorLong, setMirrorLong] = useState(false);
 
     // Exchange filter toggle
     const [onlyMyExchanges, setOnlyMyExchanges] = useState(false);
@@ -554,8 +555,8 @@ const HypothesisV2: React.FC = () => {
 
                 // Calculate P&L for a single change value (no SL tracking)
                 const calcRawPnl = (change: number, stopped: boolean) => {
-                    const shortChange = -change;
-                    const eff = stopped ? -(STOP_LOSS_PCT) : shortChange;
+                    const dirChange = mirrorLong ? change : -change; // long: +change is profit; short: -change is profit
+                    const eff = stopped ? -(STOP_LOSS_PCT) : dirChange;
                     const gross = BET * LEVERAGE * (eff / 100);
                     const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
                     const funding = BET * LEVERAGE * (FUNDING_24H_PCT / 100);
@@ -567,8 +568,9 @@ const HypothesisV2: React.FC = () => {
                     const snaps = c.snapshots || [];
                     for (const snap of snaps) {
                         const changeFromStart = snap.changeFromStart ?? snap.change;
-                        // For short: price going UP = bad. If price rose > SL% from start, SL triggered
-                        if (changeFromStart > STOP_LOSS_PCT) {
+                        // Short: price UP = SL hit. Long (mirror): price DOWN = SL hit.
+                        const slTriggered = mirrorLong ? (changeFromStart < -STOP_LOSS_PCT) : (changeFromStart > STOP_LOSS_PCT);
+                        if (slTriggered) {
                             return { stopped: true, stoppedAtLabel: snap.label };
                         }
                     }
@@ -598,7 +600,8 @@ const HypothesisV2: React.FC = () => {
                         if (!snap) return null;
                         if (alreadyStopped) return calcRawPnl(0, true); // already stopped, show SL loss
                         const changeFromStart = snap.changeFromStart ?? snap.change;
-                        if (changeFromStart > STOP_LOSS_PCT) {
+                        const slTriggered = mirrorLong ? (changeFromStart < -STOP_LOSS_PCT) : (changeFromStart > STOP_LOSS_PCT);
+                        if (slTriggered) {
                             alreadyStopped = true;
                             return calcRawPnl(0, true); // SL hit at this point
                         }
@@ -623,6 +626,16 @@ const HypothesisV2: React.FC = () => {
                     <div className="data-card bg-brand-card border border-gray-800 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
+                            <button
+                                onClick={() => setMirrorLong(!mirrorLong)}
+                                className={`px-3 py-1 rounded text-xs font-bold transition-all border ${
+                                    mirrorLong
+                                        ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40'
+                                        : 'bg-red-600/20 text-red-400 border-red-500/40'
+                                }`}
+                            >
+                                {mirrorLong ? '📈 Лонг (зеркало)' : '📉 Шорт'}
+                            </button>
                         </div>
 
                         <div className="grid grid-cols-4 gap-3 mb-4">
@@ -764,9 +777,10 @@ const HypothesisV2: React.FC = () => {
                                                 let stopped = false;
                                                 for (const snap of (c.snapshots || [])) {
                                                     const cfs = snap.changeFromStart ?? snap.change;
-                                                    if (cfs > stopLoss) { stopped = true; break; }
+                                                    const slHit = mirrorLong ? (cfs < -stopLoss) : (cfs > stopLoss);
+                                                    if (slHit) { stopped = true; break; }
                                                 }
-                                                const shortChange = -(c.actualChange24h || 0);
+                                                const shortChange = mirrorLong ? (c.actualChange24h || 0) : -(c.actualChange24h || 0);
                                                 const eff = stopped ? -stopLoss : shortChange;
                                                 const gross = betSize * leverage * (eff / 100);
                                                 const commission = betSize * leverage * (0.1 / 100);
@@ -803,12 +817,14 @@ const HypothesisV2: React.FC = () => {
                                             if (!snap) return null;
                                             if (stopped) return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                                             const cfs = snap.changeFromStart ?? snap.change;
-                                            if (cfs > SL) { stopped = true; return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)); }
-                                            const gross = BET * LEV * (-cfs / 100);
+                                            const slHit = mirrorLong ? (cfs < -SL) : (cfs > SL);
+                                            if (slHit) { stopped = true; return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)); }
+                                            const dirChange = mirrorLong ? cfs : -cfs;
+                                            const gross = BET * LEV * (dirChange / 100);
                                             return gross - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                                         });
                                         const finalPnl = stopped ? -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)) : 
-                                            (c.actualChange24h !== undefined ? (BET * LEV * (-(c.actualChange24h) / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)) : (snaps.filter(s => s !== null).pop() ?? 0));
+                                            (c.actualChange24h !== undefined ? (BET * LEV * ((mirrorLong ? 1 : -1) * (c.actualChange24h) / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)) : (snaps.filter(s => s !== null).pop() ?? 0));
                                         return { symbol: c.symbol, snaps, pnl: finalPnl, stopped };
                                     });
 
