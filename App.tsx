@@ -48,7 +48,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'shitcoins'>('hypothesis_v2');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -517,7 +517,13 @@ const App: React.FC = () => {
                 onClick={() => setActiveTab('hypothesis_v2')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                📉 Гипотеза
+                📉 Шорт
+              </button>
+              <button
+                onClick={() => setActiveTab('hypothesis_v2_long')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2_long' ? 'bg-emerald-700/50 text-emerald-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📈 Лонг
               </button>
               <button
                 onClick={() => setActiveTab('shitcoins')}
@@ -599,6 +605,8 @@ const App: React.FC = () => {
         <DemoOverlay>
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
+        ) : activeTab === 'hypothesis_v2_long' ? (
+          <HypothesisV2 mode="long" />
         ) : activeTab === 'hypothesis_v2' ? (
           <HypothesisV2 />
         ) : (

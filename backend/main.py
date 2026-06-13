@@ -28,7 +28,7 @@ from altcoin_analysis import run_altcoin_analysis, update_altcoin_tracking, upda
 from mentions_tracker import run_mentions_scan
 from shitcoin_monitor import start_monitor, get_detected_tokens, is_monitor_running
 from hourly_hypothesis import run_hourly_hypothesis, verify_hypothesis_results
-from hypothesis_v2 import run_hypothesis_v2, verify_hypothesis_v2_results
+from hypothesis_v2 import run_hypothesis_v2, verify_hypothesis_v2_results, run_hypothesis_v2_long, verify_hypothesis_v2_long_results
 from forecast_tracker import update_forecast_tracking_job, save_forecast_from_analysis, update_binance_tracking, update_polymarket_tracking
 
 BINANCE_PROXY = "http://pkg-private2:iau7vmnt3jt3lkfs@quality.proxywing.com:8888"
@@ -188,8 +188,24 @@ async def lifespan(app: FastAPI):
                 name="Hypothesis V2 Verification (every 1 min)",
                 replace_existing=True,
             )
+            # Hypothesis V2 Long — daily at 08:00 MSK (05:00 UTC)
+            scheduler.add_job(
+                run_hypothesis_v2_long,
+                trigger=CronTrigger(hour=5, minute=0),
+                id="hypothesis_v2_long",
+                name="Hypothesis V2 Long: Altcoin Rise Predictor (daily 08:00 MSK)",
+                kwargs={"trigger": "scheduled"},
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                verify_hypothesis_v2_long_results,
+                trigger=CronTrigger(minute="*/1"),
+                id="hypothesis_v2_long_verify",
+                name="Hypothesis V2 Long Verification (every 1 min)",
+                replace_existing=True,
+            )
             scheduler.start()
-            logger.info("APScheduler started — hourly hypothesis, daily altcoin tracking, hypothesis v2")
+            logger.info("APScheduler started — hypothesis v2 short+long, altcoin tracking")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
@@ -1155,6 +1171,58 @@ async def trigger_hypothesis_v2_verify():
     """Manually trigger Hypothesis V2 verification."""
     asyncio.create_task(verify_hypothesis_v2_results())
     return {"status": "started", "message": "Verification triggered."}
+
+
+# ==================== HYPOTHESIS V2 LONG ====================
+
+@app.post("/api/hypothesis_v2_long/run")
+async def trigger_hypothesis_v2_long():
+    """Manually trigger Hypothesis V2 Long (altcoin rise predictor)."""
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        raise HTTPException(400, "DEEPSEEK_API_KEY not configured")
+    asyncio.create_task(run_hypothesis_v2_long(trigger="manual"))
+    return {"status": "started", "message": "Hypothesis V2 Long triggered."}
+
+
+@app.get("/api/hypothesis_v2_long/history")
+async def get_hypothesis_v2_long_history(limit: int = 20):
+    """Get Hypothesis V2 Long prediction history."""
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2_long")
+            .order_by(AnalysisLog.created_at.desc())
+            .limit(limit)
+        )
+        logs = result.scalars().all()
+        items = []
+        for log in logs:
+            result_data = None
+            if log.result_json:
+                try:
+                    result_data = json.loads(log.result_json)
+                except:
+                    pass
+            items.append({
+                "id": log.id,
+                "created_at": (log.created_at.isoformat() + "Z") if log.created_at else None,
+                "finished_at": (log.finished_at.isoformat() + "Z") if log.finished_at else None,
+                "status": log.status,
+                "trigger": log.trigger,
+                "reddit_posts_count": log.reddit_posts_count,
+                "twitter_tweets_count": log.twitter_tweets_count,
+                "error_message": log.error_message,
+                "result": result_data,
+            })
+        return {"success": True, "items": items}
+
+
+@app.post("/api/hypothesis_v2_long/verify")
+async def trigger_hypothesis_v2_long_verify():
+    """Manually trigger Hypothesis V2 Long verification."""
+    asyncio.create_task(verify_hypothesis_v2_long_results())
+    return {"status": "started", "message": "Long verification triggered."}
 
 
 @app.post("/api/hypothesis_v2/enrich_exchanges")

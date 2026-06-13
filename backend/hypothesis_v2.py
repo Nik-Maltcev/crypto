@@ -450,6 +450,99 @@ Pick from the provided market data list."""
     return system_prompt, user_prompt
 
 
+def _build_prompt_long(cmc_coins: list[dict], reddit_posts: list, twitter_posts: list) -> tuple[str, str]:
+    """Build system + user prompts for LONG prediction."""
+    
+    # Market data — same as short
+    market_lines = []
+    for coin in cmc_coins:
+        market_lines.append(
+            f"{coin['symbol']} ({coin['name']}): ${coin['price']:.6f} | "
+            f"1h: {coin['change_1h']:+.1f}% | 24h: {coin['change_24h']:+.1f}% | "
+            f"7d: {coin['change_7d']:+.1f}% | Vol: ${coin['volume_24h']:,.0f} | "
+            f"MCap: ${coin['market_cap']:,.0f} | src: {coin['source']}"
+        )
+    market_context = "\n".join(market_lines)
+
+    top_reddit = sorted(reddit_posts, key=lambda x: x.get("score", 0), reverse=True)
+    reddit_payload = json.dumps([{
+        "title": p.get("title", ""),
+        "text": (p.get("selftext", "") or ""),
+        "sub": p.get("subreddit", ""),
+        "score": p.get("score", 0),
+    } for p in top_reddit], ensure_ascii=False)
+
+    twitter_payload = json.dumps([{
+        "text": t.get("text", ""),
+        "user": t.get("user", ""),
+    } for t in twitter_posts], ensure_ascii=False) if twitter_posts else "No Twitter data."
+
+    all_symbols_list = sorted([c["symbol"] for c in cmc_coins])
+
+    system_prompt = """You are CryptoPulse AI — a professional short-term crypto analyst specializing in LONG positions.
+
+Your task: Analyze 16 hours of social + market data and predict which altcoins will RISE significantly in the NEXT 24 HOURS.
+
+Output pure JSON only. No markdown wrappers. Response must be parseable by JSON.parse().
+
+Response Format:
+{
+  "summary": "String (Russian) - Overall market sentiment, 2-3 sentences",
+  "analysisTime": "ISO datetime string",
+  "longCandidates": [
+    {
+      "symbol": "COIN",
+      "name": "Full Name",
+      "currentPrice": 1.23,
+      "targetPrice24h": 1.45,
+      "expectedChange": 14.6,
+      "confidence": 75,
+      "timeframe": "6-12h" | "12-18h" | "18-24h",
+      "catalyst": "String (Russian) - What will trigger the move",
+      "reasoning": "String (Russian) - Detailed analysis",
+      "riskLevel": "Low" | "Medium" | "High",
+      "entryZone": "String - price range for entry",
+      "stopLoss": 1.10
+    }
+  ],
+  "marketRiskNote": "String (Russian) - General risk warning for the next 24h"
+}
+
+RULES:
+- You MUST ALWAYS provide exactly 5-10 longCandidates. NEVER return an empty list.
+- DO NOT HALLUCINATE OR INVENT EVENTS. Only reference facts from the provided data (Reddit posts, Twitter, CMC prices).
+- If you mention a token unlock, airdrop, or any event — it MUST be mentioned in the provided social data. Do NOT make up dates or events.
+- All dates must be relative to the current time provided in the user prompt.
+- longCandidates: altcoins most likely to RISE 5-20%+ in the next 24 hours
+- Sort by confidence (highest first)
+- ONLY pick coins from the PROVIDED MARKET DATA list
+- Look for: oversold bounces, positive news/partnerships, accumulation patterns, increasing volume, bullish social sentiment, upcoming catalysts
+- Be REALISTIC — don't predict extreme moves, focus on achievable targets
+- Include stop-loss levels (where the thesis is invalidated — below current price)
+- All text in Russian
+- EXCLUDE: BTC, ETH, BNB, USDT, USDC, DOGE, SOL, XRP
+- If market conditions are uncertain, still provide picks but set confidence lower (30-50%) and note the risk"""
+
+    user_prompt = f"""CURRENT TIME (UTC): {datetime.utcnow().isoformat()}Z
+
+MARKET DATA (altcoins from CMC):
+{market_context}
+
+AVAILABLE SYMBOLS: {json.dumps(all_symbols_list)}
+
+REDDIT (last 16 hours, {len(reddit_posts)} posts, top 400 by score):
+{reddit_payload}
+
+TWITTER (last 16 hours, {len(twitter_posts)} tweets):
+{twitter_payload}
+
+TASK: Identify 5-10 altcoins that will RISE in the next 24 hours.
+Focus on: oversold conditions, positive catalysts, accumulation, bullish sentiment, upcoming events.
+Pick from the provided market data list."""
+
+    return system_prompt, user_prompt
+
+
 async def _call_claude_opus(system_prompt: str, user_prompt: str, base_url: str, auth_token: str) -> dict:
     """Call Claude Opus 4.6 via proxy API."""
     logger.info("[HYP_V2] Claude Opus 4.6: sending request...")
@@ -1194,3 +1287,332 @@ async def verify_hypothesis_v2_results() -> None:
 
         await session.commit()
     logger.info("[HYP_V2] Verification complete")
+
+
+# ==================== HYPOTHESIS V2 LONG ====================
+
+async def _send_hypothesis_long_email(candidates: list[dict]) -> None:
+    """Send email with long candidates."""
+    from core.config import get_settings
+    settings = get_settings()
+    resend_key = settings.RESEND_API_KEY
+    from_email = settings.RESEND_FROM_EMAIL or "alerts@dexflow.xyz"
+    to_email = "nikmaltcev98@gmail.com"
+
+    if not resend_key:
+        return
+
+    mexc_coins = []
+    gate_coins = []
+    for c in candidates:
+        symbol = c.get("symbol", "???")
+        change = c.get("expectedChange", 0)
+        confidence = c.get("confidence", 0)
+        exchanges = c.get("exchanges", [])
+        line = f"{symbol} {change:+.1f}% conf:{confidence}%"
+        if "MEXC" in exchanges:
+            mexc_coins.append(line)
+        if any(ex in ("Gate.io", "Gate") for ex in exchanges):
+            gate_coins.append(line)
+
+    lines = [f"MEXC ({len(mexc_coins)}):"]
+    lines.extend(mexc_coins or ["—"])
+    lines.append("")
+    lines.append(f"Gate ({len(gate_coins)}):")
+    lines.extend(gate_coins or ["—"])
+
+    body = "\n".join(lines)
+    subject = f"Long: MEXC {len(mexc_coins)}, Gate {len(gate_coins)}"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={"from": from_email, "to": [to_email], "subject": subject, "text": body},
+            )
+            logger.info(f"[HYP_V2_LONG] Email sent: {subject}")
+    except Exception as e:
+        logger.warning(f"[HYP_V2_LONG] Email error: {e}")
+
+
+async def run_hypothesis_v2_long(trigger: str = "scheduled") -> None:
+    """Main entry for LONG predictions: collect 16h data, predict 24h rises."""
+    logger.info(f"=== HYPOTHESIS V2 LONG: Starting (trigger: {trigger}) ===")
+
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    reddit_id = os.environ.get("REDDIT_CLIENT_ID", "")
+    reddit_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
+    cmc_key = os.environ.get("CMC_API_KEY", "")
+
+    if not deepseek_key:
+        logger.error("[HYP_V2_LONG] DEEPSEEK_API_KEY missing. Skipping.")
+        return
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        # Guard: don't run if already ran within last 1 hour
+        recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+        existing = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2_long")
+            .where(AnalysisLog.created_at >= recent_cutoff)
+            .where(AnalysisLog.status.in_(["success", "running"]))
+        )
+        recent_entry = existing.scalars().first()
+        if recent_entry:
+            if recent_entry.status == "running":
+                elapsed = (datetime.utcnow() - recent_entry.created_at).total_seconds() / 60
+                if elapsed > 10:
+                    recent_entry.status = "failed"
+                    recent_entry.error_message = "Stuck in running state"
+                    recent_entry.finished_at = datetime.utcnow()
+                    await session.commit()
+                else:
+                    logger.info("[HYP_V2_LONG] Already running, skipping")
+                    return
+            else:
+                logger.info("[HYP_V2_LONG] Already ran within last 1h, skipping")
+                return
+
+        log = AnalysisLog(mode="hypothesis_v2_long", status="running", trigger=trigger)
+        session.add(log)
+        await session.commit()
+        await session.refresh(log)
+
+        try:
+            # 1. CMC data (reuse same function)
+            logger.info("[HYP_V2_LONG] Step 1/4: Fetching CMC data...")
+            cmc_coins = []
+            if cmc_key:
+                cmc_coins = await _fetch_cmc_losers_and_volatile(cmc_key)
+            logger.info(f"[HYP_V2_LONG] CMC: {len(cmc_coins)} coins")
+
+            # 2. Reddit
+            logger.info("[HYP_V2_LONG] Step 2/4: Fetching Reddit (16h)...")
+            reddit_posts = []
+            if reddit_id and reddit_secret:
+                reddit_posts = await _fetch_reddit_16h(reddit_id, reddit_secret)
+            logger.info(f"[HYP_V2_LONG] Reddit: {len(reddit_posts)} posts")
+
+            # 3. Twitter
+            logger.info("[HYP_V2_LONG] Step 3/4: Fetching Twitter...")
+            twitter_posts = await _fetch_twitter_16h()
+            logger.info(f"[HYP_V2_LONG] Twitter: {len(twitter_posts)} tweets")
+
+            if not cmc_coins and not reddit_posts:
+                raise RuntimeError("No data collected")
+
+            # 4. Build LONG prompt and call DeepSeek
+            system_prompt, user_prompt = _build_prompt_long(cmc_coins, reddit_posts, twitter_posts)
+
+            logger.info("[HYP_V2_LONG] Step 4/4: Calling DeepSeek v4 Pro...")
+            deepseek_result = await _call_deepseek_v4(system_prompt, user_prompt, deepseek_key)
+
+            if not deepseek_result:
+                raise RuntimeError("DeepSeek returned empty result")
+
+            # Normalize: API returns longCandidates, store as shortCandidates for unified frontend
+            candidates = deepseek_result.get("longCandidates", [])
+            if not candidates:
+                candidates = deepseek_result.get("shortCandidates", [])
+            deepseek_result["shortCandidates"] = candidates
+            if "longCandidates" in deepseek_result:
+                del deepseek_result["longCandidates"]
+
+            # Fix prices with CMC
+            cmc_prices = {c["symbol"]: c["price"] for c in cmc_coins}
+            for c in deepseek_result.get("shortCandidates", []):
+                sym = c.get("symbol", "").upper()
+                real_price = cmc_prices.get(sym)
+                if real_price and real_price > 0:
+                    c["currentPrice"] = real_price
+
+            # Fetch exchanges
+            all_picks = [c.get("symbol", "").upper() for c in deepseek_result.get("shortCandidates", [])]
+            if all_picks and cmc_key:
+                exchanges_map = await _fetch_exchanges_for_symbols(all_picks, cmc_key)
+                for c in deepseek_result.get("shortCandidates", []):
+                    c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+
+            # Check futures availability
+            if all_picks:
+                futures_map = await _check_futures_availability(all_picks)
+                for c in deepseek_result.get("shortCandidates", []):
+                    sym = c.get("symbol", "").upper()
+                    futures_info = futures_map.get(sym, {"MEXC": False, "Gate": False})
+                    c["futures"] = futures_info
+                    updated_exchanges = []
+                    for ex in c.get("exchanges", []):
+                        if ex in ("MEXC", "MEXC Global") and not futures_info["MEXC"]:
+                            updated_exchanges.append(f"{ex} (spot)")
+                        elif ex in ("Gate.io", "Gate") and not futures_info["Gate"]:
+                            updated_exchanges.append(f"{ex} (spot)")
+                        else:
+                            updated_exchanges.append(ex)
+                    c["exchanges"] = updated_exchanges
+
+            # Filter: keep only coins with futures on MEXC or Gate
+            before_futures = len(deepseek_result.get("shortCandidates", []))
+            deepseek_result["shortCandidates"] = [
+                c for c in deepseek_result.get("shortCandidates", [])
+                if c.get("futures", {}).get("MEXC") or c.get("futures", {}).get("Gate")
+            ]
+            filtered = before_futures - len(deepseek_result.get("shortCandidates", []))
+            if filtered > 0:
+                logger.info(f"[HYP_V2_LONG] Removed {filtered} picks without futures")
+
+            # Combine
+            combined = {
+                "deepseek_v4": deepseek_result,
+                "metadata": {
+                    "reddit_posts": len(reddit_posts),
+                    "twitter_tweets": len(twitter_posts),
+                    "cmc_coins_analyzed": len(cmc_coins),
+                    "lookback_hours": 16,
+                    "prediction_horizon": "24h",
+                    "direction": "long",
+                },
+            }
+
+            # Save
+            log.finished_at = datetime.utcnow()
+            log.status = "success"
+            log.result_json = json.dumps(combined, ensure_ascii=False)
+            log.reddit_posts_count = len(reddit_posts)
+            log.twitter_tweets_count = len(twitter_posts)
+            log.telegram_msgs_count = 0
+            await session.commit()
+
+            logger.info(f"=== HYPOTHESIS V2 LONG complete (ID: {log.id}) ===")
+            if deepseek_result.get("shortCandidates"):
+                logger.info(f"  Long picks: {[c['symbol'] for c in deepseek_result['shortCandidates']]}")
+                await _send_hypothesis_long_email(deepseek_result["shortCandidates"])
+
+        except Exception as e:
+            import traceback
+            logger.error(f"[HYP_V2_LONG] Failed: {type(e).__name__}: {e}")
+            logger.error(traceback.format_exc())
+            log.finished_at = datetime.utcnow()
+            log.status = "failed"
+            log.error_message = str(e)
+            await session.commit()
+
+
+async def verify_hypothesis_v2_long_results() -> None:
+    """Verify long predictions — same as short but hit = price went UP."""
+    logger.info("[HYP_V2_LONG] Verifying predictions...")
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        cutoff = datetime.utcnow() - timedelta(hours=48)
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2_long")
+            .where(AnalysisLog.status == "success")
+            .where(AnalysisLog.created_at >= cutoff)
+        )
+        entries = result.scalars().all()
+
+        if not entries:
+            return
+
+        for entry in entries:
+            if not entry.result_json:
+                continue
+            try:
+                data = json.loads(entry.result_json)
+            except:
+                continue
+
+            if data.get("verification_complete"):
+                continue
+
+            model_data = data.get("deepseek_v4")
+            if not model_data:
+                continue
+
+            all_symbols = set()
+            for c in model_data.get("shortCandidates", []):
+                all_symbols.add(c.get("symbol", "").upper())
+            if not all_symbols:
+                continue
+
+            # Fetch prices from MEXC
+            prices = {}
+            async with httpx.AsyncClient(timeout=15) as client:
+                for sym in all_symbols:
+                    try:
+                        resp = await client.get(
+                            "https://api.mexc.com/api/v3/ticker/price",
+                            params={"symbol": f"{sym}USDT"}
+                        )
+                        if resp.status_code == 200:
+                            price = float(resp.json().get("price", 0))
+                            if price > 0:
+                                prices[sym] = price
+                    except:
+                        pass
+
+            if not prices:
+                continue
+
+            minutes_elapsed = int((datetime.utcnow() - entry.created_at).total_seconds() / 60)
+            hours_elapsed = minutes_elapsed / 60
+            if minutes_elapsed < 60:
+                snapshot_label = f"{minutes_elapsed}m"
+            else:
+                h = minutes_elapsed // 60
+                m = minutes_elapsed % 60
+                snapshot_label = f"{h}h{m:02d}m"
+            now_iso = datetime.utcnow().isoformat()
+
+            for candidate in model_data.get("shortCandidates", []):
+                sym = candidate.get("symbol", "").upper()
+                current_price = prices.get(sym)
+                start_price = candidate.get("currentPrice", 0)
+                if not current_price or start_price <= 0:
+                    continue
+
+                actual_change = ((current_price - start_price) / start_price) * 100
+
+                if "snapshots" not in candidate:
+                    candidate["snapshots"] = []
+
+                existing_labels = [s.get("label") for s in candidate["snapshots"]]
+                if snapshot_label not in existing_labels:
+                    prev_price = candidate["snapshots"][-1]["price"] if candidate["snapshots"] else start_price
+                    change_from_prev = ((current_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
+                    change_from_start = ((current_price - start_price) / start_price) * 100
+                    candidate["snapshots"].append({
+                        "label": snapshot_label,
+                        "time": now_iso,
+                        "price": current_price,
+                        "change": round(change_from_prev, 2),
+                        "changeFromStart": round(change_from_start, 2),
+                    })
+
+                candidate["actualPrice24h"] = current_price
+                candidate["actualChange24h"] = round(actual_change, 2)
+                # LONG: hit = price went UP
+                candidate["hit"] = actual_change > 0
+                candidate["strongHit"] = actual_change >= 5
+
+            if hours_elapsed >= 24:
+                picks = model_data.get("shortCandidates", [])
+                hits = len([c for c in picks if c.get("hit")])
+                total = len([c for c in picks if c.get("actualChange24h") is not None])
+                model_data["verification"] = {
+                    "hits": hits,
+                    "total": total,
+                    "winrate": round((hits / total) * 100) if total > 0 else 0,
+                    "strong_hits": len([c for c in picks if c.get("strongHit")]),
+                }
+                data["verification_complete"] = True
+                data["verified"] = True
+                data["verified_at"] = now_iso
+
+            entry.result_json = json.dumps(data, ensure_ascii=False)
+
+        await session.commit()
+    logger.info("[HYP_V2_LONG] Verification complete")

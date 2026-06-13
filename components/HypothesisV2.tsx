@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
 
+interface HypothesisV2Props {
+    mode?: 'short' | 'long';
+}
+
 interface ShortCandidate {
     symbol: string;
     name: string;
@@ -67,7 +71,10 @@ interface HistoryItem {
     result: HypV2Result | null;
 }
 
-const HypothesisV2: React.FC = () => {
+const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
+    const isLong = mode === 'long';
+    const API_PREFIX = isLong ? '/api/hypothesis_v2_long' : '/api/hypothesis_v2';
+
     const [items, setItems] = useState<HistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRunning, setIsRunning] = useState(false);
@@ -115,7 +122,7 @@ const HypothesisV2: React.FC = () => {
 
     const fetchHistory = async () => {
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/hypothesis_v2/history?limit=20`);
+            const resp = await fetch(`${BACKEND_URL}${API_PREFIX}/history?limit=20`);
             if (resp.ok) {
                 const data = await resp.json();
                 if (data.success) setItems(data.items);
@@ -131,7 +138,7 @@ const HypothesisV2: React.FC = () => {
         setIsRunning(true);
         setError('');
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/hypothesis_v2/run`, { method: 'POST' });
+            const resp = await fetch(`${BACKEND_URL}${API_PREFIX}/run`, { method: 'POST' });
             if (!resp.ok) {
                 const err = await resp.json();
                 throw new Error(err.detail || 'Failed');
@@ -150,7 +157,7 @@ const HypothesisV2: React.FC = () => {
 
     const triggerVerify = async () => {
         try {
-            await fetch(`${BACKEND_URL}/api/hypothesis_v2/verify`, { method: 'POST' });
+            await fetch(`${BACKEND_URL}${API_PREFIX}/verify`, { method: 'POST' });
             setTimeout(fetchHistory, 5000);
         } catch (e: any) {
             setError(e.message);
@@ -395,9 +402,9 @@ const HypothesisV2: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">📉 Гипотеза — Шорт 24ч</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">{isLong ? '📈 Гипотеза — Лонг 24ч' : '📉 Гипотеза — Шорт 24ч'}</h2>
                     <p className="text-gray-400 text-sm">
-                        16ч данных → DeepSeek v4 Pro • Альткоины на падение
+                        16ч данных → DeepSeek v4 Pro • Альткоины на {isLong ? 'рост' : 'падение'}
                     </p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
