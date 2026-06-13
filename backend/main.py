@@ -1318,8 +1318,10 @@ async def fix_hypothesis_v2_prices():
 
 
 @app.post("/api/hypothesis_v2/backfill_snapshots")
-async def backfill_hypothesis_snapshots():
-    """Backfill hourly snapshots from MEXC klines for all hypothesis_v2 entries."""
+async def backfill_hypothesis_snapshots(interval: str = "1m"):
+    """Backfill snapshots from MEXC klines for all hypothesis_v2 entries.
+    interval: '1m' for 1-minute candles (futures API), '5m' for 5-minute (spot API).
+    """
     import httpx
     from datetime import datetime, timedelta
     
@@ -1330,7 +1332,7 @@ async def backfill_hypothesis_snapshots():
             .where(AnalysisLog.mode == "hypothesis_v2")
             .where(AnalysisLog.status == "success")
             .order_by(AnalysisLog.created_at.desc())
-            .limit(10)
+            .limit(20)
         )
         entries = result.scalars().all()
         
@@ -1356,82 +1358,115 @@ async def backfill_hypothesis_snapshots():
                     if not start_price or start_price <= 0:
                         continue
                     
-                    pair = f"{symbol}USDT"
-                    start_ms = int(analysis_time.timestamp() * 1000)
-                    end_ms = start_ms + (24 * 3600 * 1000)
+                    start_ts = int(analysis_time.timestamp())
+                    end_ts = start_ts + (24 * 3600)
                     
                     try:
-                        # MEXC klines API (5m candles for precise SL detection)
-                        resp = await client.get(
-                            "https://api.mexc.com/api/v3/klines",
-                            params={"symbol": pair, "interval": "5m", "startTime": start_ms, "endTime": end_ms, "limit": 288}
-                        )
-                        if resp.status_code != 200:
-                            errors_list.append(f"{symbol}: MEXC {resp.status_code}")
-                            continue
-                        
-                        klines = resp.json()
-                        if not klines:
-                            errors_list.append(f"{symbol}: no klines")
-                            continue
-                        
-                        # Sanity check: first candle price should be close to currentPrice
-                        first_close = float(klines[0][4])
-                        if start_price > 0 and abs(first_close - start_price) / start_price > 0.5:
-                            errors_list.append(f"{symbol}: price mismatch (model={start_price}, MEXC={first_close}), likely different token")
-                            continue
-                        
-                        # Build 5-minute snapshots
-                        new_snapshots = []
-                        prev_price = start_price
-                        for kline in klines:
-                            close_time = kline[6]  # Close time ms
-                            close_price = float(kline[4])  # Close price
-                            high_price = float(kline[2])  # High price (for SL detection)
-                            minutes_elapsed = int((close_time - start_ms) / 60000)
+                        if interval == "1m":
+                            # MEXC Futures API — 1-minute candles
+                            all_klines = []
+                            cursor_start = start_ts
+                            for page in range(5):  # up to 5 pages x 500 = 2500 candles (41h+)
+                                resp = await client.get(
+                                    f"https://contract.mexc.com/api/v1/contract/kline/{symbol}_USDT",
+                                    params={"interval": "Min1", "start": cursor_start, "end": end_ts}
+                                )
+                                if resp.status_code != 200:
+                                    break
+                                page_data = resp.json().get("data", {})
+                                times = page_data.get("time", [])
+                                closes = page_data.get("close", [])
+                                highs = page_data.get("high", [])
+                                if not times:
+                                    break
+                                for i in range(len(times)):
+                                    all_klines.append({"t": times[i], "c": closes[i], "h": highs[i]})
+                                cursor_start = times[-1] + 60
+                                if cursor_start >= end_ts:
+                                    break
+                                await asyncio.sleep(0.3)
                             
-                            if minutes_elapsed <= 0:
+                            if not all_klines:
+                                errors_list.append(f"{symbol}: no futures klines")
                                 continue
                             
-                            # Label: show hours for readability
-                            hours = minutes_elapsed / 60
-                            if hours >= 1:
+                            # Sanity check first candle
+                            first_close = all_klines[0]["c"]
+                            if abs(first_close - start_price) / start_price > 0.5:
+                                errors_list.append(f"{symbol}: price mismatch (model={start_price}, MEXC={first_close})")
+                                continue
+                            
+                            # Build 1-min snapshots
+                            new_snapshots = []
+                            for k in all_klines:
+                                minutes_elapsed = int((k["t"] - start_ts) / 60)
+                                if minutes_elapsed <= 0:
+                                    continue
+                                hours = minutes_elapsed / 60
+                                label = f"{int(hours)}h{minutes_elapsed%60:02d}m" if hours >= 1 else f"{minutes_elapsed}m"
+                                change_from_start = ((k["c"] - start_price) / start_price) * 100
+                                high_change = ((k["h"] - start_price) / start_price) * 100
+                                new_snapshots.append({
+                                    "label": label,
+                                    "time": datetime.utcfromtimestamp(k["t"]).isoformat(),
+                                    "price": k["c"],
+                                    "high": k["h"],
+                                    "change": round(change_from_start, 2),
+                                    "changeFromStart": round(change_from_start, 2),
+                                    "highChangeFromStart": round(high_change, 2),
+                                })
+                        else:
+                            # MEXC Spot API — 5-minute candles (legacy)
+                            pair = f"{symbol}USDT"
+                            start_ms = start_ts * 1000
+                            end_ms = end_ts * 1000
+                            resp = await client.get(
+                                "https://api.mexc.com/api/v3/klines",
+                                params={"symbol": pair, "interval": "5m", "startTime": start_ms, "endTime": end_ms, "limit": 288}
+                            )
+                            if resp.status_code != 200:
+                                errors_list.append(f"{symbol}: MEXC {resp.status_code}")
+                                continue
+                            klines = resp.json()
+                            if not klines:
+                                errors_list.append(f"{symbol}: no klines")
+                                continue
+                            first_close = float(klines[0][4])
+                            if abs(first_close - start_price) / start_price > 0.5:
+                                errors_list.append(f"{symbol}: price mismatch")
+                                continue
+                            new_snapshots = []
+                            for kline in klines:
+                                close_time = kline[6]
+                                close_price = float(kline[4])
+                                high_price = float(kline[2])
+                                minutes_elapsed = int((close_time - start_ms) / 60000)
+                                if minutes_elapsed <= 0:
+                                    continue
+                                hours = minutes_elapsed / 60
                                 label = f"{hours:.1f}h" if hours % 1 != 0 else f"{int(hours)}h"
-                            else:
-                                label = f"{minutes_elapsed}m"
-                            
-                            change_from_start = ((close_price - start_price) / start_price) * 100
-                            high_change_from_start = ((high_price - start_price) / start_price) * 100
-                            change_from_prev = ((close_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
-                            
-                            new_snapshots.append({
-                                "label": label,
-                                "time": datetime.utcfromtimestamp(close_time / 1000).isoformat(),
-                                "price": close_price,
-                                "high": high_price,
-                                "change": round(change_from_prev, 2),
-                                "changeFromStart": round(change_from_start, 2),
-                                "highChangeFromStart": round(high_change_from_start, 2),
-                            })
-                            prev_price = close_price
+                                change_from_start = ((close_price - start_price) / start_price) * 100
+                                high_change = ((high_price - start_price) / start_price) * 100
+                                new_snapshots.append({
+                                    "label": label,
+                                    "time": datetime.utcfromtimestamp(close_time / 1000).isoformat(),
+                                    "price": close_price,
+                                    "high": high_price,
+                                    "change": round(change_from_start, 2),
+                                    "changeFromStart": round(change_from_start, 2),
+                                    "highChangeFromStart": round(high_change, 2),
+                                })
                         
                         if new_snapshots:
-                            # Only add missing hours, keep existing snapshots
-                            existing_labels = set(s.get("label") for s in c.get("snapshots", []))
-                            added = [s for s in new_snapshots if s["label"] not in existing_labels]
-                            if added:
-                                existing = c.get("snapshots", [])
-                                existing.extend(added)
-                                existing.sort(key=lambda s: float(s["label"].replace("h", "").replace("m", "")) * (1 if "h" in s["label"] else 1/60))
-                                c["snapshots"] = existing
-                                # Update actualChange24h from last snapshot
-                                last = existing[-1]
-                                c["actualPrice24h"] = last["price"]
-                                c["actualChange24h"] = last["changeFromStart"]
-                                c["hit"] = last["changeFromStart"] < 0
-                                c["strongHit"] = last["changeFromStart"] <= -5
-                                entry_fills.append(f"{symbol}: +{len(added)} snapshots (total {len(existing)})")
-                                filled_total += 1
+                            # Replace all snapshots with fresh data
+                            c["snapshots"] = new_snapshots
+                            last = new_snapshots[-1]
+                            c["actualPrice24h"] = last["price"]
+                            c["actualChange24h"] = last["changeFromStart"]
+                            c["hit"] = last["changeFromStart"] < 0
+                            c["strongHit"] = last["changeFromStart"] <= -5
+                            entry_fills.append(f"{symbol}: {len(new_snapshots)} snapshots ({interval})")
+                            filled_total += 1
                     
                     except Exception as e:
                         errors_list.append(f"{symbol}: {e}")
@@ -1442,9 +1477,21 @@ async def backfill_hypothesis_snapshots():
                 if entry_fills:
                     details[str(entry.id)] = entry_fills
                     entry.result_json = json.dumps(data, ensure_ascii=False)
+                
+                # Update verification stats
+                candidates = ds.get("shortCandidates", [])
+                verified = [c2 for c2 in candidates if c2.get("hit") is not None]
+                if verified:
+                    ds["verification"] = {
+                        "hits": sum(1 for c2 in verified if c2.get("hit")),
+                        "total": len(verified),
+                        "winrate": round(sum(1 for c2 in verified if c2.get("hit")) / len(verified) * 100),
+                        "strong_hits": sum(1 for c2 in verified if c2.get("strongHit")),
+                    }
+                    entry.result_json = json.dumps(data, ensure_ascii=False)
         
         await session.commit()
-        return {"success": True, "filled": filled_total, "details": details, "errors": errors_list[:20]}
+        return {"success": True, "filled": filled_total, "details": details, "errors": errors_list[:30]}
 
 
 @app.post("/api/hypothesis_v2/cleanup_old")
