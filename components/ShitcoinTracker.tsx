@@ -173,23 +173,33 @@ const ShitcoinTracker: React.FC = () => {
                     )}
                     {tokens.length > 0 && (
                         <button onClick={() => {
-                            const headers = ['Symbol','Name','Caller','Detected','Safety','Price at Call','MCap at Call','Current Change %','Peak Change %','Liquidity','LP Locked %','Creator %','Contract','Dexscreener'];
-                            const rows = tokens.map(t => [
-                                getSymbol(t),
-                                getName(t),
-                                t.caller,
-                                t.detected_at ? new Date(t.detected_at).toLocaleString('ru-RU') : '',
-                                t.safety,
-                                t.price_at_call,
-                                getMcap(t),
-                                getCurrentChange(t).toFixed(1),
-                                (t.peak_change || 0).toFixed(1),
-                                getLiquidity(t),
-                                getLpPct(t).toFixed(0),
-                                getCreatorPct(t).toFixed(1),
-                                t.contract,
-                                getDexUrl(t),
-                            ].map(v => `"${v}"`).join(','));
+                            // Find max price history length for dynamic columns
+                            const maxHistory = Math.max(...tokens.map(t => t.price_history.length), 0);
+                            const histHeaders = Array.from({length: maxHistory}, (_, i) => `Snap ${i+1} %`);
+                            const headers = ['Symbol','Name','Caller','Detected','Safety','Price at Call','MCap at Call','Current Change %','Peak Change %','Liquidity','LP Locked %','Creator %','Contract','Dexscreener', ...histHeaders];
+                            const rows = tokens.map(t => {
+                                const base = [
+                                    getSymbol(t),
+                                    getName(t),
+                                    t.caller,
+                                    t.detected_at ? new Date(t.detected_at).toLocaleString('ru-RU') : '',
+                                    t.safety,
+                                    t.price_at_call,
+                                    getMcap(t),
+                                    getCurrentChange(t).toFixed(1),
+                                    (t.peak_change || 0).toFixed(1),
+                                    getLiquidity(t),
+                                    getLpPct(t).toFixed(0),
+                                    getCreatorPct(t).toFixed(1),
+                                    t.contract,
+                                    getDexUrl(t),
+                                ];
+                                // Add price history snapshots (change_from_call for each 5min tick)
+                                const snaps = t.price_history.map(ph => ph.change_from_call.toFixed(1));
+                                // Pad to maxHistory
+                                while (snaps.length < maxHistory) snaps.push('');
+                                return [...base, ...snaps].map(v => `"${v}"`).join(',');
+                            });
                             const csv = [headers.join(','), ...rows].join('\n');
                             const blob = new Blob([csv], { type: 'text/csv' });
                             const url = URL.createObjectURL(blob);
