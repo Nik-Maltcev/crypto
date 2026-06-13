@@ -606,9 +606,9 @@ const App: React.FC = () => {
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
         ) : activeTab === 'hypothesis_v2_long' ? (
-          <HypothesisV2 mode="long" />
+          <HypothesisV2 key="long" mode="long" />
         ) : activeTab === 'hypothesis_v2' ? (
-          <HypothesisV2 />
+          <HypothesisV2 key="short" />
         ) : (
           <>
             {/* Progress Display */}

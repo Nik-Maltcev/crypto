@@ -164,7 +164,7 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
         }
     };
 
-    useEffect(() => { fetchHistory(); }, []);
+    useEffect(() => { fetchHistory(); }, [mode]);
 
     const getRiskColor = (risk: string) => {
         if (risk === 'Low') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
