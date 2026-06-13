@@ -961,6 +961,16 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
             if filtered_out > 0:
                 logger.info(f"[HYP_V2] Removed {filtered_out} picks not on RU-accessible exchanges")
 
+            # Filter: keep only coins that have futures on MEXC or Gate (spot-only = can't short)
+            before_futures = len(deepseek_result.get("shortCandidates", []))
+            deepseek_result["shortCandidates"] = [
+                c for c in deepseek_result.get("shortCandidates", [])
+                if c.get("futures", {}).get("MEXC") or c.get("futures", {}).get("Gate")
+            ]
+            futures_filtered = before_futures - len(deepseek_result.get("shortCandidates", []))
+            if futures_filtered > 0:
+                logger.info(f"[HYP_V2] Removed {futures_filtered} picks with no futures on MEXC/Gate (spot only)")
+
             # Combine results
             combined = {
                 "deepseek_v4": deepseek_result,

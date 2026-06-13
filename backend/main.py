@@ -516,6 +516,33 @@ async def fetch_reddit_comments(subreddit: str, limit: int = 100):
     return resp.json()
 
 
+@app.delete("/api/admin/hypothesis/cleanup")
+async def cleanup_hypothesis_entries(date_from: str, date_to: str):
+    """Delete hypothesis_v2 entries between date_from and date_to (YYYY-MM-DD). Admin only."""
+    from sqlalchemy import delete, and_
+    from datetime import datetime as dt
+
+    try:
+        start = dt.strptime(date_from, "%Y-%m-%d")
+        end = dt.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    except ValueError:
+        raise HTTPException(400, "Use YYYY-MM-DD format")
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            delete(AnalysisLog).where(
+                and_(
+                    AnalysisLog.mode == "hypothesis_v2",
+                    AnalysisLog.created_at >= start,
+                    AnalysisLog.created_at <= end,
+                )
+            )
+        )
+        await session.commit()
+        return {"deleted": result.rowcount, "range": f"{date_from} — {date_to}"}
+
+
 @app.get("/api/test/twitter")
 async def test_twitter_list(cursor: str | None = None):
     """Test endpoint: calls Twitter list timeline and returns raw response structure (no LLM costs)."""
