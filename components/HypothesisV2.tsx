@@ -445,6 +445,51 @@ const HypothesisV2: React.FC = () => {
                         Показаны только монеты доступные на MEXC или Gate.io
                     </span>
                 )}
+                {items.filter(i => i.status === 'success').length > 0 && (
+                    <button
+                        onClick={() => {
+                            const allCandidates: {item: HistoryItem; c: ShortCandidate}[] = [];
+                            items.filter(i => i.status === 'success' && i.result?.deepseek_v4?.shortCandidates).forEach(item => {
+                                item.result!.deepseek_v4!.shortCandidates.filter(isOnMyExchanges).forEach(c => {
+                                    allCandidates.push({item, c});
+                                });
+                            });
+                            if (allCandidates.length === 0) return;
+
+                            const maxSnaps = Math.max(...allCandidates.map(({c}) => c.snapshots?.length || 0), 0);
+                            const snapHeaders = Array.from({length: maxSnaps}, (_, i) => {
+                                const label = allCandidates.find(({c}) => c.snapshots && c.snapshots[i])?.c.snapshots?.[i]?.label || `${(i+1)*5}m`;
+                                return label;
+                            });
+                            const headers = ['Date','Symbol','Expected %','Confidence','Actual 24h %','Hit','Exchanges', ...snapHeaders];
+                            const rows = allCandidates.map(({item, c}) => {
+                                const base = [
+                                    item.created_at ? new Date(item.created_at).toLocaleDateString('ru-RU') : '',
+                                    c.symbol,
+                                    (c.expectedChange || 0).toFixed(1),
+                                    c.confidence,
+                                    c.actualChange24h !== undefined ? c.actualChange24h.toFixed(1) : '',
+                                    c.hit === true ? 'YES' : c.hit === false ? 'NO' : '',
+                                    (c.exchanges || []).join(' / '),
+                                ];
+                                const snaps = (c.snapshots || []).map(s => (s.changeFromStart ?? s.change).toFixed(2));
+                                while (snaps.length < maxSnaps) snaps.push('');
+                                return [...base, ...snaps].map(v => `"${v}"`).join(',');
+                            });
+                            const csv = [headers.join(','), ...rows].join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `hypothesis_${new Date().toISOString().slice(0,10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }}
+                        className="px-3 py-2 bg-gray-800/50 text-gray-400 border border-gray-700 hover:border-gray-600 rounded-lg text-sm transition"
+                    >
+                        CSV
+                    </button>
+                )}
             </div>
 
             {/* Schedule info */}
