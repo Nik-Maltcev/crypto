@@ -78,6 +78,7 @@ const HypothesisV2: React.FC = () => {
     const [betSize, setBetSize] = useState(100);
     const [leverage, setLeverage] = useState(10);
     const [stopLoss, setStopLoss] = useState(1);
+    const [fundingRate, setFundingRate] = useState(0.01);
 
     // Exchange filter toggle
     const [onlyMyExchanges, setOnlyMyExchanges] = useState(false);
@@ -548,6 +549,8 @@ const HypothesisV2: React.FC = () => {
                 const LEVERAGE = leverage;
                 const STOP_LOSS_PCT = stopLoss;
                 const COMMISSION_PCT = 0.1;
+                const FUNDING_RATE_PCT = fundingRate; // per 8h, ×3 for 24h
+                const FUNDING_24H_PCT = FUNDING_RATE_PCT * 3;
 
                 // Calculate P&L for a single change value (no SL tracking)
                 const calcRawPnl = (change: number, stopped: boolean) => {
@@ -555,7 +558,8 @@ const HypothesisV2: React.FC = () => {
                     const eff = stopped ? -(STOP_LOSS_PCT) : shortChange;
                     const gross = BET * LEVERAGE * (eff / 100);
                     const commission = BET * LEVERAGE * (COMMISSION_PCT / 100);
-                    return gross - commission;
+                    const funding = BET * LEVERAGE * (FUNDING_24H_PCT / 100);
+                    return gross - commission - funding;
                 };
 
                 // Check if stop-loss was hit by scanning snapshots in order
@@ -621,7 +625,7 @@ const HypothesisV2: React.FC = () => {
                             <span className="text-sm font-bold text-gray-400 uppercase">💰 Калькулятор P&L</span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="grid grid-cols-4 gap-3 mb-4">
                             <div>
                                 <label className="text-sm text-gray-500 block mb-1">Ставка ($)</label>
                                 <input type="number" value={betSize} onChange={e => setBetSize(Number(e.target.value))} 
@@ -637,10 +641,15 @@ const HypothesisV2: React.FC = () => {
                                 <input type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} 
                                     className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
                             </div>
+                            <div>
+                                <label className="text-sm text-gray-500 block mb-1">Funding/8ч (%)</label>
+                                <input type="number" step="0.001" value={fundingRate} onChange={e => setFundingRate(Number(e.target.value))} 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                            </div>
                         </div>
 
                         <div className="text-sm text-gray-500 mb-3">
-                            Позиция: ${BET * LEVERAGE} на монету • Комиссия: {COMMISSION_PCT}% • {candidates.length} монет
+                            Позиция: ${BET * LEVERAGE} на монету • Комиссия: {COMMISSION_PCT}% • Funding/24ч: {FUNDING_24H_PCT.toFixed(3)}% • {candidates.length} монет
                         </div>
 
                         {allLabels.length > 0 && (
@@ -761,7 +770,8 @@ const HypothesisV2: React.FC = () => {
                                                 const eff = stopped ? -stopLoss : shortChange;
                                                 const gross = betSize * leverage * (eff / 100);
                                                 const commission = betSize * leverage * (0.1 / 100);
-                                                pnl += gross - commission;
+                                                const funding = betSize * leverage * (fundingRate * 3 / 100);
+                                                pnl += gross - commission - funding;
                                             });
                                             return (
                                                 <span className={`text-sm px-2 py-0.5 rounded font-bold font-mono ${pnl >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -781,7 +791,7 @@ const HypothesisV2: React.FC = () => {
                                     const sc = item.result?.deepseek_v4?.shortCandidates?.filter((c: ShortCandidate) => isOnMyExchanges(c) && c.snapshots && c.snapshots.length > 0) || [];
                                     if (sc.length === 0) return null;
                                     
-                                    const BET = betSize, LEV = leverage, SL = stopLoss, COM = 0.1;
+                                    const BET = betSize, LEV = leverage, SL = stopLoss, COM = 0.1, FUND = fundingRate * 3;
                                     const allL: string[] = [];
                                     sc.forEach((c: ShortCandidate) => c.snapshots?.forEach(s => { if (!allL.includes(s.label)) allL.push(s.label); }));
                                     allL.sort((a, b) => parseInt(a) - parseInt(b));
@@ -791,14 +801,14 @@ const HypothesisV2: React.FC = () => {
                                         const snaps = allL.map(label => {
                                             const snap = c.snapshots?.find(s => s.label === label);
                                             if (!snap) return null;
-                                            if (stopped) return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100));
+                                            if (stopped) return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                                             const cfs = snap.changeFromStart ?? snap.change;
-                                            if (cfs > SL) { stopped = true; return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)); }
+                                            if (cfs > SL) { stopped = true; return -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)); }
                                             const gross = BET * LEV * (-cfs / 100);
-                                            return gross - (BET * LEV * (COM / 100));
+                                            return gross - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                                         });
-                                        const finalPnl = stopped ? -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) : 
-                                            (c.actualChange24h !== undefined ? (BET * LEV * (-(c.actualChange24h) / 100)) - (BET * LEV * (COM / 100)) : (snaps.filter(s => s !== null).pop() ?? 0));
+                                        const finalPnl = stopped ? -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)) : 
+                                            (c.actualChange24h !== undefined ? (BET * LEV * (-(c.actualChange24h) / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100)) : (snaps.filter(s => s !== null).pop() ?? 0));
                                         return { symbol: c.symbol, snaps, pnl: finalPnl, stopped };
                                     });
 
