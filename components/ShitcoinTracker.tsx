@@ -299,38 +299,6 @@ const ShitcoinTracker: React.FC = () => {
                 </div>
             )}
 
-            {/* Buy Signals — tokens with +50%+ */}
-            {tokens.filter(t => getCurrentChange(t) >= 50).length > 0 && (
-                <div className="bg-gradient-to-r from-emerald-900/20 to-green-900/20 border border-emerald-500/30 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="text-sm font-bold text-emerald-400 uppercase">🚀 Покупать (+50%+)</span>
-                        <span className="text-xs text-gray-500">{tokens.filter(t => getCurrentChange(t) >= 50).length} токенов</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {tokens.filter(t => getCurrentChange(t) >= 50).map(token => {
-                            const change = getCurrentChange(token);
-                            return (
-                                <div key={token.contract} className="bg-gray-900/50 border border-emerald-700/30 rounded-lg p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="data-secret text-base font-bold text-white">{getSymbol(token)}</span>
-                                        <span className="text-lg font-bold text-emerald-400">+{change.toFixed(0)}%</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-                                        <span>MCap: {formatMcap(getMcap(token))}</span>
-                                        <span>Liq: {formatMcap(getLiquidity(token))}</span>
-                                    </div>
-                                    <a href={`https://app.telemetry.io/@lx0aw_ru?action=buy&token=${token.contract}`}
-                                        target="_blank" rel="noopener"
-                                        className="block w-full text-center px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition">
-                                        🚀 Купить
-                                    </a>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
             {/* Token list */}
             {tokens.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-gray-800 rounded-xl">
