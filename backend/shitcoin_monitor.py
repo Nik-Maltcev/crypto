@@ -307,15 +307,18 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
 
 
 async def update_price_tracking():
-    """Update prices for all active tokens in DB (runs every 5 min)."""
+    """Update prices for active tokens detected in the last 24h."""
     from core.models import ShitcoinDetection
     from sqlalchemy import select as sa_select
     
     async_session = get_async_session()
     async with async_session() as session:
+        # Only update tokens from last 24h (not all 217+)
+        cutoff = datetime.utcnow() - timedelta(hours=24)
         result = await session.execute(
             sa_select(ShitcoinDetection)
             .where(ShitcoinDetection.status == "active")
+            .where(ShitcoinDetection.detected_at >= cutoff)
             .order_by(ShitcoinDetection.detected_at.desc())
         )
         tokens = result.scalars().all()
