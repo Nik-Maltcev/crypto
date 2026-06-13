@@ -1205,6 +1205,54 @@ async def enrich_hypothesis_v2_exchanges():
         return {"success": True, "enriched": len(all_symbols), "exchanges": exchanges_map}
 
 
+@app.post("/api/hypothesis_v2/remove_from_all")
+async def remove_symbols_from_all(request: Request):
+    """Remove symbols from ALL hypothesis_v2 entries (not just latest)."""
+    body = await request.json()
+    symbols = [s.upper() for s in body.get("symbols", [])]
+    if not symbols:
+        raise HTTPException(400, "Provide 'symbols' array")
+
+    async_session = get_async_session()
+    async with async_session() as session:
+        result = await session.execute(
+            select(AnalysisLog)
+            .where(AnalysisLog.mode == "hypothesis_v2")
+            .where(AnalysisLog.status == "success")
+        )
+        entries = result.scalars().all()
+        total_removed = 0
+
+        for entry in entries:
+            if not entry.result_json:
+                continue
+            data = json.loads(entry.result_json)
+            ds = data.get("deepseek_v4")
+            if not ds:
+                continue
+            before = len(ds.get("shortCandidates", []))
+            ds["shortCandidates"] = [
+                c for c in ds.get("shortCandidates", [])
+                if c.get("symbol", "").upper() not in symbols
+            ]
+            removed = before - len(ds["shortCandidates"])
+            if removed > 0:
+                total_removed += removed
+                # Recalculate verification
+                verified = [c for c in ds["shortCandidates"] if c.get("hit") is not None]
+                if verified:
+                    ds["verification"] = {
+                        "hits": sum(1 for c in verified if c.get("hit")),
+                        "total": len(verified),
+                        "winrate": round(sum(1 for c in verified if c.get("hit")) / len(verified) * 100),
+                        "strong_hits": sum(1 for c in verified if c.get("strongHit")),
+                    }
+                entry.result_json = json.dumps(data, ensure_ascii=False)
+
+        await session.commit()
+        return {"success": True, "removed": total_removed, "symbols": symbols, "entries_checked": len(entries)}
+
+
 @app.delete("/api/hypothesis_v2/remove/{symbol}")
 async def remove_hypothesis_v2_candidate(symbol: str):
     """Remove a coin from the latest hypothesis_v2 result."""
