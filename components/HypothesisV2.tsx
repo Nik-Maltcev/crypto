@@ -86,11 +86,15 @@ const HypothesisV2: React.FC = () => {
     // Exchanges available in Russia (verified May 2026)
     const RU_EXCHANGES = new Set(['Bybit', 'OKX', 'Bitget', 'BingX', 'MEXC', 'KuCoin', 'Gate.io', 'Gate', 'CoinEx', 'LBank', 'XT.COM', 'BitMart', 'Pionex', 'BTCC', 'BYDFi', 'CoinTR', 'DigiFinex', 'Bitrue', 'AscendEX (BitMax)', 'BloFin', 'WEEX']);
 
-    // Filter helper: check if candidate is on my exchanges
+    // Filter helper: check if candidate is on my exchanges (futures, not spot-only)
     const isOnMyExchanges = (c: ShortCandidate) => {
         if (!onlyMyExchanges) return true;
         if (!c.exchanges || c.exchanges.length === 0) return false;
-        return c.exchanges.some(ex => MY_EXCHANGES.has(ex));
+        return c.exchanges.some(ex => {
+            const isSpotOnly = ex.includes('(spot)');
+            if (isSpotOnly) return false;
+            return MY_EXCHANGES.has(ex) || ex.startsWith('Gate');
+        });
     };
 
     // Timer: next verification countdown

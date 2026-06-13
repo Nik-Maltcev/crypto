@@ -196,6 +196,52 @@ async def _fetch_exchanges_for_symbols(symbols: list[str], cmc_key: str = "") ->
     return exchanges_map
 
 
+async def _check_futures_availability(symbols: list[str]) -> dict[str, dict[str, bool]]:
+    """Check if symbols have futures (not just spot) on MEXC and Gate.
+    Returns: {symbol: {"MEXC": True/False, "Gate": True/False}}
+    """
+    result = {s: {"MEXC": False, "Gate": False} for s in symbols}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        # MEXC Futures — get all contract symbols
+        try:
+            resp = await client.get("https://contract.mexc.com/api/v1/contract/detail")
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                mexc_futures_symbols = set()
+                for contract in data:
+                    # symbol format: "BTC_USDT"
+                    base = contract.get("symbol", "").split("_")[0].upper()
+                    if base:
+                        mexc_futures_symbols.add(base)
+                for sym in symbols:
+                    if sym.upper() in mexc_futures_symbols:
+                        result[sym]["MEXC"] = True
+                logger.info(f"[HYP_V2] MEXC futures: {sum(1 for s in symbols if result[s]['MEXC'])}/{len(symbols)} available")
+        except Exception as e:
+            logger.warning(f"[HYP_V2] MEXC futures check error: {e}")
+
+        # Gate Futures — get all contract symbols
+        try:
+            resp = await client.get("https://api.gateio.ws/api/v4/futures/usdt/contracts")
+            if resp.status_code == 200:
+                data = resp.json()
+                gate_futures_symbols = set()
+                for contract in data:
+                    # name format: "BTC_USDT"
+                    base = contract.get("name", "").split("_")[0].upper()
+                    if base:
+                        gate_futures_symbols.add(base)
+                for sym in symbols:
+                    if sym.upper() in gate_futures_symbols:
+                        result[sym]["Gate"] = True
+                logger.info(f"[HYP_V2] Gate futures: {sum(1 for s in symbols if result[s]['Gate'])}/{len(symbols)} available")
+        except Exception as e:
+            logger.warning(f"[HYP_V2] Gate futures check error: {e}")
+
+    return result
+
+
 async def _fetch_cmc_losers_and_volatile(cmc_key: str) -> list[dict]:
     """Fetch potential drop candidates from CMC: losers, high-volume alts, recently pumped."""
     coins = []
@@ -870,6 +916,26 @@ async def run_hypothesis_v2(trigger: str = "scheduled") -> None:
                 # Add exchanges to each candidate
                 for c in deepseek_result.get("shortCandidates", []):
                     c["exchanges"] = exchanges_map.get(c.get("symbol", "").upper(), [])
+
+            # Check futures availability on MEXC and Gate
+            remaining_symbols = [c.get("symbol", "").upper() for c in deepseek_result.get("shortCandidates", [])]
+            if remaining_symbols:
+                logger.info(f"[HYP_V2] Checking futures availability for {len(remaining_symbols)} symbols...")
+                futures_map = await _check_futures_availability(remaining_symbols)
+                for c in deepseek_result.get("shortCandidates", []):
+                    sym = c.get("symbol", "").upper()
+                    futures_info = futures_map.get(sym, {"MEXC": False, "Gate": False})
+                    c["futures"] = futures_info
+                    # Mark exchanges with (spot) if no futures
+                    updated_exchanges = []
+                    for ex in c.get("exchanges", []):
+                        if ex in ("MEXC", "MEXC Global") and not futures_info["MEXC"]:
+                            updated_exchanges.append(f"{ex} (spot)")
+                        elif ex in ("Gate.io", "Gate") and not futures_info["Gate"]:
+                            updated_exchanges.append(f"{ex} (spot)")
+                        else:
+                            updated_exchanges.append(ex)
+                    c["exchanges"] = updated_exchanges
 
             # Filter: keep only coins available on major exchanges accessible from Russia
             RU_ACCESSIBLE_EXCHANGES = {
