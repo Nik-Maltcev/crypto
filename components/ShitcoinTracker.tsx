@@ -258,47 +258,6 @@ const ShitcoinTracker: React.FC = () => {
                 </div>
             )}
 
-            {/* Top performers & Worst */}
-            {tokens.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Best */}
-                    <div className="bg-brand-card border border-emerald-800/30 rounded-xl p-4">
-                        <div className="text-xs font-bold text-emerald-400 uppercase mb-3">🏆 Лучшие выстрелы</div>
-                        <div className="space-y-2">
-                            {[...tokens].sort((a, b) => (b.peak_change || getCurrentChange(b)) - (a.peak_change || getCurrentChange(a))).slice(0, 5).map(t => (
-                                <div key={t.contract} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="data-secret text-sm font-bold text-white">{getSymbol(t)}</span>
-                                        <span className="text-xs text-gray-500">{getTimeSince(t.detected_at)}</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-bold text-emerald-400">+{(t.peak_change || getCurrentChange(t)).toFixed(0)}%</span>
-                                        {getCurrentChange(t) < (t.peak_change || 0) && (
-                                            <span className="text-xs text-gray-500 ml-1">(сейчас {getCurrentChange(t) >= 0 ? '+' : ''}{getCurrentChange(t).toFixed(0)}%)</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    {/* Worst */}
-                    <div className="bg-brand-card border border-red-800/30 rounded-xl p-4">
-                        <div className="text-xs font-bold text-red-400 uppercase mb-3">💀 Слились</div>
-                        <div className="space-y-2">
-                            {[...tokens].sort((a, b) => getCurrentChange(a) - getCurrentChange(b)).slice(0, 5).map(t => (
-                                <div key={t.contract} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="data-secret text-sm font-bold text-white">{getSymbol(t)}</span>
-                                        <span className="text-xs text-gray-500">{getTimeSince(t.detected_at)}</span>
-                                    </div>
-                                    <span className="text-sm font-bold text-red-400">{getCurrentChange(t).toFixed(0)}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Token list */}
             {tokens.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-gray-800 rounded-xl">
