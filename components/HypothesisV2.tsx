@@ -592,48 +592,13 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                 const getAvg = (vals: number[]) => vals.reduce((a, b) => a + b, 0) / vals.length;
                 const getPctNegative = (vals: number[]) => Math.round(vals.filter(v => v < 0).length / vals.length * 100);
 
-                // Per-coin: best hour (lowest average change = best for short)
-                const perCoinBestHour: { symbol: string; bestHour: number; bestChange: number; changes: number[] }[] = [];
-                // Group candidates by symbol across all analyses
-                const symbolMap = new Map<string, number[][]>(); // symbol -> [hour1_vals, hour2_vals, hour3_vals, hour4_vals]
-                allCandidates.forEach(c => {
-                    const sym = c.symbol;
-                    if (!symbolMap.has(sym)) symbolMap.set(sym, [[], [], [], []]);
-                    const arr = symbolMap.get(sym)!;
-                    for (let h = 0; h < 4; h++) {
-                        const targetMin = (h + 1) * 60;
-                        const snap = c.snapshots?.find(s => {
-                            const mins = labelToMinutes(s.label || '');
-                            return mins >= targetMin - 5 && mins <= targetMin + 5;
-                        });
-                        if (snap && snap.changeFromStart !== undefined) {
-                            arr[h].push(snap.changeFromStart);
-                        }
-                    }
-                });
-
-                symbolMap.forEach((hourArrays, symbol) => {
-                    const avgs = hourArrays.map(vals => vals.length > 0 ? getAvg(vals) : null);
-                    const validAvgs = avgs.filter(a => a !== null) as number[];
-                    if (validAvgs.length < 2) return;
-                    const bestIdx = avgs.indexOf(Math.min(...validAvgs));
-                    perCoinBestHour.push({
-                        symbol,
-                        bestHour: bestIdx + 1,
-                        bestChange: avgs[bestIdx]!,
-                        changes: avgs.map(a => a ?? 0),
-                    });
-                });
-                perCoinBestHour.sort((a, b) => a.bestChange - b.bestChange);
-
                 return (
                     <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-r from-indigo-900/20 to-purple-900/20">
-                            <span className="text-sm font-bold text-indigo-400">{isLong ? 'Статистика 1-4ч (когда растёт)' : 'Статистика 1-4ч (когда падает)'}</span>
+                            <span className="text-sm font-bold text-indigo-400">Статистика 1-4ч (когда падает)</span>
                             <span className="text-sm text-gray-500 ml-2">• {allCandidates.length} монет</span>
                         </div>
-                        <div className="p-4 space-y-4">
-                            {/* Hourly summary */}
+                        <div className="p-4">
                             <div className="grid grid-cols-4 gap-3">
                                 {hourlyData.map(({ hour, values }) => {
                                     const avg = getAvg(values);
@@ -655,42 +620,6 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                                     );
                                 })}
                             </div>
-
-                            {/* Per-coin breakdown */}
-                            {perCoinBestHour.length > 0 && (
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">По монетам (лучший час для {isLong ? 'лонга' : 'шорта'})</div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="text-gray-500 border-b border-gray-700">
-                                                    <th className="text-left py-1 pr-3">Монета</th>
-                                                    <th className="text-center px-2">1ч</th>
-                                                    <th className="text-center px-2">2ч</th>
-                                                    <th className="text-center px-2">3ч</th>
-                                                    <th className="text-center px-2">4ч</th>
-                                                    <th className="text-right pl-2">Лучший</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {perCoinBestHour.slice(0, 15).map(({ symbol, bestHour, bestChange, changes }) => (
-                                                    <tr key={symbol} className="border-b border-gray-800/40">
-                                                        <td className="py-1 pr-3 font-bold text-white"><span className="data-secret">{symbol}</span></td>
-                                                        {changes.map((ch, i) => (
-                                                            <td key={i} className={`text-center px-2 py-1 font-mono ${
-                                                                i === bestHour - 1 ? 'font-bold underline' : ''
-                                                            } ${ch < 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                                {ch >= 0 ? '+' : ''}{ch.toFixed(1)}
-                                                            </td>
-                                                        ))}
-                                                        <td className="text-right pl-2 py-1 text-xs text-indigo-400 font-bold">{bestHour}ч</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 );
