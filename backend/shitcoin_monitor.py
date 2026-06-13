@@ -231,10 +231,20 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
             _log(f"Already in DB: {contract[:12]}...")
             return None
     
-    # Parallel checks
-    rug_task = check_rugcheck(contract)
-    dex_task = check_dexscreener(contract)
-    rug_result, dex_result = await asyncio.gather(rug_task, dex_task)
+    # Parallel checks with timeout protection
+    try:
+        rug_task = check_rugcheck(contract)
+        dex_task = check_dexscreener(contract)
+        rug_result, dex_result = await asyncio.wait_for(
+            asyncio.gather(rug_task, dex_task),
+            timeout=20
+        )
+    except asyncio.TimeoutError:
+        _log(f"{contract[:12]}... timeout on RugCheck/Dexscreener, skipping")
+        return None
+    except Exception as e:
+        _log(f"{contract[:12]}... error in checks: {e}")
+        return None
     
     # Skip if Dexscreener found nothing
     if not dex_result or not dex_result.get("price_usd"):
@@ -405,7 +415,9 @@ async def start_monitor():
             _log(f"REGEX found {len(addresses)} addresses from @{sender}: {[a[:8] for a in addresses]}")
             for addr in addresses:
                 try:
-                    await process_new_token(addr, sender, text)
+                    await asyncio.wait_for(process_new_token(addr, sender, text), timeout=30)
+                except asyncio.TimeoutError:
+                    _log(f"TIMEOUT processing {addr[:12]}... (30s)")
                 except Exception as e:
                     _log(f"ERROR processing {addr[:12]}: {e}")
         else:
@@ -415,7 +427,9 @@ async def start_monitor():
             if extracted:
                 _log(f"AI extracted: {extracted} from @{sender}")
                 try:
-                    await process_new_token(extracted, sender, text)
+                    await asyncio.wait_for(process_new_token(extracted, sender, text), timeout=30)
+                except asyncio.TimeoutError:
+                    _log(f"TIMEOUT processing AI-extracted {extracted[:12]}... (30s)")
                 except Exception as e:
                     _log(f"ERROR processing AI-extracted {extracted[:12]}: {e}")
             else:
