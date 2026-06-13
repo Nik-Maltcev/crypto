@@ -548,7 +548,7 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">❌ {error}</div>
             )}
 
-            {/* Hourly breakdown — first 4 hours (short only) */}
+            {/* Hourly P&L summary (1-4h, all history, short only) */}
             {!isLong && (() => {
                 const allCandidates: ShortCandidate[] = [];
                 items.filter(i => i.status === 'success' && i.result?.deepseek_v4?.shortCandidates).forEach(item => {
@@ -558,7 +558,12 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                 });
                 if (allCandidates.length < 3) return null;
 
-                // Parse minutes from label
+                const BET = betSize;
+                const LEV = leverage;
+                const SL = stopLoss;
+                const COM = 0.1;
+                const FUND = fundingRate * 3;
+
                 const labelToMinutes = (label: string): number => {
                     let mins = 0;
                     const hMatch = label.match(/^(\d+)h/);
@@ -568,57 +573,72 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                     return mins;
                 };
 
-                // Aggregate by hour (1-4h)
-                const hourlyData: { hour: number; values: number[] }[] = [];
-                for (let h = 1; h <= 4; h++) {
-                    const values: number[] = [];
+                // For each hour (1-4), calculate total P&L if all positions were closed at that hour
+                const hourlyPnl = [1, 2, 3, 4].map(hour => {
+                    const targetMin = hour * 60;
+                    let totalPnl = 0;
+                    let count = 0;
+
                     allCandidates.forEach(c => {
-                        const targetMinutes = h * 60;
+                        const startPrice = c.currentPrice;
+                        if (!startPrice || startPrice <= 0) return;
+
+                        // Check if SL was hit before this hour
+                        let stopped = false;
+                        for (const snap of (c.snapshots || [])) {
+                            const mins = labelToMinutes(snap.label || '');
+                            if (mins > targetMin) break;
+                            const cfs = snap.changeFromStart ?? snap.change;
+                            if (cfs > SL) { stopped = true; break; }
+                        }
+
+                        // Get change at this hour
                         const snap = c.snapshots?.find(s => {
                             const mins = labelToMinutes(s.label || '');
-                            return mins >= targetMinutes - 5 && mins <= targetMinutes + 5;
+                            return mins >= targetMin - 5 && mins <= targetMin + 5;
                         });
-                        if (snap && snap.changeFromStart !== undefined) {
-                            values.push(snap.changeFromStart);
+
+                        if (!snap && !stopped) return;
+
+                        let pnl: number;
+                        if (stopped) {
+                            pnl = -(BET * LEV * (SL / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
+                        } else {
+                            const cfs = snap!.changeFromStart ?? snap!.change;
+                            const shortProfit = -cfs;
+                            pnl = (BET * LEV * (shortProfit / 100)) - (BET * LEV * (COM / 100)) - (BET * LEV * (FUND / 100));
                         }
+
+                        totalPnl += pnl;
+                        count++;
                     });
-                    if (values.length > 0) {
-                        hourlyData.push({ hour: h, values });
-                    }
-                }
 
-                if (hourlyData.length < 2) return null;
+                    return { hour, totalPnl, count, avgPnl: count > 0 ? totalPnl / count : 0 };
+                });
 
-                const getAvg = (vals: number[]) => vals.reduce((a, b) => a + b, 0) / vals.length;
-                const getPctNegative = (vals: number[]) => Math.round(vals.filter(v => v < 0).length / vals.length * 100);
+                const bestHour = hourlyPnl.reduce((best, h) => h.totalPnl > best.totalPnl ? h : best, hourlyPnl[0]);
 
                 return (
                     <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-r from-indigo-900/20 to-purple-900/20">
-                            <span className="text-sm font-bold text-indigo-400">Статистика 1-4ч (когда падает)</span>
-                            <span className="text-sm text-gray-500 ml-2">• {allCandidates.length} монет</span>
+                            <span className="text-sm font-bold text-indigo-400">P&L по часам (если закрыть все позиции)</span>
+                            <span className="text-sm text-gray-500 ml-2">• {allCandidates.length} монет из {items.filter(i => i.status === 'success').length} анализов</span>
                         </div>
                         <div className="p-4">
                             <div className="grid grid-cols-4 gap-3">
-                                {hourlyData.map(({ hour, values }) => {
-                                    const avg = getAvg(values);
-                                    const pctDown = getPctNegative(values);
-                                    return (
-                                        <div key={hour} className={`rounded-lg p-3 text-center border ${
-                                            avg <= -3 ? 'bg-emerald-500/10 border-emerald-500/30' :
-                                            avg <= -1 ? 'bg-emerald-500/5 border-emerald-500/20' :
-                                            avg >= 3 ? 'bg-red-500/10 border-red-500/30' :
-                                            avg >= 1 ? 'bg-red-500/5 border-red-500/20' :
-                                            'bg-gray-800/30 border-gray-700/30'
-                                        }`}>
-                                            <div className="text-xs text-gray-400 font-bold">{hour}ч</div>
-                                            <div className={`text-lg font-bold ${avg < 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                {avg >= 0 ? '+' : ''}{avg.toFixed(1)}%
-                                            </div>
-                                            <div className="text-[10px] text-gray-500">{pctDown}% вниз • n={values.length}</div>
+                                {hourlyPnl.map(({ hour, totalPnl, count, avgPnl }) => (
+                                    <div key={hour} className={`rounded-lg p-3 text-center border ${
+                                        hour === bestHour.hour ? 'border-indigo-500/50 bg-indigo-500/10' :
+                                        totalPnl >= 0 ? 'border-emerald-500/20 bg-emerald-500/5' :
+                                        'border-red-500/20 bg-red-500/5'
+                                    }`}>
+                                        <div className="text-xs text-gray-400 font-bold">{hour}ч {hour === bestHour.hour ? '⭐' : ''}</div>
+                                        <div className={`text-lg font-bold font-mono ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(0)}$
                                         </div>
-                                    );
-                                })}
+                                        <div className="text-[10px] text-gray-500">~{avgPnl >= 0 ? '+' : ''}{avgPnl.toFixed(0)}$/монета • n={count}</div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
