@@ -548,8 +548,8 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">❌ {error}</div>
             )}
 
-            {/* Hourly breakdown — first 4 hours + per-coin best hour */}
-            {(() => {
+            {/* Hourly breakdown — first 4 hours (short only) */}
+            {!isLong && (() => {
                 const allCandidates: ShortCandidate[] = [];
                 items.filter(i => i.status === 'success' && i.result?.deepseek_v4?.shortCandidates).forEach(item => {
                     item.result!.deepseek_v4!.shortCandidates.filter(isOnMyExchanges).forEach(c => {
