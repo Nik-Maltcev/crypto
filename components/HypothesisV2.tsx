@@ -86,7 +86,7 @@ const HypothesisV2: React.FC<HypothesisV2Props> = ({ mode = 'short' }) => {
     const [leverage, setLeverage] = useState(10);
     const [stopLoss, setStopLoss] = useState(1);
     const [fundingRate, setFundingRate] = useState(0.01);
-    const [mirrorLong, setMirrorLong] = useState(false);
+    const [mirrorLong, setMirrorLong] = useState(isLong);
 
     // Exchange filter toggle
     const [onlyMyExchanges, setOnlyMyExchanges] = useState(false);
