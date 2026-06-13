@@ -1119,9 +1119,16 @@ async def verify_hypothesis_v2_results() -> None:
 
             logger.info(f"[HYP_V2] Got prices for {len(prices)}/{len(all_symbols)} symbols")
 
-            # Calculate hours since analysis
-            hours_elapsed = (datetime.utcnow() - entry.created_at).total_seconds() / 3600
-            snapshot_label = f"{int(hours_elapsed)}h"
+            # Calculate minutes since analysis
+            minutes_elapsed = int((datetime.utcnow() - entry.created_at).total_seconds() / 60)
+            hours_elapsed = minutes_elapsed / 60
+            # Label: "5m", "15m", ..., "1h05m", "2h30m" etc.
+            if minutes_elapsed < 60:
+                snapshot_label = f"{minutes_elapsed}m"
+            else:
+                h = minutes_elapsed // 60
+                m = minutes_elapsed % 60
+                snapshot_label = f"{h}h{m:02d}m"
             now_iso = datetime.utcnow().isoformat()
 
             # Process shorts
@@ -1181,7 +1188,7 @@ async def verify_hypothesis_v2_results() -> None:
 
                 logger.info(f"[HYP_V2] ID {entry.id} FINAL: shorts {short_hits}/{short_total}")
             else:
-                logger.info(f"[HYP_V2] ID {entry.id} snapshot at {snapshot_label}")
+                logger.info(f"[HYP_V2] ID {entry.id} snapshot at {snapshot_label} ({minutes_elapsed}m elapsed)")
 
             entry.result_json = json.dumps(data, ensure_ascii=False)
 
