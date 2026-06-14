@@ -127,7 +127,7 @@ const BitcoinPatterns: React.FC = () => {
                     <p className="text-gray-400 text-sm">Когда BTC чаще растёт/падает за последние {days} дней (Binance, UTC→МСК)</p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
-                    {[7, 14, 30, 90, 365].map(d => (
+                    {[7, 14, 30, 90, 180, 365].map(d => (
                         <button key={d} onClick={() => setDays(d)}
                             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${days === d ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-500/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700'}`}>
                             {d}д
