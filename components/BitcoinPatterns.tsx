@@ -27,6 +27,17 @@ const BitcoinPatterns: React.FC = () => {
     const [error, setError] = useState('');
     const [bestUp, setBestUp] = useState<TimeSlot | null>(null);
     const [bestDown, setBestDown] = useState<TimeSlot | null>(null);
+    const [timezone, setTimezone] = useState<'msk' | 'et'>('msk');
+
+    // MSK = UTC+3, ET summer (EDT) = UTC-4, ET winter (EST) = UTC-5
+    // Currently June = summer = EDT = UTC-4
+    const tzOffset = timezone === 'msk' ? 3 : -4; // hours from UTC
+    const tzLabel = timezone === 'msk' ? 'МСК' : 'ET';
+
+    const formatTime = (utcHour: number, utcMin: number): string => {
+        let h = (utcHour + tzOffset + 24) % 24;
+        return `${h.toString().padStart(2, '0')}:${utcMin.toString().padStart(2, '0')}`;
+    };
 
     const fetchAndAnalyze = async () => {
         setIsLoading(true);
@@ -85,7 +96,7 @@ const BitcoinPatterns: React.FC = () => {
                 const upCount = changes.filter(c => c > 0).length;
                 const downCount = changes.filter(c => c < 0).length;
 
-                // MSK label
+                // MSK label (stored for backward compat, but we use formatTime for display)
                 const mskH = (h + 3) % 24;
                 const mskLabel = `${mskH.toString().padStart(2, '0')}:${mStr}`;
 
@@ -124,9 +135,19 @@ const BitcoinPatterns: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-white mb-2">BTC 5-минутные паттерны</h2>
-                    <p className="text-gray-400 text-sm">Когда BTC чаще растёт/падает за последние {days} дней (Binance, UTC→МСК)</p>
+                    <p className="text-gray-400 text-sm">Когда BTC чаще растёт/падает за последние {days} дней (Binance, {tzLabel})</p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
+                    <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5 mr-2">
+                        <button onClick={() => setTimezone('msk')}
+                            className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'msk' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
+                            МСК
+                        </button>
+                        <button onClick={() => setTimezone('et')}
+                            className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'et' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
+                            ET
+                        </button>
+                    </div>
                     {[7, 14, 30, 90, 180, 365].map(d => (
                         <button key={d} onClick={() => setDays(d)}
                             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${days === d ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-500/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700'}`}>
@@ -143,13 +164,13 @@ const BitcoinPatterns: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-brand-card border border-emerald-800/30 rounded-xl p-4 text-center">
                         <div className="text-xs text-gray-500 uppercase mb-1">Чаще растёт</div>
-                        <div className="text-2xl font-bold text-emerald-400">{bestUp.label} МСК</div>
+                        <div className="text-2xl font-bold text-emerald-400">{formatTime(bestUp.hour, bestUp.minute)} {tzLabel}</div>
                         <div className="text-sm text-gray-400">UP {bestUp.winrate}% ({bestUp.upCount}/{bestUp.total})</div>
                         <div className="text-xs text-gray-500">avg {bestUp.avgChange >= 0 ? '+' : ''}{bestUp.avgChange.toFixed(3)}%</div>
                     </div>
                     <div className="bg-brand-card border border-red-800/30 rounded-xl p-4 text-center">
                         <div className="text-xs text-gray-500 uppercase mb-1">Чаще падает</div>
-                        <div className="text-2xl font-bold text-red-400">{bestDown.label} МСК</div>
+                        <div className="text-2xl font-bold text-red-400">{formatTime(bestDown.hour, bestDown.minute)} {tzLabel}</div>
                         <div className="text-sm text-gray-400">DOWN {100 - bestDown.winrate}% ({bestDown.downCount}/{bestDown.total})</div>
                         <div className="text-xs text-gray-500">avg {bestDown.avgChange >= 0 ? '+' : ''}{bestDown.avgChange.toFixed(3)}%</div>
                     </div>
@@ -159,7 +180,7 @@ const BitcoinPatterns: React.FC = () => {
             {/* Heatmap table */}
             <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-800">
-                    <span className="text-sm font-bold text-gray-400">Все 5-минутные слоты (МСК) — {slots.length} интервалов</span>
+                    <span className="text-sm font-bold text-gray-400">Все 5-минутные слоты ({tzLabel}) — {slots.length} интервалов</span>
                 </div>
                 <div className="p-4 overflow-x-auto">
                     <div className="grid grid-cols-12 gap-1" style={{ minWidth: '900px' }}>
@@ -174,9 +195,9 @@ const BitcoinPatterns: React.FC = () => {
                                         isDown ? `bg-red-500/${Math.round(intensity * 30 + 5)}` :
                                         'bg-gray-800/30'
                                     }`}
-                                    title={`${slot.label} МСК | UP ${slot.winrate}% | avg ${slot.avgChange.toFixed(3)}% | n=${slot.total}`}
+                                    title={`${formatTime(slot.hour, slot.minute)} ${tzLabel} | UP ${slot.winrate}% | avg ${slot.avgChange.toFixed(3)}% | n=${slot.total}`}
                                 >
-                                    <div className="text-[8px] text-gray-500">{slot.label}</div>
+                                    <div className="text-[8px] text-gray-500">{formatTime(slot.hour, slot.minute)}</div>
                                     <div className={`text-[10px] font-bold ${isUp ? 'text-emerald-400' : isDown ? 'text-red-400' : 'text-gray-500'}`}>
                                         {slot.winrate}%
                                     </div>
@@ -197,7 +218,7 @@ const BitcoinPatterns: React.FC = () => {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-gray-500 border-b border-gray-700">
-                                <th className="text-left py-2">Время МСК</th>
+                                <th className="text-left py-2">Время {tzLabel}</th>
                                 <th className="text-center py-2">UP %</th>
                                 <th className="text-center py-2">Avg %</th>
                                 <th className="text-center py-2">UP/DOWN</th>
@@ -207,7 +228,7 @@ const BitcoinPatterns: React.FC = () => {
                         <tbody>
                             {[...slots].sort((a, b) => b.winrate - a.winrate).slice(0, 20).map(slot => (
                                 <tr key={`up-${slot.hour}-${slot.minute}`} className="border-b border-gray-800/40">
-                                    <td className="py-1.5 font-bold text-white">{slot.label}</td>
+                                    <td className="py-1.5 font-bold text-white">{formatTime(slot.hour, slot.minute)}</td>
                                     <td className="text-center py-1.5 font-mono font-bold text-emerald-400">{slot.winrate}%</td>
                                     <td className={`text-center py-1.5 font-mono ${slot.avgChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {slot.avgChange >= 0 ? '+' : ''}{slot.avgChange.toFixed(3)}%
@@ -230,7 +251,7 @@ const BitcoinPatterns: React.FC = () => {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-gray-500 border-b border-gray-700">
-                                <th className="text-left py-2">Время МСК</th>
+                                <th className="text-left py-2">Время {tzLabel}</th>
                                 <th className="text-center py-2">DOWN %</th>
                                 <th className="text-center py-2">Avg %</th>
                                 <th className="text-center py-2">UP/DOWN</th>
@@ -240,7 +261,7 @@ const BitcoinPatterns: React.FC = () => {
                         <tbody>
                             {[...slots].sort((a, b) => a.winrate - b.winrate).slice(0, 20).map(slot => (
                                 <tr key={`down-${slot.hour}-${slot.minute}`} className="border-b border-gray-800/40">
-                                    <td className="py-1.5 font-bold text-white">{slot.label}</td>
+                                    <td className="py-1.5 font-bold text-white">{formatTime(slot.hour, slot.minute)}</td>
                                     <td className="text-center py-1.5 font-mono font-bold text-red-400">{100 - slot.winrate}%</td>
                                     <td className={`text-center py-1.5 font-mono ${slot.avgChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {slot.avgChange >= 0 ? '+' : ''}{slot.avgChange.toFixed(3)}%
