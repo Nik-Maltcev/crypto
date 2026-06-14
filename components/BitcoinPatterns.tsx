@@ -188,9 +188,10 @@ const BitcoinPatterns: React.FC = () => {
             </div>
 
             {/* Table for top patterns */}
+            {/* Top UP patterns */}
             <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-800">
-                    <span className="text-sm font-bold text-gray-400">Топ-20 слотов (сильнейшие паттерны)</span>
+                    <span className="text-sm font-bold text-emerald-400">Топ-20 — чаще растёт (UP)</span>
                 </div>
                 <div className="p-4">
                     <table className="w-full text-sm">
@@ -204,12 +205,43 @@ const BitcoinPatterns: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {[...slots].sort((a, b) => Math.abs(b.winrate - 50) - Math.abs(a.winrate - 50)).slice(0, 20).map(slot => (
-                                <tr key={`table-${slot.hour}-${slot.minute}`} className="border-b border-gray-800/40">
+                            {[...slots].sort((a, b) => b.winrate - a.winrate).slice(0, 20).map(slot => (
+                                <tr key={`up-${slot.hour}-${slot.minute}`} className="border-b border-gray-800/40">
                                     <td className="py-1.5 font-bold text-white">{slot.label}</td>
-                                    <td className={`text-center py-1.5 font-mono font-bold ${slot.winrate >= 55 ? 'text-emerald-400' : slot.winrate <= 45 ? 'text-red-400' : 'text-gray-400'}`}>
-                                        {slot.winrate}%
+                                    <td className="text-center py-1.5 font-mono font-bold text-emerald-400">{slot.winrate}%</td>
+                                    <td className={`text-center py-1.5 font-mono ${slot.avgChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {slot.avgChange >= 0 ? '+' : ''}{slot.avgChange.toFixed(3)}%
                                     </td>
+                                    <td className="text-center py-1.5 text-gray-400">{slot.upCount}/{slot.downCount}</td>
+                                    <td className="text-center py-1.5 text-gray-500">{slot.total}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Top DOWN patterns */}
+            <div className="bg-brand-card border border-gray-800 rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-800">
+                    <span className="text-sm font-bold text-red-400">Топ-20 — чаще падает (DOWN)</span>
+                </div>
+                <div className="p-4">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-gray-500 border-b border-gray-700">
+                                <th className="text-left py-2">Время МСК</th>
+                                <th className="text-center py-2">DOWN %</th>
+                                <th className="text-center py-2">Avg %</th>
+                                <th className="text-center py-2">UP/DOWN</th>
+                                <th className="text-center py-2">Дней</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {[...slots].sort((a, b) => a.winrate - b.winrate).slice(0, 20).map(slot => (
+                                <tr key={`down-${slot.hour}-${slot.minute}`} className="border-b border-gray-800/40">
+                                    <td className="py-1.5 font-bold text-white">{slot.label}</td>
+                                    <td className="text-center py-1.5 font-mono font-bold text-red-400">{100 - slot.winrate}%</td>
                                     <td className={`text-center py-1.5 font-mono ${slot.avgChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {slot.avgChange >= 0 ? '+' : ''}{slot.avgChange.toFixed(3)}%
                                     </td>
