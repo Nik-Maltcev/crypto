@@ -12,6 +12,7 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisV2 from './components/HypothesisV2';
+import BitcoinPatterns from './components/BitcoinPatterns';
 import LoginPage from './components/LoginPage';
 import DemoOverlay from './components/DemoOverlay';
 import PricingModal from './components/PricingModal';
@@ -48,7 +49,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'shitcoins'>('hypothesis_v2');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'shitcoins'>('hypothesis_v2');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -531,6 +532,12 @@ const App: React.FC = () => {
               >
                 🎯 Щитки
               </button>
+              <button
+                onClick={() => setActiveTab('bitcoin')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'bitcoin' ? 'bg-orange-700/50 text-orange-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                ₿ Биткоин
+              </button>
             </div>
 
             {/* User info / Logout */}
@@ -605,6 +612,8 @@ const App: React.FC = () => {
         <DemoOverlay>
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
+        ) : activeTab === 'bitcoin' ? (
+          <BitcoinPatterns />
         ) : activeTab === 'hypothesis_v2_long' ? (
           <HypothesisV2 key="long" mode="long" />
         ) : activeTab === 'hypothesis_v2' ? (
