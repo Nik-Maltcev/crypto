@@ -173,39 +173,39 @@ async def lifespan(app: FastAPI):
                 name="Daily Altcoin Price Snapshot (08:00 MSK)",
                 replace_existing=True,
             )
-            scheduler.add_job(
-                run_hypothesis_v2,
-                trigger=CronTrigger(hour=5, minute=0),  # 08:00 MSK (05:00 UTC)
-                id="hypothesis_v2",
-                name="Hypothesis V2: Altcoin Drop Predictor (daily 08:00 MSK)",
-                kwargs={"trigger": "scheduled"},
-                replace_existing=True,
-            )
-            scheduler.add_job(
-                verify_hypothesis_v2_results,
-                trigger=CronTrigger(minute="*/1"),  # Every 1 minute
-                id="hypothesis_v2_verify",
-                name="Hypothesis V2 Verification (every 1 min)",
-                replace_existing=True,
-            )
-            # Hypothesis V2 Long — daily at 08:00 MSK (05:00 UTC)
-            scheduler.add_job(
-                run_hypothesis_v2_long,
-                trigger=CronTrigger(hour=5, minute=0),
-                id="hypothesis_v2_long",
-                name="Hypothesis V2 Long: Altcoin Rise Predictor (daily 08:00 MSK)",
-                kwargs={"trigger": "scheduled"},
-                replace_existing=True,
-            )
-            scheduler.add_job(
-                verify_hypothesis_v2_long_results,
-                trigger=CronTrigger(minute="*/1"),
-                id="hypothesis_v2_long_verify",
-                name="Hypothesis V2 Long Verification (every 1 min)",
-                replace_existing=True,
-            )
+            # Hypothesis V2 Short + Long — DISABLED temporarily
+            # scheduler.add_job(
+            #     run_hypothesis_v2,
+            #     trigger=CronTrigger(hour=5, minute=0),
+            #     id="hypothesis_v2",
+            #     name="Hypothesis V2: Altcoin Drop Predictor (daily 08:00 MSK)",
+            #     kwargs={"trigger": "scheduled"},
+            #     replace_existing=True,
+            # )
+            # scheduler.add_job(
+            #     verify_hypothesis_v2_results,
+            #     trigger=CronTrigger(minute="*/1"),
+            #     id="hypothesis_v2_verify",
+            #     name="Hypothesis V2 Verification (every 1 min)",
+            #     replace_existing=True,
+            # )
+            # scheduler.add_job(
+            #     run_hypothesis_v2_long,
+            #     trigger=CronTrigger(hour=5, minute=0),
+            #     id="hypothesis_v2_long",
+            #     name="Hypothesis V2 Long: Altcoin Rise Predictor (daily 08:00 MSK)",
+            #     kwargs={"trigger": "scheduled"},
+            #     replace_existing=True,
+            # )
+            # scheduler.add_job(
+            #     verify_hypothesis_v2_long_results,
+            #     trigger=CronTrigger(minute="*/1"),
+            #     id="hypothesis_v2_long_verify",
+            #     name="Hypothesis V2 Long Verification (every 1 min)",
+            #     replace_existing=True,
+            # )
             scheduler.start()
-            logger.info("APScheduler started — hypothesis v2 short+long, altcoin tracking")
+            logger.info("APScheduler started — hypothesis v2 short+long DISABLED")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
