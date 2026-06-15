@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
 
+const AVAILABLE_SYMBOLS = [
+    { symbol: 'BTCUSDT', label: 'BTC' },
+    { symbol: 'ETHUSDT', label: 'ETH' },
+    { symbol: 'BNBUSDT', label: 'BNB' },
+    { symbol: 'SOLUSDT', label: 'SOL' },
+    { symbol: 'XRPUSDT', label: 'XRP' },
+    { symbol: 'DOGEUSDT', label: 'DOGE' },
+];
+
 interface Candle {
     time: number; // unix ms
     open: number;
@@ -28,6 +37,7 @@ const BitcoinPatterns: React.FC = () => {
     const [bestUp, setBestUp] = useState<TimeSlot | null>(null);
     const [bestDown, setBestDown] = useState<TimeSlot | null>(null);
     const [timezone, setTimezone] = useState<'msk' | 'et'>('msk');
+    const [activeSymbol, setActiveSymbol] = useState('BTCUSDT');
 
     // MSK = UTC+3, ET summer (EDT) = UTC-4, ET winter (EST) = UTC-5
     // Currently June = summer = EDT = UTC-4
@@ -50,7 +60,7 @@ const BitcoinPatterns: React.FC = () => {
             let cursor = startTime;
 
             while (cursor < endTime) {
-                const url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&startTime=${cursor}&limit=1000`;
+                const url = `https://api.binance.com/api/v3/klines?symbol=${activeSymbol}&interval=5m&startTime=${cursor}&limit=1000`;
                 const resp = await fetch(url);
                 if (!resp.ok) break;
                 const data = await resp.json();
@@ -126,7 +136,7 @@ const BitcoinPatterns: React.FC = () => {
         setIsLoading(false);
     };
 
-    useEffect(() => { fetchAndAnalyze(); }, [days]);
+    useEffect(() => { fetchAndAnalyze(); }, [days, activeSymbol]);
 
     if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Загрузка BTC свечей с Binance...</div>;
 
@@ -134,26 +144,36 @@ const BitcoinPatterns: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">BTC 5-минутные паттерны</h2>
-                    <p className="text-gray-400 text-sm">Когда BTC чаще растёт/падает за последние {days} дней (Binance, {tzLabel})</p>
+                    <h2 className="text-2xl font-bold text-white mb-2">{AVAILABLE_SYMBOLS.find(s => s.symbol === activeSymbol)?.label} 5-минутные паттерны</h2>
+                    <p className="text-gray-400 text-sm">Когда {AVAILABLE_SYMBOLS.find(s => s.symbol === activeSymbol)?.label} чаще растёт/падает за последние {days} дней (Binance, {tzLabel})</p>
                 </div>
-                <div className="flex items-center gap-2 mt-4 sm:mt-0">
-                    <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5 mr-2">
-                        <button onClick={() => setTimezone('msk')}
-                            className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'msk' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
-                            МСК
-                        </button>
-                        <button onClick={() => setTimezone('et')}
-                            className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'et' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
-                            ET
-                        </button>
+                <div className="flex flex-col items-end gap-2 mt-4 sm:mt-0">
+                    <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5">
+                        {AVAILABLE_SYMBOLS.map(s => (
+                            <button key={s.symbol} onClick={() => setActiveSymbol(s.symbol)}
+                                className={`px-2.5 py-1 rounded text-xs font-semibold transition ${activeSymbol === s.symbol ? 'bg-orange-600/30 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                                {s.label}
+                            </button>
+                        ))}
                     </div>
-                    {[7, 14, 30, 90, 180, 365].map(d => (
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5 mr-2">
+                            <button onClick={() => setTimezone('msk')}
+                                className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'msk' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
+                                МСК
+                            </button>
+                            <button onClick={() => setTimezone('et')}
+                                className={`px-2 py-1 rounded text-xs font-semibold transition ${timezone === 'et' ? 'bg-indigo-600/30 text-indigo-400' : 'text-gray-500'}`}>
+                                ET
+                            </button>
+                        </div>
+                        {[7, 14, 30, 90, 180, 365].map(d => (
                         <button key={d} onClick={() => setDays(d)}
                             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${days === d ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-500/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700'}`}>
                             {d}д
                         </button>
                     ))}
+                    </div>
                 </div>
             </div>
 

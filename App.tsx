@@ -537,7 +537,7 @@ const App: React.FC = () => {
                 onClick={() => setActiveTab('bitcoin')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'bitcoin' ? 'bg-orange-700/50 text-orange-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                ₿ Биткоин
+                📊 Паттерны
               </button>
               <button
                 onClick={() => setActiveTab('top_hours')}
