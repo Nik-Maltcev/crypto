@@ -108,6 +108,45 @@ const TopHours: React.FC = () => {
         }
 
         setData(results);
+
+        // USD/JPY daily (17:00 ET → 17:00 ET next day) via Twelve Data
+        try {
+            const url = `https://api.twelvedata.com/time_series?symbol=USD/JPY&interval=1day&outputsize=${period}&apikey=c9618dc13fed4d90904fc63307d3a44e`;
+            const resp = await fetch(url);
+            if (resp.ok) {
+                const json = await resp.json();
+                if (json.status === 'ok' && json.values) {
+                    const days: DayResult[] = json.values.map((v: any) => {
+                        const open = parseFloat(v.open);
+                        const close = parseFloat(v.close);
+                        const change = ((close - open) / open) * 100;
+                        return {
+                            date: new Date(v.datetime).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+                            open, close,
+                            high: parseFloat(v.high),
+                            low: parseFloat(v.low),
+                            change,
+                            direction: close >= open ? 'UP' : 'DOWN' as 'UP' | 'DOWN',
+                        };
+                    }).reverse();
+
+                    const upCount = days.filter((d: DayResult) => d.direction === 'UP').length;
+                    const downCount = days.filter((d: DayResult) => d.direction === 'DOWN').length;
+                    const avgChange = days.length > 0 ? days.reduce((s: number, d: DayResult) => s + d.change, 0) / days.length : 0;
+
+                    results.push({
+                        label: 'USD/JPY (daily, Kalshi 10AM ET)',
+                        days,
+                        upCount,
+                        downCount,
+                        winrateUp: days.length > 0 ? Math.round((upCount / days.length) * 100) : 0,
+                        avgChange,
+                    });
+                    setData([...results]);
+                }
+            }
+        } catch {}
+
         setIsLoading(false);
     };
 
