@@ -158,7 +158,7 @@ const TopHours: React.FC = () => {
                     <p className="text-gray-400 text-sm">История 5-минутных свечей BTC по отслеживаемым слотам</p>
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0">
-                    {[7, 14, 30, 60, 90].map(d => (
+                    {[7, 14, 30, 60, 90, 180, 365].map(d => (
                         <button key={d} onClick={() => setPeriod(d)}
                             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${period === d ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-500/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700'}`}>
                             {d}д
