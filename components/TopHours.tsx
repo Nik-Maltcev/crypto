@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 // Tracked slots (ET time = UTC-4)
-const TRACKED_SLOTS = [
-    { label: '13:30-13:35 ET', etHour: 13, etMin: 30, utcHour: 17, utcMin: 30 },
-    { label: '19:35-19:40 ET', etHour: 19, etMin: 35, utcHour: 23, utcMin: 35 },
-    { label: '21:40-21:45 ET', etHour: 21, etMin: 40, utcHour: 1, utcMin: 40 },  // next day UTC
-];
+const TRACKED_SLOTS: any[] = [];  // BTC slots removed
 
 interface DayResult {
     date: string;
@@ -201,7 +197,8 @@ const TopHours: React.FC = () => {
                                     <th className="text-left py-2">Дата</th>
                                     <th className="text-center py-2">Open</th>
                                     <th className="text-center py-2">Close</th>
-                                    <th className="text-center py-2">Change</th>
+                                    <th className="text-center py-2">Движение</th>
+                                    <th className="text-center py-2">Change %</th>
                                     <th className="text-center py-2">Result</th>
                                 </tr>
                             </thead>
@@ -209,9 +206,12 @@ const TopHours: React.FC = () => {
                                 {slot.days.map((day, i) => (
                                     <tr key={i} className="border-b border-gray-800/40">
                                         <td className="py-1.5 text-gray-300">{day.date}</td>
-                                        <td className="text-center py-1.5 font-mono text-gray-400">${day.open.toFixed(0)}</td>
-                                        <td className="text-center py-1.5 font-mono text-gray-400">${day.close.toFixed(0)}</td>
-                                        <td className={`text-center py-1.5 font-mono font-bold ${day.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        <td className="text-center py-1.5 font-mono text-gray-400">{day.open.toFixed(3)}</td>
+                                        <td className="text-center py-1.5 font-mono text-gray-400">{day.close.toFixed(3)}</td>
+                                        <td className={`text-center py-1.5 font-mono font-bold ${day.close - day.open >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {day.close - day.open >= 0 ? '+' : ''}{(day.close - day.open).toFixed(3)}
+                                        </td>
+                                        <td className={`text-center py-1.5 font-mono ${day.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                             {day.change >= 0 ? '+' : ''}{day.change.toFixed(3)}%
                                         </td>
                                         <td className="text-center py-1.5">
