@@ -50,7 +50,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'shitcoins'>('hypothesis_v2');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'shitcoins'>('shitcoins');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -515,18 +515,6 @@ const App: React.FC = () => {
 
             {/* Navigation Tabs */}
             <div className="hidden md:flex items-center space-x-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('hypothesis_v2')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📉 Шорт
-              </button>
-              <button
-                onClick={() => setActiveTab('hypothesis_v2_long')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'hypothesis_v2_long' ? 'bg-emerald-700/50 text-emerald-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                📈 Лонг
-              </button>
               <button
                 onClick={() => setActiveTab('shitcoins')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'shitcoins' ? 'bg-red-700/50 text-red-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
