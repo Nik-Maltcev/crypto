@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
 const AVAILABLE_SYMBOLS = [
-    { symbol: 'BTCUSDT', label: 'BTC' },
-    { symbol: 'ETHUSDT', label: 'ETH' },
-    { symbol: 'BNBUSDT', label: 'BNB' },
-    { symbol: 'SOLUSDT', label: 'SOL' },
-    { symbol: 'XRPUSDT', label: 'XRP' },
-    { symbol: 'DOGEUSDT', label: 'DOGE' },
+    { symbol: 'BTCUSDT', label: 'BTC', source: 'binance' },
+    { symbol: 'ETHUSDT', label: 'ETH', source: 'binance' },
+    { symbol: 'BNBUSDT', label: 'BNB', source: 'binance' },
+    { symbol: 'SOLUSDT', label: 'SOL', source: 'binance' },
+    { symbol: 'XRPUSDT', label: 'XRP', source: 'binance' },
+    { symbol: 'DOGEUSDT', label: 'DOGE', source: 'binance' },
+    { symbol: 'EUR/USD', label: 'EUR/USD', source: 'twelvedata' },
+    { symbol: 'GBP/USD', label: 'GBP/USD', source: 'twelvedata' },
+    { symbol: 'USD/JPY', label: 'USD/JPY', source: 'twelvedata' },
+    { symbol: 'AUD/USD', label: 'AUD/USD', source: 'twelvedata' },
 ];
+
+const TWELVE_DATA_KEY = 'c9618dc13fed4d90904fc63307d3a44e';
 
 interface Candle {
     time: number; // unix ms
@@ -53,32 +59,72 @@ const BitcoinPatterns: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            // Fetch 5m candles from Binance (free, no key)
-            const endTime = Date.now();
-            const startTime = endTime - (days * 24 * 60 * 60 * 1000);
+            const activeConfig = AVAILABLE_SYMBOLS.find(s => s.symbol === activeSymbol);
             const allCandles: Candle[] = [];
-            let cursor = startTime;
 
-            while (cursor < endTime) {
-                const url = `https://api.binance.com/api/v3/klines?symbol=${activeSymbol}&interval=5m&startTime=${cursor}&limit=1000`;
-                const resp = await fetch(url);
-                if (!resp.ok) break;
-                const data = await resp.json();
-                if (data.length === 0) break;
+            if (activeConfig?.source === 'binance') {
+                // Fetch from Binance
+                const endTime = Date.now();
+                const startTime = endTime - (days * 24 * 60 * 60 * 1000);
+                let cursor = startTime;
 
-                data.forEach((c: any) => {
-                    allCandles.push({
-                        time: c[0],
-                        open: parseFloat(c[1]),
-                        high: parseFloat(c[2]),
-                        low: parseFloat(c[3]),
-                        close: parseFloat(c[4]),
-                        volume: parseFloat(c[5]),
+                while (cursor < endTime) {
+                    const url = `https://api.binance.com/api/v3/klines?symbol=${activeSymbol}&interval=5m&startTime=${cursor}&limit=1000`;
+                    const resp = await fetch(url);
+                    if (!resp.ok) break;
+                    const data = await resp.json();
+                    if (data.length === 0) break;
+
+                    data.forEach((c: any) => {
+                        allCandles.push({
+                            time: c[0],
+                            open: parseFloat(c[1]),
+                            high: parseFloat(c[2]),
+                            low: parseFloat(c[3]),
+                            close: parseFloat(c[4]),
+                            volume: parseFloat(c[5]),
+                        });
                     });
-                });
 
-                cursor = data[data.length - 1][6] + 1;
-                await new Promise(r => setTimeout(r, 100));
+                    cursor = data[data.length - 1][6] + 1;
+                    await new Promise(r => setTimeout(r, 100));
+                }
+            } else {
+                // Fetch from Twelve Data (forex)
+                // Max 5000 per request, need multiple for large periods
+                const outputsize = Math.min(days * 24 * 12, 5000); // 12 candles per hour
+                let fetched = 0;
+                const totalNeeded = days * 24 * 12;
+                let endDate = '';
+
+                while (fetched < totalNeeded) {
+                    let url = `https://api.twelvedata.com/time_series?symbol=${activeSymbol}&interval=5min&outputsize=${Math.min(5000, totalNeeded - fetched)}&apikey=${TWELVE_DATA_KEY}`;
+                    if (endDate) url += `&end_date=${endDate}`;
+                    
+                    const resp = await fetch(url);
+                    if (!resp.ok) break;
+                    const json = await resp.json();
+                    if (json.status !== 'ok' || !json.values || json.values.length === 0) break;
+
+                    json.values.forEach((v: any) => {
+                        const dt = new Date(v.datetime + ' UTC');
+                        allCandles.push({
+                            time: dt.getTime(),
+                            open: parseFloat(v.open),
+                            high: parseFloat(v.high),
+                            low: parseFloat(v.low),
+                            close: parseFloat(v.close),
+                            volume: 0,
+                        });
+                    });
+
+                    fetched += json.values.length;
+                    if (json.values.length < 5000) break;
+                    
+                    // Next page: use oldest datetime as end_date
+                    endDate = json.values[json.values.length - 1].datetime;
+                    await new Promise(r => setTimeout(r, 8000)); // 8 req/min limit
+                }
             }
 
             // Group by time-of-day (5min slots in UTC)
@@ -148,12 +194,15 @@ const BitcoinPatterns: React.FC = () => {
                     <p className="text-gray-400 text-sm">Когда {AVAILABLE_SYMBOLS.find(s => s.symbol === activeSymbol)?.label} чаще растёт/падает за последние {days} дней (Binance, {tzLabel})</p>
                 </div>
                 <div className="flex flex-col items-end gap-2 mt-4 sm:mt-0">
-                    <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5">
-                        {AVAILABLE_SYMBOLS.map(s => (
-                            <button key={s.symbol} onClick={() => setActiveSymbol(s.symbol)}
-                                className={`px-2.5 py-1 rounded text-xs font-semibold transition ${activeSymbol === s.symbol ? 'bg-orange-600/30 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                                {s.label}
-                            </button>
+                    <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-0.5 flex-wrap">
+                        {AVAILABLE_SYMBOLS.map((s, i) => (
+                            <React.Fragment key={s.symbol}>
+                                {i === 6 && <div className="w-px h-5 bg-gray-600 mx-1"></div>}
+                                <button onClick={() => setActiveSymbol(s.symbol)}
+                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition ${activeSymbol === s.symbol ? 'bg-orange-600/30 text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                                    {s.label}
+                                </button>
+                            </React.Fragment>
                         ))}
                     </div>
                     <div className="flex items-center gap-2">
