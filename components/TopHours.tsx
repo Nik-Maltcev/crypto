@@ -26,6 +26,8 @@ const TopHours: React.FC = () => {
     const [data, setData] = useState<SlotHistory[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [period, setPeriod] = useState(30);
+    const [prediction, setPrediction] = useState('');
+    const [isPredicting, setIsPredicting] = useState(false);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -150,6 +152,70 @@ const TopHours: React.FC = () => {
 
     if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Загрузка исторических свечей...</div>;
 
+    const downloadCsv = () => {
+        const slot = data.find(s => s.label.includes('USD/JPY'));
+        if (!slot) return;
+        const headers = ['Date', 'Open', 'Close', 'Move', 'Change %', 'Direction'];
+        const rows = slot.days.map(d => [
+            d.date, d.open.toFixed(3), d.close.toFixed(3),
+            (d.close - d.open).toFixed(3), d.change.toFixed(3), d.direction
+        ].join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `usdjpy_${period}d_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const runPrediction = async () => {
+        const slot = data.find(s => s.label.includes('USD/JPY'));
+        if (!slot || slot.days.length === 0) return;
+
+        setIsPredicting(true);
+        setPrediction('');
+
+        const last30 = slot.days.slice(-30).map(d =>
+            `${d.date}: ${d.open.toFixed(3)}→${d.close.toFixed(3)} (${d.change >= 0 ? '+' : ''}${d.change.toFixed(3)}%) ${d.direction}`
+        ).join('\n');
+
+        const prompt = `You are a forex analyst. Based on the last ${slot.days.length} days of USD/JPY daily candles (forex market, 5pm ET to 5pm ET), predict whether today's candle will close UP or DOWN.
+
+Recent ${Math.min(30, slot.days.length)} days:
+${last30}
+
+Stats: UP ${slot.winrateUp}% of days (${slot.upCount}/${slot.days.length}), avg change: ${slot.avgChange >= 0 ? '+' : ''}${slot.avgChange.toFixed(4)}%
+
+Current price context: last close was ${slot.days[slot.days.length - 1]?.close.toFixed(3)}
+
+Give your prediction: UP or DOWN, confidence %, and brief reasoning (2-3 sentences). Response in Russian.`;
+
+        try {
+            const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+            const resp = await fetch(`${BACKEND_URL}/api/proxy/openrouter`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'deepseek/deepseek-chat',
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 300,
+                }),
+            });
+            if (resp.ok) {
+                const json = await resp.json();
+                const text = json.choices?.[0]?.message?.content || 'No response';
+                setPrediction(text);
+            } else {
+                setPrediction(`Error: ${resp.status}`);
+            }
+        } catch (e: any) {
+            setPrediction(`Error: ${e.message}`);
+        }
+        setIsPredicting(false);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -164,6 +230,14 @@ const TopHours: React.FC = () => {
                             {d}д
                         </button>
                     ))}
+                    <button onClick={downloadCsv}
+                        className="px-3 py-1.5 bg-gray-800/50 text-gray-400 border border-gray-700 hover:border-gray-600 rounded-lg text-sm transition">
+                        CSV
+                    </button>
+                    <button onClick={runPrediction} disabled={isPredicting}
+                        className="px-3 py-1.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+                        {isPredicting ? '...' : 'AI Прогноз'}
+                    </button>
                 </div>
             </div>
 
@@ -180,6 +254,14 @@ const TopHours: React.FC = () => {
                     </div>
                 ))}
             </div>
+
+            {/* AI Prediction */}
+            {prediction && (
+                <div className="bg-brand-card border border-indigo-500/30 rounded-xl p-4">
+                    <div className="text-xs text-indigo-400 font-bold uppercase mb-2">AI Прогноз (DeepSeek)</div>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{prediction}</p>
+                </div>
+            )}
 
             {/* Per-slot history tables */}
             {data.map(slot => (
