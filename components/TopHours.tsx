@@ -177,18 +177,23 @@ const TopHours: React.FC = () => {
         setIsPredicting(true);
         setPrediction('');
 
-        const last30 = slot.days.slice(-31, -1).map(d =>
+        const closedDays = slot.days.slice(0, -1); // exclude today's open candle
+        const dataLines = closedDays.map(d =>
             `${d.date}: ${d.open.toFixed(3)}→${d.close.toFixed(3)} (${d.change >= 0 ? '+' : ''}${d.change.toFixed(3)}%) ${d.direction}`
         ).join('\n');
 
-        const prompt = `You are a forex analyst specializing in USD/JPY. Based on the last ${slot.days.length - 1} days of completed USD/JPY daily candles (5pm ET to 5pm ET), predict where today's candle will close.
+        const upCount = closedDays.filter(d => d.direction === 'UP').length;
+        const downCount = closedDays.filter(d => d.direction === 'DOWN').length;
+        const avgCh = closedDays.length > 0 ? closedDays.reduce((s, d) => s + d.change, 0) / closedDays.length : 0;
 
-Recent ${Math.min(30, slot.days.length - 1)} completed days:
-${last30}
+        const prompt = `You are a forex analyst specializing in USD/JPY. Based on ${closedDays.length} completed daily candles (5pm ET to 5pm ET), predict where today's candle will close.
 
-Stats: UP ${slot.winrateUp}% of days (${slot.upCount}/${slot.days.length}), avg change: ${slot.avgChange >= 0 ? '+' : ''}${slot.avgChange.toFixed(4)}%
+ALL ${closedDays.length} completed days (oldest to newest):
+${dataLines}
 
-Current price context: last completed close was ${slot.days[slot.days.length - 2]?.close.toFixed(3)}. Today's candle is still open (closes at 5pm ET).
+Stats over ${closedDays.length} days: UP ${Math.round((upCount / closedDays.length) * 100)}% (${upCount}/${closedDays.length}), DOWN ${Math.round((downCount / closedDays.length) * 100)}% (${downCount}/${closedDays.length}), avg daily change: ${avgCh >= 0 ? '+' : ''}${avgCh.toFixed(4)}%
+
+Last completed close: ${closedDays[closedDays.length - 1]?.close.toFixed(3)}. Today's candle is still open (closes at 5pm ET).
 
 Give your prediction:
 1. Expected closing PRICE RANGE (e.g. "160.000 to 160.249" or "159.750 to 159.999")
