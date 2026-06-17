@@ -177,20 +177,26 @@ const TopHours: React.FC = () => {
         setIsPredicting(true);
         setPrediction('');
 
-        const last30 = slot.days.slice(-30).map(d =>
+        const last30 = slot.days.slice(-31, -1).map(d =>
             `${d.date}: ${d.open.toFixed(3)}→${d.close.toFixed(3)} (${d.change >= 0 ? '+' : ''}${d.change.toFixed(3)}%) ${d.direction}`
         ).join('\n');
 
-        const prompt = `You are a forex analyst. Based on the last ${slot.days.length} days of USD/JPY daily candles (forex market, 5pm ET to 5pm ET), predict whether today's candle will close UP or DOWN.
+        const prompt = `You are a forex analyst specializing in USD/JPY. Based on the last ${slot.days.length - 1} days of completed USD/JPY daily candles (5pm ET to 5pm ET), predict where today's candle will close.
 
-Recent ${Math.min(30, slot.days.length)} days:
+Recent ${Math.min(30, slot.days.length - 1)} completed days:
 ${last30}
 
 Stats: UP ${slot.winrateUp}% of days (${slot.upCount}/${slot.days.length}), avg change: ${slot.avgChange >= 0 ? '+' : ''}${slot.avgChange.toFixed(4)}%
 
-Current price context: last close was ${slot.days[slot.days.length - 1]?.close.toFixed(3)}
+Current price context: last completed close was ${slot.days[slot.days.length - 2]?.close.toFixed(3)}. Today's candle is still open (closes at 5pm ET).
 
-Give your prediction: UP or DOWN, confidence %, and brief reasoning (2-3 sentences). Response in Russian.`;
+Give your prediction:
+1. Expected closing PRICE RANGE (e.g. "160.000 to 160.249" or "159.750 to 159.999")
+2. Direction: UP or DOWN from yesterday's close
+3. Confidence %
+4. Brief reasoning (2-3 sentences)
+
+Response in Russian. Be specific with the price range.`;
 
         try {
             const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
