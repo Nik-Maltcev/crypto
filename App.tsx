@@ -14,6 +14,7 @@ import ShitcoinTracker from './components/ShitcoinTracker';
 import HypothesisV2 from './components/HypothesisV2';
 import BitcoinPatterns from './components/BitcoinPatterns';
 import TopHours from './components/TopHours';
+import Top100 from './components/Top100';
 import LoginPage from './components/LoginPage';
 import DemoOverlay from './components/DemoOverlay';
 import PricingModal from './components/PricingModal';
@@ -50,7 +51,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'shitcoins'>('shitcoins');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'top100' | 'shitcoins'>('shitcoins');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -533,6 +534,12 @@ const App: React.FC = () => {
               >
                 ⏰ Топ часы
               </button>
+              <button
+                onClick={() => setActiveTab('top100')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'top100' ? 'bg-cyan-700/50 text-cyan-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                🏆 Топ-100
+              </button>
             </div>
 
             {/* User info / Logout */}
@@ -611,6 +618,8 @@ const App: React.FC = () => {
           <BitcoinPatterns />
         ) : activeTab === 'top_hours' ? (
           <TopHours />
+        ) : activeTab === 'top100' ? (
+          <Top100 />
         ) : activeTab === 'hypothesis_v2_long' ? (
           <HypothesisV2 key="long" mode="long" />
         ) : activeTab === 'hypothesis_v2' ? (
