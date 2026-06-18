@@ -462,7 +462,7 @@ async def start_monitor():
                 await update_price_tracking()
             except Exception as e:
                 _log(f"ERROR price tracking: {e}")
-            await asyncio.sleep(300)  # Every 5 minutes
+            await asyncio.sleep(60)  # Every 1 minute
     
     asyncio.create_task(price_loop())
     
