@@ -25,11 +25,13 @@ const Top100: React.FC = () => {
     const [yearlyData, setYearlyData] = useState<{ prices: number[]; weeks: { week: number; open: number; close: number; change: number }[] } | null>(null);
     const [yearlyLoading, setYearlyLoading] = useState(false);
 
+    const BACKEND_URL = import.meta.env.VITE_TELEGRAM_API_URL || 'http://localhost:8000';
+
     const fetchCoins = async () => {
         setIsLoading(true);
         try {
-            const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=24h,7d,14d,30d,200d,1y';
-            const resp = await fetch(url);
+            const targetUrl = encodeURIComponent('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=24h,7d,14d,30d,200d,1y');
+            const resp = await fetch(`${BACKEND_URL}/api/proxy?url=${targetUrl}`);
             if (resp.ok) {
                 const data = await resp.json();
                 setCoins(data);
@@ -60,7 +62,8 @@ const Top100: React.FC = () => {
         setYearlyData(null);
         setYearlyLoading(true);
         try {
-            const resp = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=365`);
+            const targetUrl = encodeURIComponent(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=365`);
+            const resp = await fetch(`${BACKEND_URL}/api/proxy?url=${targetUrl}`);
             if (resp.ok) {
                 const json = await resp.json();
                 const prices: number[] = json.prices.map((p: [number, number]) => p[1]);
