@@ -57,6 +57,7 @@ const ShitcoinTracker: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [showLogs, setShowLogs] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
+    const [selectedToken, setSelectedToken] = useState<TokenData | null>(null);
 
     const fetchTokens = async () => {
         try {
@@ -315,7 +316,7 @@ const ShitcoinTracker: React.FC = () => {
 
                             const change = getCurrentChange(token);
                             elements.push(
-                            <div key={token.contract} className="bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition">
+                            <div key={token.contract} className="bg-brand-card border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition cursor-pointer" onClick={() => setSelectedToken(token)}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className={`text-xs px-2 py-1 rounded border font-bold ${getSafetyColor(token.safety)}`}>
@@ -390,6 +391,86 @@ const ShitcoinTracker: React.FC = () => {
 
                         return elements;
                     })()}
+                </div>
+            )}
+
+            {/* Token detail modal */}
+            {selectedToken && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedToken(null)}>
+                    <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <span className="text-xl font-bold text-white">{getSymbol(selectedToken)}</span>
+                                <span className="text-gray-400 ml-2">{getName(selectedToken)}</span>
+                            </div>
+                            <button onClick={() => setSelectedToken(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                        </div>
+
+                        {/* Chart */}
+                        {selectedToken.price_history.length > 1 && (() => {
+                            const history = selectedToken.price_history;
+                            const values = history.map(h => h.change_from_call);
+                            const min = Math.min(...values, 0);
+                            const max = Math.max(...values, 0);
+                            const range = max - min || 1;
+                            const W = 600, H = 150;
+                            const points = values.map((v, i) => {
+                                const x = (i / (values.length - 1)) * W;
+                                const y = H - ((v - min) / range) * H;
+                                return `${x.toFixed(1)},${y.toFixed(1)}`;
+                            }).join(' ');
+                            const zeroY = H - ((0 - min) / range) * H;
+
+                            return (
+                                <div className="mb-4">
+                                    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="rounded bg-gray-800/50">
+                                        <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke="#4b5563" strokeWidth="1" strokeDasharray="4,4" />
+                                        <polyline points={points} fill="none" stroke={values[values.length-1] >= 0 ? '#10b981' : '#ef4444'} strokeWidth="2" />
+                                    </svg>
+                                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                        <span>{new Date(history[0].time).toLocaleString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</span>
+                                        <span>{new Date(history[history.length-1].time).toLocaleString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Snapshot table */}
+                        <div className="overflow-x-auto max-h-[40vh]">
+                            <table className="w-full text-sm">
+                                <thead className="sticky top-0 bg-gray-900">
+                                    <tr className="text-gray-500 border-b border-gray-700">
+                                        <th className="text-left py-2">Время</th>
+                                        <th className="text-right py-2">Цена</th>
+                                        <th className="text-right py-2">От колла</th>
+                                        <th className="text-right py-2">От пред.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {selectedToken.price_history.map((ph, i, arr) => {
+                                        const prevChange = i > 0 ? ph.change_from_call - arr[i-1].change_from_call : 0;
+                                        return (
+                                            <tr key={i} className="border-b border-gray-800/40">
+                                                <td className="py-1 text-gray-400">{new Date(ph.time).toLocaleString('ru-RU', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+                                                <td className="py-1 text-right font-mono text-gray-300">{ph.price < 0.001 ? ph.price.toExponential(2) : ph.price.toFixed(6)}</td>
+                                                <td className={`py-1 text-right font-mono font-bold ${ph.change_from_call >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {ph.change_from_call >= 0 ? '+' : ''}{ph.change_from_call.toFixed(1)}%
+                                                </td>
+                                                <td className={`py-1 text-right font-mono ${prevChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {prevChange >= 0 ? '+' : ''}{prevChange.toFixed(1)}%
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+                            <span>{selectedToken.price_history.length} снэпшотов</span>
+                            <span>Пик: +{(selectedToken.peak_change || 0).toFixed(1)}% | Сейчас: {getCurrentChange(selectedToken) >= 0 ? '+' : ''}{getCurrentChange(selectedToken).toFixed(1)}%</span>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
