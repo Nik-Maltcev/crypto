@@ -21,6 +21,9 @@ const Top100: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [sortBy, setSortBy] = useState<string>('market_cap_rank');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const [expanded, setExpanded] = useState<string | null>(null);
+    const [yearlyData, setYearlyData] = useState<{ prices: number[]; weeks: { week: number; open: number; close: number; change: number }[] } | null>(null);
+    const [yearlyLoading, setYearlyLoading] = useState(false);
 
     const fetchCoins = async () => {
         setIsLoading(true);
@@ -46,6 +49,37 @@ const Top100: React.FC = () => {
             setSortBy(col);
             setSortDir('desc');
         }
+    };
+
+    const loadYearly = async (coinId: string) => {
+        if (expanded === coinId) {
+            setExpanded(null);
+            return;
+        }
+        setExpanded(coinId);
+        setYearlyData(null);
+        setYearlyLoading(true);
+        try {
+            const resp = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=365`);
+            if (resp.ok) {
+                const json = await resp.json();
+                const prices: number[] = json.prices.map((p: [number, number]) => p[1]);
+                // Group into weeks (7 days each)
+                const dailyPrices = json.prices as [number, number][];
+                const weeks: { week: number; open: number; close: number; change: number }[] = [];
+                for (let w = 0; w < 52; w++) {
+                    const startIdx = w * 7;
+                    const endIdx = Math.min(startIdx + 6, dailyPrices.length - 1);
+                    if (startIdx >= dailyPrices.length) break;
+                    const open = dailyPrices[startIdx][1];
+                    const close = dailyPrices[endIdx][1];
+                    const change = ((close - open) / open) * 100;
+                    weeks.push({ week: w + 1, open, close, change });
+                }
+                setYearlyData({ prices, weeks });
+            }
+        } catch {}
+        setYearlyLoading(false);
     };
 
     const sorted = [...coins].sort((a: any, b: any) => {
@@ -105,7 +139,8 @@ const Top100: React.FC = () => {
                         </thead>
                         <tbody>
                             {sorted.map(coin => (
-                                <tr key={coin.id} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+                                <React.Fragment key={coin.id}>
+                                <tr className="border-b border-gray-800/40 hover:bg-gray-800/20 cursor-pointer" onClick={() => loadYearly(coin.id)}>
                                     <td className="py-1.5 px-3 text-gray-500">{coin.market_cap_rank}</td>
                                     <td className="py-1.5 px-3">
                                         <span className="font-bold text-white">{coin.symbol.toUpperCase()}</span>
@@ -151,6 +186,53 @@ const Top100: React.FC = () => {
                                         {fmt(coin.price_change_percentage_1y_in_currency)}
                                     </td>
                                 </tr>
+                                {expanded === coin.id && (
+                                    <tr>
+                                        <td colSpan={11} className="p-4 bg-gray-900/50">
+                                            {yearlyLoading ? (
+                                                <div className="text-gray-500 text-center py-4">Загрузка годовых данных...</div>
+                                            ) : yearlyData ? (
+                                                <div className="space-y-3">
+                                                    {/* Yearly sparkline */}
+                                                    <div>
+                                                        <div className="text-xs text-gray-500 mb-1">График за год (365 дней)</div>
+                                                        <svg width="100%" height="60" viewBox={`0 0 ${yearlyData.prices.length} 60`} preserveAspectRatio="none" className="rounded bg-gray-800/30">
+                                                            {(() => {
+                                                                const p = yearlyData.prices;
+                                                                const min = Math.min(...p);
+                                                                const max = Math.max(...p);
+                                                                const range = max - min || 1;
+                                                                const points = p.map((v, i) => `${i},${60 - ((v - min) / range) * 58}`).join(' ');
+                                                                const isUp = p[p.length - 1] >= p[0];
+                                                                return <polyline points={points} fill="none" stroke={isUp ? '#10b981' : '#ef4444'} strokeWidth="1" />;
+                                                            })()}
+                                                        </svg>
+                                                    </div>
+                                                    {/* Weekly breakdown */}
+                                                    <div>
+                                                        <div className="text-xs text-gray-500 mb-1">Понедельный рост/падение (52 недели)</div>
+                                                        <div className="flex gap-0.5 flex-wrap">
+                                                            {yearlyData.weeks.map(w => (
+                                                                <div key={w.week}
+                                                                    className={`w-5 h-5 rounded-sm flex items-center justify-center text-[7px] font-bold ${
+                                                                        w.change >= 5 ? 'bg-emerald-500/40 text-emerald-300' :
+                                                                        w.change >= 0 ? 'bg-emerald-500/15 text-emerald-400' :
+                                                                        w.change >= -5 ? 'bg-red-500/15 text-red-400' :
+                                                                        'bg-red-500/40 text-red-300'
+                                                                    }`}
+                                                                    title={`Нед ${w.week}: ${w.change >= 0 ? '+' : ''}${w.change.toFixed(1)}%`}
+                                                                >
+                                                                    {w.change >= 0 ? '↑' : '↓'}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                        </td>
+                                    </tr>
+                                )}
+                                </React.Fragment>
                             ))}
                         </tbody>
                     </table>
