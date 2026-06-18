@@ -67,14 +67,20 @@ const Top100: React.FC = () => {
                 // Group into weeks (7 days each)
                 const dailyPrices = json.prices as [number, number][];
                 const weeks: { week: number; open: number; close: number; change: number }[] = [];
-                for (let w = 0; w < 52; w++) {
-                    const startIdx = w * 7;
-                    const endIdx = Math.min(startIdx + 6, dailyPrices.length - 1);
-                    if (startIdx >= dailyPrices.length) break;
-                    const open = dailyPrices[startIdx][1];
-                    const close = dailyPrices[endIdx][1];
-                    const change = ((close - open) / open) * 100;
-                    weeks.push({ week: w + 1, open, close, change });
+                // Group by 7-day intervals using timestamps
+                if (dailyPrices.length > 0) {
+                    const startTime = dailyPrices[0][0];
+                    const weekMs = 7 * 24 * 60 * 60 * 1000;
+                    for (let w = 0; w < 52; w++) {
+                        const wStart = startTime + w * weekMs;
+                        const wEnd = wStart + weekMs;
+                        const weekPrices = dailyPrices.filter(p => p[0] >= wStart && p[0] < wEnd);
+                        if (weekPrices.length === 0) break;
+                        const open = weekPrices[0][1];
+                        const close = weekPrices[weekPrices.length - 1][1];
+                        const change = ((close - open) / open) * 100;
+                        weeks.push({ week: w + 1, open, close, change });
+                    }
                 }
                 setYearlyData({ prices, weeks });
             }
