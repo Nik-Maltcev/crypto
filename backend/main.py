@@ -559,6 +559,88 @@ async def cleanup_hypothesis_entries(date_from: str, date_to: str):
         return {"deleted": result.rowcount, "range": f"{date_from} — {date_to}"}
 
 
+@app.get("/api/top100/yearly_csv")
+async def top100_yearly_csv():
+    """Fetch yearly weekly data for top 100 coins from CoinGecko and return CSV. Takes ~5 min."""
+    import httpx
+    from fastapi.responses import PlainTextResponse
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # 1. Get top 100 coins
+        resp = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1}
+        )
+        if resp.status_code != 200:
+            return PlainTextResponse(f"Error fetching coin list: {resp.status_code}", status_code=500)
+
+        coins = resp.json()
+        
+        # 2. For each coin, fetch 365-day chart and compute weekly changes
+        header = "Rank,Symbol,Name,Price,MCap"
+        for w in range(1, 53):
+            header += f",Week{w}_%"
+        rows = [header]
+
+        for coin in coins:
+            coin_id = coin.get("id")
+            symbol = coin.get("symbol", "").upper()
+            name = coin.get("name", "")
+            price = coin.get("current_price", 0)
+            mcap = coin.get("market_cap", 0)
+            rank = coin.get("market_cap_rank", 0)
+
+            try:
+                resp2 = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
+                    params={"vs_currency": "usd", "days": 365}
+                )
+                if resp2.status_code == 429:
+                    logger.warning(f"[TOP100] Rate limited at {symbol}, waiting 60s...")
+                    await asyncio.sleep(60)
+                    resp2 = await client.get(
+                        f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
+                        params={"vs_currency": "usd", "days": 365}
+                    )
+
+                weekly_changes = []
+                if resp2.status_code == 200:
+                    prices_data = resp2.json().get("prices", [])
+                    if prices_data:
+                        start_time = prices_data[0][0]
+                        week_ms = 7 * 24 * 60 * 60 * 1000
+                        for w in range(52):
+                            w_start = start_time + w * week_ms
+                            w_end = w_start + week_ms
+                            week_prices = [p for p in prices_data if w_start <= p[0] < w_end]
+                            if week_prices:
+                                op = week_prices[0][1]
+                                cl = week_prices[-1][1]
+                                change = ((cl - op) / op) * 100 if op > 0 else 0
+                                weekly_changes.append(f"{change:.2f}")
+                            else:
+                                weekly_changes.append("")
+                
+                # Pad to 52
+                while len(weekly_changes) < 52:
+                    weekly_changes.append("")
+
+                row = f"{rank},{symbol},\"{name}\",{price},{mcap}," + ",".join(weekly_changes)
+                rows.append(row)
+                logger.info(f"[TOP100] {rank}. {symbol} done ({len(weekly_changes)} weeks)")
+
+            except Exception as e:
+                logger.warning(f"[TOP100] {symbol} error: {e}")
+                rows.append(f"{rank},{symbol},\"{name}\",{price},{mcap}," + ",".join([""] * 52))
+
+            await asyncio.sleep(4)  # ~15 req/min to stay under limits
+
+    csv_content = "\n".join(rows)
+    return PlainTextResponse(csv_content, media_type="text/csv", headers={
+        "Content-Disposition": "attachment; filename=top100_weekly_52w.csv"
+    })
+
+
 @app.get("/api/test/twitter")
 async def test_twitter_list(cursor: str | None = None):
     """Test endpoint: calls Twitter list timeline and returns raw response structure (no LLM costs)."""
