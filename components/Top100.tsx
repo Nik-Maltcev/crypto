@@ -13,6 +13,7 @@ interface CoinData {
     price_change_percentage_30d_in_currency: number;
     price_change_percentage_200d_in_currency: number;
     price_change_percentage_1y_in_currency: number;
+    sparkline_in_7d?: { price: number[] };
 }
 
 const Top100: React.FC = () => {
@@ -24,7 +25,7 @@ const Top100: React.FC = () => {
     const fetchCoins = async () => {
         setIsLoading(true);
         try {
-            const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=24h,7d,14d,30d,200d,1y';
+            const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=24h,7d,14d,30d,200d,1y';
             const resp = await fetch(url);
             if (resp.ok) {
                 const data = await resp.json();
@@ -93,6 +94,7 @@ const Top100: React.FC = () => {
                                 <th className="text-left py-2 px-3">Монета</th>
                                 <th className="text-right py-2 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('current_price')}>Цена</th>
                                 <th className="text-right py-2 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('market_cap')}>MCap</th>
+                                <th className="text-center py-2 px-3">7д график</th>
                                 <th className="text-right py-2 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('price_change_percentage_24h')}>24ч</th>
                                 <th className="text-right py-2 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('price_change_percentage_7d_in_currency')}>7д</th>
                                 <th className="text-right py-2 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('price_change_percentage_14d_in_currency')}>14д</th>
@@ -113,6 +115,23 @@ const Top100: React.FC = () => {
                                         ${coin.current_price < 1 ? coin.current_price.toFixed(6) : coin.current_price.toFixed(2)}
                                     </td>
                                     <td className="py-1.5 px-3 text-right text-gray-400">{fmtMcap(coin.market_cap)}</td>
+                                    <td className="py-1.5 px-3">
+                                        {coin.sparkline_in_7d?.price && (() => {
+                                            const prices = coin.sparkline_in_7d!.price;
+                                            const min = Math.min(...prices);
+                                            const max = Math.max(...prices);
+                                            const range = max - min || 1;
+                                            const W = 80, H = 24;
+                                            const step = prices.length > 1 ? W / (prices.length - 1) : 0;
+                                            const points = prices.map((p, i) => `${(i * step).toFixed(1)},${(H - ((p - min) / range) * H).toFixed(1)}`).join(' ');
+                                            const isUp = prices[prices.length - 1] >= prices[0];
+                                            return (
+                                                <svg width={W} height={H} className="inline-block">
+                                                    <polyline points={points} fill="none" stroke={isUp ? '#10b981' : '#ef4444'} strokeWidth="1.5" />
+                                                </svg>
+                                            );
+                                        })()}
+                                    </td>
                                     <td className={`py-1.5 px-3 text-right font-mono font-bold ${color(coin.price_change_percentage_24h)}`}>
                                         {fmt(coin.price_change_percentage_24h)}
                                     </td>
