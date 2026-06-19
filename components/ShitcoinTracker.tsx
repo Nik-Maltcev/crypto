@@ -87,9 +87,9 @@ const TpSlCalculator: React.FC = () => {
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label className="text-[10px] text-gray-500 uppercase block mb-1">Сумма ($)</label>
+                    <label className="text-[10px] text-gray-500 uppercase block mb-1">Сумма (SOL)</label>
                     <input type="text" value={amount} onChange={e => setAmount(e.target.value)}
-                        placeholder="100"
+                        placeholder="0.5"
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
@@ -120,12 +120,12 @@ const TpSlCalculator: React.FC = () => {
                     <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
                         <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Take Profit (+{tpPct}%)</div>
                         <div className="text-lg font-bold text-emerald-400 font-mono">{formatNum(tpPrice)}</div>
-                        {pos > 0 && <div className="text-xs text-emerald-300 mt-1">+${tpProfit.toFixed(2)}</div>}
+                        {pos > 0 && <div className="text-xs text-emerald-300 mt-1">+{tpProfit.toFixed(4)} SOL</div>}
                     </div>
                     <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
                         <div className="text-[10px] text-red-400 uppercase font-bold mb-1">Stop Loss (-{slPct}%)</div>
                         <div className="text-lg font-bold text-red-400 font-mono">{formatNum(slPrice)}</div>
-                        {pos > 0 && <div className="text-xs text-red-300 mt-1">-${slLoss.toFixed(2)}</div>}
+                        {pos > 0 && <div className="text-xs text-red-300 mt-1">-{slLoss.toFixed(4)} SOL</div>}
                     </div>
                 </div>
             )}
