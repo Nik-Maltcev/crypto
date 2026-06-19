@@ -299,14 +299,14 @@ const ShitcoinTracker: React.FC = () => {
                         let lastDateKey = '';
                         const elements: React.ReactNode[] = [];
 
+                        const displayTokens = onlyPumping ? tokens.filter(t => t.safety === 'PUMPING') : tokens;
+
                         // Count tokens per day
                         const dayCounts = new Map<string, number>();
                         displayTokens.forEach(t => {
                             const dk = getDateKey(t.detected_at);
                             dayCounts.set(dk, (dayCounts.get(dk) || 0) + 1);
                         });
-
-                        const displayTokens = onlyPumping ? tokens.filter(t => t.safety === 'PUMPING') : tokens;
 
                         displayTokens.forEach((token, idx) => {
                             const dateKey = getDateKey(token.detected_at);
