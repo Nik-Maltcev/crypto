@@ -212,6 +212,90 @@ async def check_dexscreener(contract: str) -> dict:
     return {}
 
 
+async def _handle_re_call(token, caller_channel: str, message_text: str, session):
+    """Handle a repeat call — same contract mentioned by a different caller."""
+    from datetime import datetime, timezone
+
+    # Load existing re_callers
+    re_callers = json.loads(token.re_callers_json or "[]")
+    
+    # Check if this caller already re-called it
+    if any(rc["caller"] == caller_channel for rc in re_callers):
+        _log(f"Re-call from @{caller_channel} already recorded for {token.symbol}")
+        return
+    
+    # Add new re-call entry
+    now = datetime.now(timezone.utc)
+    re_callers.append({
+        "caller": caller_channel,
+        "time": now.isoformat() + "Z",
+        "message": (message_text or "")[:200],
+    })
+    
+    token.re_callers_json = json.dumps(re_callers)
+    token.re_detected_at = now
+    token.call_count = (token.call_count or 1) + 1
+    
+    await session.commit()
+    _log(f"🔁 RE-CALL #{token.call_count} for {token.symbol} by @{caller_channel}")
+    
+    # Send alert for re-call (multiple callers = bullish signal)
+    if token.call_count >= 2:
+        try:
+            dex_data = {
+                "market_cap": token.mcap_at_call,
+                "liquidity_usd": token.liquidity_usd,
+            }
+            await _send_recall_alert(token, caller_channel, token.call_count)
+        except Exception as e:
+            _log(f"Re-call alert error: {e}")
+
+
+async def _send_recall_alert(token, new_caller: str, call_count: int):
+    """Send email alert when a token gets re-called by another caller."""
+    from core.config import get_settings
+    settings = get_settings()
+    resend_key = settings.RESEND_API_KEY
+    from_email = settings.RESEND_FROM_EMAIL or "alerts@dexflow.xyz"
+
+    if not resend_key:
+        return
+
+    symbol = token.symbol or "???"
+    contract = token.contract
+    change = token.current_change or 0
+    dex_url = token.dexscreener_url or f"https://dexscreener.com/solana/{contract}"
+
+    subject = f"🔁 {symbol} RE-CALLED x{call_count} — @{new_caller}"
+    text_body = (
+        f"🔁 {symbol} was called AGAIN by @{new_caller} (total: {call_count} callers)\n\n"
+        f"Current: {change:+.1f}% from original call\n"
+        f"Original caller: @{token.caller}\n"
+        f"Contract: {contract}\n"
+        f"Dexscreener: {dex_url}\n\n"
+        f"Multiple callers = bullish signal!\n"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": from_email,
+                    "to": [ALERT_EMAIL],
+                    "subject": subject,
+                    "text": text_body,
+                },
+            )
+            if resp.status_code in (200, 201):
+                _log(f"📧 Re-call alert sent for {symbol} (x{call_count})")
+            else:
+                _log(f"Re-call email failed: {resp.status_code}")
+    except Exception as e:
+        _log(f"Re-call email error: {e}")
+
+
 async def process_new_token(contract: str, caller_channel: str, message_text: str) -> dict | None:
     """Process a newly detected token: check rug, get market data, save to DB."""
     from core.models import ShitcoinDetection
@@ -219,19 +303,32 @@ async def process_new_token(contract: str, caller_channel: str, message_text: st
     
     _log(f"New token detected from @{caller_channel}: {contract[:12]}...")
     
-    # Check if already processed (in-memory fast check)
+    # Check if already processed — handle re-calls
+    async_session = get_async_session()
+    
     if contract in _processed_contracts:
+        # Already seen this session — check if it's a NEW caller (re-call)
+        async with async_session() as session:
+            result = await session.execute(
+                sa_select(ShitcoinDetection).where(ShitcoinDetection.contract == contract)
+            )
+            existing = result.scalars().first()
+            if existing and caller_channel != existing.caller:
+                await _handle_re_call(existing, caller_channel, message_text, session)
         return None
     _processed_contracts.add(contract)
     
     # Check DB for existing
-    async_session = get_async_session()
     async with async_session() as session:
-        existing = await session.execute(
+        result = await session.execute(
             sa_select(ShitcoinDetection).where(ShitcoinDetection.contract == contract)
         )
-        if existing.scalars().first():
-            _log(f"Already in DB: {contract[:12]}...")
+        existing = result.scalars().first()
+        if existing:
+            if caller_channel != existing.caller:
+                await _handle_re_call(existing, caller_channel, message_text, session)
+            else:
+                _log(f"Already in DB (same caller): {contract[:12]}...")
             return None
     
     # Parallel checks with timeout protection
@@ -486,13 +583,13 @@ def get_detected_tokens() -> list[dict]:
 async def get_detected_tokens_async() -> list[dict]:
     """Get detected tokens from DB."""
     from core.models import ShitcoinDetection
-    from sqlalchemy import select as sa_select
+    from sqlalchemy import select as sa_select, func as sa_func
     
     async_session = get_async_session()
     async with async_session() as session:
         result = await session.execute(
             sa_select(ShitcoinDetection)
-            .order_by(ShitcoinDetection.detected_at.desc())
+            .order_by(sa_func.coalesce(ShitcoinDetection.re_detected_at, ShitcoinDetection.detected_at).desc())
         )
         tokens = result.scalars().all()
         
@@ -501,7 +598,8 @@ async def get_detected_tokens_async() -> list[dict]:
             "symbol": t.symbol,
             "name": t.name,
             "caller": t.caller,
-            "detected_at": t.detected_at.isoformat() + "Z" if t.detected_at else None,
+            "detected_at": (t.re_detected_at or t.detected_at).isoformat() + "Z" if (t.re_detected_at or t.detected_at) else None,
+            "original_detected_at": t.detected_at.isoformat() + "Z" if t.detected_at else None,
             "price_at_call": t.price_at_call,
             "mcap_at_call": t.mcap_at_call,
             "liquidity_usd": t.liquidity_usd,
@@ -519,6 +617,8 @@ async def get_detected_tokens_async() -> list[dict]:
             "twitter": t.twitter,
             "telegram": t.telegram_link,
             "price_history": json.loads(t.price_history_json or "[]"),
+            "call_count": t.call_count or 1,
+            "re_callers": json.loads(t.re_callers_json or "[]"),
         } for t in tokens]
 
 

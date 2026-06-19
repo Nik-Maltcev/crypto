@@ -244,5 +244,10 @@ class ShitcoinDetection(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Re-call tracking (when same contract mentioned again by another caller)
+    re_callers_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: [{"caller": "...", "time": "...", "message": "..."}]
+    re_detected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # last re-call time
+    call_count: Mapped[int] = mapped_column(Integer, default=1)  # total times called
+
     def __repr__(self) -> str:
         return f"<ShitcoinDetection({self.symbol}, safety={self.safety}, change={self.current_change}%)>"

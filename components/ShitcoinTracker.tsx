@@ -49,6 +49,10 @@ interface TokenData {
         telegram?: string;
     };
     price_history: { time: string; price: number; change_from_call: number; mcap: number }[];
+    // Re-call tracking
+    call_count?: number;
+    re_callers?: { caller: string; time: string; message?: string }[];
+    original_detected_at?: string;
 }
 
 const TpSlCalculator: React.FC = () => {
@@ -417,6 +421,12 @@ const ShitcoinTracker: React.FC = () => {
                                         <span className={`text-xs px-2 py-1 rounded border font-bold ${getSafetyColor(token.safety)}`}>
                                             {getSafetyIcon(token.safety)} {token.safety}
                                         </span>
+                                        {(token.call_count || 1) >= 2 && (
+                                            <span className="text-xs px-2 py-1 rounded border font-bold bg-purple-500/20 text-purple-400 border-purple-500/30 animate-pulse"
+                                                title={`Коллеры: @${token.caller}${token.re_callers ? ', @' + token.re_callers.map(r => r.caller).join(', @') : ''}`}>
+                                                🔁 x{token.call_count}
+                                            </span>
+                                        )}
                                         <div>
                                             <span className="data-secret text-lg font-bold text-white">{getSymbol(token)}</span>
                                             <span className="text-xs text-gray-500 ml-2">{getName(token)}</span>
@@ -454,7 +464,7 @@ const ShitcoinTracker: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 flex-wrap">
-                                    <span>📡 @{token.caller}</span>
+                                    <span>📡 @{token.caller}{(token.call_count || 1) >= 2 && token.re_callers ? ` + ${token.re_callers.map(r => '@' + r.caller).join(', ')}` : ''}</span>
                                     <span>⏰ {getTimeSince(token.detected_at)}</span>
                                     <span>💧 LP: {getLpPct(token).toFixed(0)}%</span>
                                     <span>👤 Creator: {getCreatorPct(token).toFixed(1)}%</span>
