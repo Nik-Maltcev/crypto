@@ -51,6 +51,88 @@ interface TokenData {
     price_history: { time: string; price: number; change_from_call: number; mcap: number }[];
 }
 
+const TpSlCalculator: React.FC = () => {
+    const [buyPrice, setBuyPrice] = useState('');
+    const [tpPct, setTpPct] = useState(20);
+    const [slPct, setSlPct] = useState(30);
+    const [amount, setAmount] = useState('');
+
+    const price = parseFloat(buyPrice);
+    const pos = parseFloat(amount);
+    const tpPrice = price > 0 ? price * (1 + tpPct / 100) : 0;
+    const slPrice = price > 0 ? price * (1 - slPct / 100) : 0;
+    const tpProfit = pos > 0 && price > 0 ? pos * (tpPct / 100) : 0;
+    const slLoss = pos > 0 && price > 0 ? pos * (slPct / 100) : 0;
+
+    const formatNum = (n: number) => {
+        if (n === 0) return '—';
+        if (n < 0.000001) return n.toExponential(2);
+        if (n < 0.001) return n.toFixed(9);
+        if (n < 1) return n.toFixed(6);
+        if (n < 1000) return n.toFixed(4);
+        return n.toFixed(2);
+    };
+
+    return (
+        <div className="bg-brand-card border border-gray-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🧮</span>
+                <h3 className="text-sm font-bold text-white">TP / SL Калькулятор</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                    <label className="text-[10px] text-gray-500 uppercase block mb-1">Цена покупки</label>
+                    <input type="text" value={buyPrice} onChange={e => setBuyPrice(e.target.value)}
+                        placeholder="0.00001"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label className="text-[10px] text-gray-500 uppercase block mb-1">Сумма ($)</label>
+                    <input type="text" value={amount} onChange={e => setAmount(e.target.value)}
+                        placeholder="100"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label className="text-[10px] text-gray-500 uppercase block mb-1">TP %</label>
+                    <div className="flex gap-1">
+                        {[15, 20, 25].map(v => (
+                            <button key={v} onClick={() => setTpPct(v)}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${tpPct === v ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                                +{v}%
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <label className="text-[10px] text-gray-500 uppercase block mb-1">SL %</label>
+                    <div className="flex gap-1">
+                        {[20, 25, 30].map(v => (
+                            <button key={v} onClick={() => setSlPct(v)}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${slPct === v ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                                -{v}%
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            {price > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
+                        <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Take Profit (+{tpPct}%)</div>
+                        <div className="text-lg font-bold text-emerald-400 font-mono">{formatNum(tpPrice)}</div>
+                        {pos > 0 && <div className="text-xs text-emerald-300 mt-1">+${tpProfit.toFixed(2)}</div>}
+                    </div>
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
+                        <div className="text-[10px] text-red-400 uppercase font-bold mb-1">Stop Loss (-{slPct}%)</div>
+                        <div className="text-lg font-bold text-red-400 font-mono">{formatNum(slPrice)}</div>
+                        {pos > 0 && <div className="text-xs text-red-300 mt-1">-${slLoss.toFixed(2)}</div>}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const ShitcoinTracker: React.FC = () => {
     const [tokens, setTokens] = useState<TokenData[]>([]);
     const [monitorRunning, setMonitorRunning] = useState(false);
@@ -245,6 +327,9 @@ const ShitcoinTracker: React.FC = () => {
                     <div className="text-[10px] text-gray-500 uppercase">Винрейт</div>
                 </div>
             </div>
+
+            {/* TP/SL Calculator */}
+            <TpSlCalculator />
 
             {/* Live Logs (admin only) */}
             {showLogs && (
