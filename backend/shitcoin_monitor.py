@@ -583,14 +583,22 @@ def get_detected_tokens() -> list[dict]:
 async def get_detected_tokens_async() -> list[dict]:
     """Get detected tokens from DB."""
     from core.models import ShitcoinDetection
-    from sqlalchemy import select as sa_select, func as sa_func
+    from sqlalchemy import select as sa_select
     
     async_session = get_async_session()
     async with async_session() as session:
-        result = await session.execute(
-            sa_select(ShitcoinDetection)
-            .order_by(sa_func.coalesce(ShitcoinDetection.re_detected_at, ShitcoinDetection.detected_at).desc())
-        )
+        try:
+            from sqlalchemy import func as sa_func
+            result = await session.execute(
+                sa_select(ShitcoinDetection)
+                .order_by(sa_func.coalesce(ShitcoinDetection.re_detected_at, ShitcoinDetection.detected_at).desc())
+            )
+        except Exception:
+            # Fallback if re_detected_at column doesn't exist yet
+            result = await session.execute(
+                sa_select(ShitcoinDetection)
+                .order_by(ShitcoinDetection.detected_at.desc())
+            )
         tokens = result.scalars().all()
         
         return [{
@@ -598,7 +606,7 @@ async def get_detected_tokens_async() -> list[dict]:
             "symbol": t.symbol,
             "name": t.name,
             "caller": t.caller,
-            "detected_at": (t.re_detected_at or t.detected_at).isoformat() + "Z" if (t.re_detected_at or t.detected_at) else None,
+            "detected_at": (getattr(t, 're_detected_at', None) or t.detected_at or t.detected_at).isoformat() + "Z" if (getattr(t, 're_detected_at', None) or t.detected_at) else None,
             "original_detected_at": t.detected_at.isoformat() + "Z" if t.detected_at else None,
             "price_at_call": t.price_at_call,
             "mcap_at_call": t.mcap_at_call,
@@ -617,8 +625,8 @@ async def get_detected_tokens_async() -> list[dict]:
             "twitter": t.twitter,
             "telegram": t.telegram_link,
             "price_history": json.loads(t.price_history_json or "[]"),
-            "call_count": t.call_count or 1,
-            "re_callers": json.loads(t.re_callers_json or "[]"),
+            "call_count": getattr(t, 'call_count', 1) or 1,
+            "re_callers": json.loads(getattr(t, 're_callers_json', None) or "[]"),
         } for t in tokens]
 
 

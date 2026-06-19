@@ -79,6 +79,16 @@ async def init_db(drop_existing: bool = False) -> None:
             await conn.execute(text(
                 "ALTER TABLE altcoin_trackings ADD COLUMN IF NOT EXISTS daily_prices_json TEXT"
             ))
+            # Migrate: shitcoin re-call tracking columns
+            await conn.execute(text(
+                "ALTER TABLE shitcoin_detections ADD COLUMN IF NOT EXISTS re_callers_json TEXT"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE shitcoin_detections ADD COLUMN IF NOT EXISTS re_detected_at TIMESTAMP"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE shitcoin_detections ADD COLUMN IF NOT EXISTS call_count INTEGER DEFAULT 1"
+            ))
         except Exception:
             pass  # Column already exists or SQLite (no IF NOT EXISTS support)
 
