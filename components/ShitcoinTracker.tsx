@@ -58,6 +58,7 @@ const ShitcoinTracker: React.FC = () => {
     const [showLogs, setShowLogs] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
     const [selectedToken, setSelectedToken] = useState<TokenData | null>(null);
+    const [onlyPumping, setOnlyPumping] = useState(false);
 
     const fetchTokens = async () => {
         try {
@@ -173,12 +174,18 @@ const ShitcoinTracker: React.FC = () => {
                         </button>
                     )}
                     {tokens.length > 0 && (
+                        <>
+                        <button onClick={() => setOnlyPumping(!onlyPumping)}
+                            className={`px-3 py-2 rounded-lg text-sm font-semibold transition border ${onlyPumping ? 'bg-yellow-600/20 text-yellow-400 border-yellow-500/40' : 'bg-gray-700/50 text-gray-400 border-gray-700'}`}>
+                            {onlyPumping ? '✓ ' : ''}Pumping
+                        </button>
                         <button onClick={() => {
+                            const filtered = onlyPumping ? tokens.filter(t => t.safety === 'PUMPING') : tokens;
                             // Find max price history length for dynamic columns
-                            const maxHistory = Math.max(...tokens.map(t => t.price_history.length), 0);
+                            const maxHistory = Math.max(...filtered.map(t => t.price_history.length), 0);
                             const histHeaders = Array.from({length: maxHistory}, (_, i) => `Snap ${i+1} %`);
                             const headers = ['Symbol','Name','Caller','Detected','Safety','Price at Call','MCap at Call','Current Change %','Peak Change %','Liquidity','LP Locked %','Creator %','Contract','Dexscreener', ...histHeaders];
-                            const rows = tokens.map(t => {
+                            const rows = filtered.map(t => {
                                 const base = [
                                     getSymbol(t),
                                     getName(t),
@@ -212,6 +219,7 @@ const ShitcoinTracker: React.FC = () => {
                         }} className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">
                             CSV
                         </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -293,12 +301,14 @@ const ShitcoinTracker: React.FC = () => {
 
                         // Count tokens per day
                         const dayCounts = new Map<string, number>();
-                        tokens.forEach(t => {
+                        displayTokens.forEach(t => {
                             const dk = getDateKey(t.detected_at);
                             dayCounts.set(dk, (dayCounts.get(dk) || 0) + 1);
                         });
 
-                        tokens.forEach((token, idx) => {
+                        const displayTokens = onlyPumping ? tokens.filter(t => t.safety === 'PUMPING') : tokens;
+
+                        displayTokens.forEach((token, idx) => {
                             const dateKey = getDateKey(token.detected_at);
                             if (dateKey !== lastDateKey) {
                                 lastDateKey = dateKey;
