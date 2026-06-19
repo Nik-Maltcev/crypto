@@ -83,9 +83,11 @@ async def _send_pump_alert(token, change_pct: float, dex_data: dict):
     liquidity = dex_data.get("liquidity_usd", 0)
     dex_url = token.dexscreener_url or f"https://dexscreener.com/solana/{contract}"
 
-    subject = f"{symbol} +{change_pct:.0f}% — shitcoin pump alert"
+    subject = f"🚨 {symbol} +{change_pct:.0f}% — BUY SIGNAL"
     text_body = (
-        f"{symbol} ({name}) +{change_pct:.1f}% from call\n\n"
+        f"🚨 {symbol} ({name}) reached +{change_pct:.1f}% from call\n\n"
+        f"ACTION: Open exchange and BUY NOW\n"
+        f"Target: sell at +45% from call (+20% from your entry)\n\n"
         f"Caller: @{caller}\n"
         f"MCap: ${mcap:,.0f}\n"
         f"Liquidity: ${liquidity:,.0f}\n"
@@ -150,6 +152,7 @@ Message:
 
 # In-memory dedup cache (persists during runtime, resets on deploy)
 _processed_contracts: set[str] = set()
+_alerted_20_contracts: set[str] = set()  # tokens that already got +20% alert
 _monitor_running: bool = False
 
 
@@ -354,11 +357,14 @@ async def update_price_tracking():
                     token.peak_price = current_price
                     token.peak_change = round(change_pct, 2)
                 
+                # Send alert at +20% (entry signal)
+                if change_pct >= 20 and token.contract not in _alerted_20_contracts:
+                    _alerted_20_contracts.add(token.contract)
+                    asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
+                    _log(f"🚨 +20% ALERT: {token.symbol} at +{change_pct:.0f}%")
+                
                 # Update safety status based on performance
                 if change_pct >= 50:
-                    # Send email alert if this is the FIRST time crossing +50%
-                    if token.safety != "PUMPING":
-                        asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
                     token.safety = "PUMPING"
                 elif change_pct <= -80:
                     token.status = "rugged"
