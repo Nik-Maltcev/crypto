@@ -422,10 +422,16 @@ const ShitcoinTracker: React.FC = () => {
                                             <span className="text-xs text-gray-500 ml-2">{getName(token)}</span>
                                         </div>
                                         <span className="data-secret text-[10px] text-gray-600 font-mono cursor-pointer hover:text-gray-400 transition"
-                                            onClick={() => {navigator.clipboard.writeText(token.contract); }}
+                                            onClick={(e) => {e.stopPropagation(); navigator.clipboard.writeText(token.contract); }}
                                             title="Нажми чтобы скопировать адрес">
-                                            📋 {token.contract.slice(0, 6)}...{token.contract.slice(-4)}
+                                            {token.contract.slice(0, 6)}...{token.contract.slice(-4)}
                                         </span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(token.contract); }}
+                                            className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded text-[10px] font-bold transition"
+                                            title="Скопировать контракт">
+                                            📋 Copy
+                                        </button>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="text-right">
