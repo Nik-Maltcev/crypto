@@ -65,7 +65,7 @@ ALERT_EMAIL = "nikmaltcev98@gmail.com"
 
 
 async def _send_pump_alert(token, change_pct: float, dex_data: dict):
-    """Send email notification via Resend when token hits +50%."""
+    """Send email notification when token hits +20% with TP/SL prices."""
     from core.config import get_settings
     settings = get_settings()
     resend_key = settings.RESEND_API_KEY
@@ -81,16 +81,34 @@ async def _send_pump_alert(token, change_pct: float, dex_data: dict):
     caller = token.caller or "unknown"
     mcap = dex_data.get("market_cap", 0)
     liquidity = dex_data.get("liquidity_usd", 0)
+    current_price = dex_data.get("price_usd", 0) or token.current_price or 0
     dex_url = token.dexscreener_url or f"https://dexscreener.com/solana/{contract}"
 
-    subject = f"🚨 {symbol} +{change_pct:.0f}% — BUY SIGNAL"
+    # Calculate TP/SL prices
+    tp_pct = 20  # +20% from buy
+    sl_pct = 30  # -30% from buy
+    tp_price = current_price * (1 + tp_pct / 100) if current_price else 0
+    sl_price = current_price * (1 - sl_pct / 100) if current_price else 0
+
+    def fmt_price(p):
+        if not p:
+            return "N/A"
+        if p < 0.000001:
+            return f"${p:.2e}"
+        if p < 0.001:
+            return f"${p:.9f}"
+        if p < 1:
+            return f"${p:.6f}"
+        return f"${p:.4f}"
+
+    subject = f"🚨 {symbol} +{change_pct:.0f}% — BUY NOW"
     text_body = (
-        f"🚨 {symbol} ({name}) reached +{change_pct:.1f}% from call\n\n"
-        f"ACTION: Open exchange and BUY NOW\n"
-        f"Target: sell at +45% from call (+20% from your entry)\n\n"
+        f"🚨 {symbol} ({name}) +{change_pct:.1f}%\n\n"
+        f"💰 ЦЕНА СЕЙЧАС: {fmt_price(current_price)}\n"
+        f"✅ TAKE PROFIT (+{tp_pct}%): {fmt_price(tp_price)}\n"
+        f"🛑 STOP LOSS (-{sl_pct}%): {fmt_price(sl_price)}\n\n"
         f"Caller: @{caller}\n"
-        f"MCap: ${mcap:,.0f}\n"
-        f"Liquidity: ${liquidity:,.0f}\n"
+        f"MCap: ${mcap:,.0f} | Liq: ${liquidity:,.0f}\n"
         f"Contract: {contract}\n"
         f"Dexscreener: {dex_url}\n"
     )
