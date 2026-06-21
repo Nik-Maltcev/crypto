@@ -475,6 +475,9 @@ async def update_price_tracking():
                 # Send alert at +20% (entry signal)
                 if change_pct >= 20 and token.contract not in _alerted_20_contracts:
                     _alerted_20_contracts.add(token.contract)
+                    # Move coin to TODAY on dashboard when alert fires
+                    token.re_detected_at = datetime.utcnow()
+                    token.safety = "PUMPING"
                     asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
                     _log(f"🚨 +20% ALERT: {token.symbol} at +{change_pct:.0f}%")
                 
