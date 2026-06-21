@@ -119,12 +119,21 @@ async def check_pairs():
             
             # Check for ENTRY signal
             if pair_key not in _active_positions:
+                price_a = prices_a[-1]
+                price_b = prices_b[-1]
+                sl_pct = 8  # SL per leg in %
+                
                 if zscore > ZSCORE_ENTRY:
                     # A outperformed B -> Short A, Long B
+                    sl_price_a = price_a * (1 + sl_pct / 100)  # short SL = price goes UP
+                    sl_price_b = price_b * (1 - sl_pct / 100)  # long SL = price goes DOWN
+                    
                     _active_positions[pair_key] = {
                         "direction": "short_a_long_b",
                         "entry_date": datetime.now(timezone.utc).isoformat(),
                         "entry_zscore": zscore,
+                        "price_a": price_a,
+                        "price_b": price_b,
                     }
                     
                     subject = f"📊 PAIRS ENTRY: Short {pair['sym_a']} / Long {pair['sym_b']}"
@@ -133,21 +142,27 @@ async def check_pairs():
                         f"Pair: {pair_key} (corr: {pair['corr']})\n"
                         f"Z-score: {zscore:.2f} (threshold: {ZSCORE_ENTRY})\n\n"
                         f"ACTION:\n"
-                        f"  🔴 SHORT {pair['sym_a']} (overbought vs pair)\n"
-                        f"  🟢 LONG {pair['sym_b']} (undervalued vs pair)\n\n"
-                        f"Exit when z-score returns to 0\n"
-                        f"Stop Loss: z-score > {ZSCORE_STOPLOSS} (spread diverges further)\n"
+                        f"  🔴 SHORT {pair['sym_a']}: entry ${price_a:.6g} | SL ${sl_price_a:.6g} (+{sl_pct}%)\n"
+                        f"  🟢 LONG {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (-{sl_pct}%)\n\n"
+                        f"TP: z-score returns to 0 (бот пришлёт алерт)\n"
+                        f"SL: {sl_pct}% на каждую ногу (ставь на MEXC)\n"
                         f"Timeout: 14 days max\n"
-                        f"Backtest winrate: {75}%\n"
+                        f"Backtest winrate: 75%\n"
                     )
                     await send_pairs_alert(subject, body)
                 
                 elif zscore < -ZSCORE_ENTRY:
                     # B outperformed A -> Long A, Short B
+                    sl_price_a = price_a * (1 - sl_pct / 100)  # long SL = price goes DOWN
+                    sl_price_b = price_b * (1 + sl_pct / 100)  # short SL = price goes UP
+                    
                     _active_positions[pair_key] = {
                         "direction": "long_a_short_b",
                         "entry_date": datetime.now(timezone.utc).isoformat(),
                         "entry_zscore": zscore,
+                        "price_a": price_a,
+                        "price_b": price_b,
+                    }
                     }
                     
                     subject = f"📊 PAIRS ENTRY: Long {pair['sym_a']} / Short {pair['sym_b']}"
@@ -156,12 +171,12 @@ async def check_pairs():
                         f"Pair: {pair_key} (corr: {pair['corr']})\n"
                         f"Z-score: {zscore:.2f} (threshold: -{ZSCORE_ENTRY})\n\n"
                         f"ACTION:\n"
-                        f"  🟢 LONG {pair['sym_a']} (undervalued vs pair)\n"
-                        f"  🔴 SHORT {pair['sym_b']} (overbought vs pair)\n\n"
-                        f"Exit when z-score returns to 0\n"
-                        f"Stop Loss: z-score < -{ZSCORE_STOPLOSS} (spread diverges further)\n"
+                        f"  🟢 LONG {pair['sym_a']}: entry ${price_a:.6g} | SL ${sl_price_a:.6g} (-{sl_pct}%)\n"
+                        f"  🔴 SHORT {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (+{sl_pct}%)\n\n"
+                        f"TP: z-score returns to 0 (бот пришлёт алерт)\n"
+                        f"SL: {sl_pct}% на каждую ногу (ставь на MEXC)\n"
                         f"Timeout: 14 days max\n"
-                        f"Backtest winrate: {75}%\n"
+                        f"Backtest winrate: 75%\n"
                     )
                     await send_pairs_alert(subject, body)
             
