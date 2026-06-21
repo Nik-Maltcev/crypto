@@ -21,6 +21,7 @@ PAIRS = [
 # Strategy parameters (from backtest: z=1.0, window=20, timeout=14)
 ZSCORE_ENTRY = 1.0
 ZSCORE_EXIT = 0.0
+ZSCORE_STOPLOSS = 2.5  # if z-score goes FURTHER against us — cut losses
 WINDOW = 20  # days for rolling mean/std
 ALERT_EMAIL = "nikmaltcev98@gmail.com"
 
@@ -135,6 +136,7 @@ async def check_pairs():
                         f"  🔴 SHORT {pair['sym_a']} (overbought vs pair)\n"
                         f"  🟢 LONG {pair['sym_b']} (undervalued vs pair)\n\n"
                         f"Exit when z-score returns to 0\n"
+                        f"Stop Loss: z-score > {ZSCORE_STOPLOSS} (spread diverges further)\n"
                         f"Timeout: 14 days max\n"
                         f"Backtest winrate: {75}%\n"
                     )
@@ -157,6 +159,7 @@ async def check_pairs():
                         f"  🟢 LONG {pair['sym_a']} (undervalued vs pair)\n"
                         f"  🔴 SHORT {pair['sym_b']} (overbought vs pair)\n\n"
                         f"Exit when z-score returns to 0\n"
+                        f"Stop Loss: z-score < -{ZSCORE_STOPLOSS} (spread diverges further)\n"
                         f"Timeout: 14 days max\n"
                         f"Backtest winrate: {75}%\n"
                     )
@@ -168,12 +171,21 @@ async def check_pairs():
                 should_exit = False
                 reason = ""
                 
+                # Take Profit: z-score returned to 0
                 if pos["direction"] == "short_a_long_b" and zscore <= ZSCORE_EXIT:
                     should_exit = True
-                    reason = "Z-score returned to 0 (mean reversion complete)"
+                    reason = "TP: Z-score returned to 0 (mean reversion complete)"
                 elif pos["direction"] == "long_a_short_b" and zscore >= -ZSCORE_EXIT:
                     should_exit = True
-                    reason = "Z-score returned to 0 (mean reversion complete)"
+                    reason = "TP: Z-score returned to 0 (mean reversion complete)"
+                
+                # Stop Loss: z-score went FURTHER against position
+                if pos["direction"] == "short_a_long_b" and zscore >= ZSCORE_STOPLOSS:
+                    should_exit = True
+                    reason = f"SL: Z-score expanded to {zscore:.2f} (>{ZSCORE_STOPLOSS}) — cut losses!"
+                elif pos["direction"] == "long_a_short_b" and zscore <= -ZSCORE_STOPLOSS:
+                    should_exit = True
+                    reason = f"SL: Z-score expanded to {zscore:.2f} (<-{ZSCORE_STOPLOSS}) — cut losses!"
                 
                 # Timeout check
                 entry_dt = datetime.fromisoformat(pos["entry_date"])
