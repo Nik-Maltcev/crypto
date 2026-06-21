@@ -16,6 +16,13 @@ const FOREX_DATA = [
     { a: 'EURJPY', b: 'GBPJPY', corr: 0.82, trades: 21, wr: 71, avg: 0.15, year: 3.2, desc: 'Euro/Yen vs Pound/Yen' },
 ];
 
+const MOEX_DATA = [
+    { a: 'ROSN', b: 'TATN', corr: 0.73, trades: 26, wr: 69, avg: 0.81, year: 21.0, desc: 'Роснефть vs Татнефть' },
+    { a: 'GAZP', b: 'SNGS', corr: 0.72, trades: 21, wr: 76, avg: 0.52, year: 10.8, desc: 'Газпром vs Сургутнефтегаз' },
+    { a: 'CHMF', b: 'NLMK', corr: 0.86, trades: 25, wr: 72, avg: 0.41, year: 10.3, desc: 'Северсталь vs НЛМК' },
+    { a: 'LKOH', b: 'ROSN', corr: 0.74, trades: 24, wr: 67, avg: 0.11, year: 2.7, desc: 'Лукойл vs Роснефть' },
+];
+
 const PairsStocks: React.FC = () => {
     return (
         <div className="space-y-8">
@@ -146,6 +153,46 @@ const PairsStocks: React.FC = () => {
                 <p className="text-xs text-red-400/80">
                     Бэктест на 365 дней не гарантирует будущих результатов. Высокое плечо увеличивает как прибыль так и убытки. Используйте только средства, потерю которых можете себе позволить.
                 </p>
+            </div>
+
+
+            {/* MOEX Table */}
+            <div className="bg-brand-card border border-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-white mb-1">МосБиржа (MOEX)</h3>
+                <p className="text-xs text-gray-500 mb-4">Торгуется через Тинькофф, БКС, Финам. Шорт доступен. Без VPN.</p>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-gray-500 border-b border-gray-700">
+                                <th className="text-left py-2">Пара</th>
+                                <th className="text-left py-2">Описание</th>
+                                <th className="text-center py-2">Корр.</th>
+                                <th className="text-center py-2">Трейды</th>
+                                <th className="text-center py-2">WR</th>
+                                <th className="text-right py-2">Год PNL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {MOEX_DATA.map((p, i) => (
+                                <tr key={i} className="border-b border-gray-800/40">
+                                    <td className="py-3 font-bold text-white">{p.a}/{p.b}</td>
+                                    <td className="py-3 text-gray-400 text-xs">{p.desc}</td>
+                                    <td className="py-3 text-center text-gray-400">{p.corr}</td>
+                                    <td className="py-3 text-center text-gray-300">{p.trades}</td>
+                                    <td className="py-3 text-center">
+                                        <span className={`font-bold ${p.wr >= 75 ? 'text-emerald-400' : p.wr >= 65 ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                            {p.wr}%
+                                        </span>
+                                    </td>
+                                    <td className="py-3 text-right font-bold text-emerald-400">+{p.year}%</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="mt-4 bg-gray-800/50 rounded-lg p-3 text-xs text-gray-400">
+                    <span className="text-white font-semibold">Преимущество MOEX:</span> торгуешь в рублях, без VPN, шорт через любого РФ брокера, данные с iss.moex.com бесплатно. Пары нефтянки (ROSN/TATN) и металлургии (CHMF/NLMK) — классика парного трейдинга на российском рынке.
+                </div>
             </div>
         </div>
     );
