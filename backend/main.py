@@ -173,6 +173,15 @@ async def lifespan(app: FastAPI):
                 name="Daily Altcoin Price Snapshot (08:00 MSK)",
                 replace_existing=True,
             )
+            # Pairs Trading bot — check z-scores daily at 06:00 UTC (09:00 MSK)
+            from pairs_trading import check_pairs
+            scheduler.add_job(
+                check_pairs,
+                trigger=CronTrigger(hour=6, minute=0),
+                id="daily_pairs_trading",
+                name="Daily Pairs Trading Z-Score Check (09:00 MSK)",
+                replace_existing=True,
+            )
             # Hypothesis V2 Short + Long — DISABLED temporarily
             # scheduler.add_job(
             #     run_hypothesis_v2,
@@ -205,7 +214,7 @@ async def lifespan(app: FastAPI):
             #     replace_existing=True,
             # )
             scheduler.start()
-            logger.info("APScheduler started — hypothesis v2 short+long DISABLED")
+            logger.info("APScheduler started — pairs trading daily at 09:00 MSK")
         except Exception as e:
             logger.error(f"Failed to start APScheduler: {e}")
     else:
@@ -2560,3 +2569,20 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+# ============ PAIRS TRADING ============
+
+@app.get("/api/pairs/status")
+async def get_pairs_status():
+    """Get active pairs trading positions."""
+    from pairs_trading import get_active_positions
+    return {"success": True, "positions": get_active_positions()}
+
+
+@app.post("/api/pairs/check")
+async def run_pairs_check():
+    """Manually trigger pairs trading z-score check."""
+    from pairs_trading import check_pairs
+    asyncio.create_task(check_pairs())
+    return {"success": True, "message": "Pairs check started, alerts will be sent if signals found"}
