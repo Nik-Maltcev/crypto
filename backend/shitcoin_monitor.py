@@ -101,9 +101,15 @@ async def _send_pump_alert(token, change_pct: float, dex_data: dict):
             return f"${p:.6f}"
         return f"${p:.4f}"
 
-    subject = f"🚨 {symbol} +{change_pct:.0f}% — BUY NOW"
+    subject = f"🚨 {symbol} +{change_pct:.0f}% — READY"
+    
+    # Max buy price (+30% from call)
+    max_buy_price = token.price_at_call * 1.30 if token.price_at_call else 0
+    
     text_body = (
         f"🚨 {symbol} ({name}) +{change_pct:.1f}%\n\n"
+        f"⚠️ ПОКУПАЙ ТОЛЬКО ЕСЛИ ЦЕНА <= {fmt_price(max_buy_price)} (+30% от call)\n"
+        f"⚠️ ПРОВЕРЬ СВЕЧУ НА DEXSCREENER — ДОЛЖНА БЫТЬ ЗЕЛЁНАЯ\n\n"
         f"💰 ЦЕНА СЕЙЧАС: {fmt_price(current_price)}\n"
         f"✅ TAKE PROFIT (+{tp_pct}%): {fmt_price(tp_price)}\n"
         f"🛑 STOP LOSS (-{sl_pct}%): {fmt_price(sl_price)}\n\n"
@@ -170,7 +176,7 @@ Message:
 
 # In-memory dedup cache (persists during runtime, resets on deploy)
 _processed_contracts: set[str] = set()
-_alerted_20_contracts: set[str] = set()  # tokens that already got +20% alert
+_alerted_10_contracts: set[str] = set()  # tokens that already got +10% alert
 _monitor_running: bool = False
 
 
@@ -472,14 +478,14 @@ async def update_price_tracking():
                     token.peak_price = current_price
                     token.peak_change = round(change_pct, 2)
                 
-                # Send alert at +20% (entry signal)
-                if change_pct >= 20 and token.contract not in _alerted_20_contracts:
-                    _alerted_20_contracts.add(token.contract)
+                # Send alert at +10% (entry signal — buy only if still <= +30%)
+                if change_pct >= 10 and token.contract not in _alerted_10_contracts:
+                    _alerted_10_contracts.add(token.contract)
                     # Move coin to TODAY on dashboard when alert fires
                     token.re_detected_at = datetime.utcnow()
                     token.safety = "PUMPING"
                     asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
-                    _log(f"🚨 +20% ALERT: {token.symbol} at +{change_pct:.0f}%")
+                    _log(f"🚨 +10% ALERT: {token.symbol} at +{change_pct:.0f}%")
                 
                 # Update safety status based on performance
                 if change_pct >= 50:
