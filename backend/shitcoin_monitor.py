@@ -478,14 +478,14 @@ async def update_price_tracking():
                     token.peak_price = current_price
                     token.peak_change = round(change_pct, 2)
                 
-                # Send alert at +10% (entry signal — buy only if still <= +30%)
+                # Send alert at +10% (entry signal — DISABLED to save Resend quota)
                 if change_pct >= 10 and token.contract not in _alerted_10_contracts:
                     _alerted_10_contracts.add(token.contract)
                     # Move coin to TODAY on dashboard when alert fires
                     token.re_detected_at = datetime.utcnow()
                     token.safety = "PUMPING"
-                    asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
-                    _log(f"🚨 +10% ALERT: {token.symbol} at +{change_pct:.0f}%")
+                    # asyncio.create_task(_send_pump_alert(token, change_pct, dex_data))
+                    _log(f"🚨 +10% ALERT (email OFF): {token.symbol} at +{change_pct:.0f}%")
                 
                 # Update safety status based on performance
                 if change_pct >= 50:
