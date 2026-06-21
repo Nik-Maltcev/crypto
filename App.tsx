@@ -11,6 +11,7 @@ import CryptoCard from './components/CryptoCard';
 import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import ShitcoinTracker from './components/ShitcoinTracker';
+import PairsTrading from './components/PairsTrading';
 import HypothesisV2 from './components/HypothesisV2';
 import BitcoinPatterns from './components/BitcoinPatterns';
 import TopHours from './components/TopHours';
@@ -51,7 +52,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'top100' | 'shitcoins'>('shitcoins');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'top100' | 'shitcoins' | 'pairs'>('pairs');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -523,6 +524,12 @@ const App: React.FC = () => {
                 🎯 Щитки
               </button>
               <button
+                onClick={() => setActiveTab('pairs')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'pairs' ? 'bg-blue-700/50 text-blue-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                📊 Pairs
+              </button>
+              <button
                 onClick={() => setActiveTab('bitcoin')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'bitcoin' ? 'bg-orange-700/50 text-orange-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
@@ -614,6 +621,8 @@ const App: React.FC = () => {
         <DemoOverlay>
         {activeTab === 'shitcoins' ? (
           <ShitcoinTracker />
+        ) : activeTab === 'pairs' ? (
+          <PairsTrading />
         ) : activeTab === 'bitcoin' ? (
           <BitcoinPatterns />
         ) : activeTab === 'top_hours' ? (
