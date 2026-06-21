@@ -12,6 +12,7 @@ import AltcoinGemCard from './components/AltcoinGemCard';
 import SentimentChart from './components/SentimentChart';
 import ShitcoinTracker from './components/ShitcoinTracker';
 import PairsTrading from './components/PairsTrading';
+import PairsStocks from './components/PairsStocks';
 import HypothesisV2 from './components/HypothesisV2';
 import BitcoinPatterns from './components/BitcoinPatterns';
 import TopHours from './components/TopHours';
@@ -52,7 +53,7 @@ const ClockIcon = () => (
 
 const App: React.FC = () => {
   const { isAuthenticated, isDemo, loading, enterDemo, exitDemo, logout, email, hasSubscription } = useAuth();
-  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'top100' | 'shitcoins' | 'pairs'>('pairs');
+  const [activeTab, setActiveTab] = useState<'main' | 'hypothesis_v2' | 'hypothesis_v2_long' | 'bitcoin' | 'top_hours' | 'top100' | 'shitcoins' | 'pairs' | 'pairs_stocks'>('pairs');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [showPricing, setShowPricing] = useState(false);
@@ -527,25 +528,13 @@ const App: React.FC = () => {
                 onClick={() => setActiveTab('pairs')}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'pairs' ? 'bg-blue-700/50 text-blue-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                📊 Pairs
+                📊 Pairs Crypto
               </button>
               <button
-                onClick={() => setActiveTab('bitcoin')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'bitcoin' ? 'bg-orange-700/50 text-orange-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setActiveTab('pairs_stocks')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'pairs_stocks' ? 'bg-emerald-700/50 text-emerald-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                📊 Паттерны
-              </button>
-              <button
-                onClick={() => setActiveTab('top_hours')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'top_hours' ? 'bg-yellow-700/50 text-yellow-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                ⏰ Топ часы
-              </button>
-              <button
-                onClick={() => setActiveTab('top100')}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'top100' ? 'bg-cyan-700/50 text-cyan-300 shadow' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                🏆 Топ-100
+                📈 Pairs Акции/ETF
               </button>
             </div>
 
@@ -623,6 +612,8 @@ const App: React.FC = () => {
           <ShitcoinTracker />
         ) : activeTab === 'pairs' ? (
           <PairsTrading />
+        ) : activeTab === 'pairs_stocks' ? (
+          <PairsStocks />
         ) : activeTab === 'bitcoin' ? (
           <BitcoinPatterns />
         ) : activeTab === 'top_hours' ? (
