@@ -148,6 +148,97 @@ const PairsStocks: React.FC = () => {
                 </div>
             </div>
 
+            {/* Detailed Instructions */}
+            <div className="bg-brand-card border border-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-white mb-4">Пошаговая инструкция</h3>
+                
+                <div className="space-y-6">
+                    {/* Step 1 */}
+                    <div className="border-l-2 border-blue-500 pl-4">
+                        <div className="text-sm font-bold text-blue-400 mb-1">Шаг 1. Получаешь алерт</div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                            <p>Бот ежедневно в 09:00 MSK проверяет z-score всех пар. Если z-score {'>'} 1.0 или {'<'} -1.0 — приходит email:</p>
+                            <div className="bg-gray-900 rounded p-2 font-mono text-[10px] mt-2">
+                                <p className="text-emerald-400">📊 PAIRS ENTRY: Long DOGE / Short ETC</p>
+                                <p className="text-gray-500">Z-score: -1.62</p>
+                                <p className="text-gray-500">🟢 LONG DOGE: entry $0.0834 | SL $0.0767 (-8%)</p>
+                                <p className="text-gray-500">🔴 SHORT ETC: entry $7.338 | SL $7.925 (+8%)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="border-l-2 border-emerald-500 pl-4">
+                        <div className="text-sm font-bold text-emerald-400 mb-1">Шаг 2. Открываешь позиции</div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                            <p><strong>Для крипты</strong> — MEXC Futures:</p>
+                            <ul className="list-disc ml-4 space-y-0.5">
+                                <li>Открываешь DOGEUSDT → Long (купить) на $50</li>
+                                <li>Открываешь ETCUSDT → Short (продать) на $50</li>
+                                <li>Плечо x2-x3 (не выше!)</li>
+                                <li>Ставишь SL из алерта на каждую ногу</li>
+                            </ul>
+                            <p className="mt-2"><strong>Для акций US</strong> — Interactive Brokers / Trading212:</p>
+                            <ul className="list-disc ml-4 space-y-0.5">
+                                <li>Buy VTI на $500 (или CFD)</li>
+                                <li>Sell Short ARKK на $500</li>
+                                <li>SL 8% на каждую ногу</li>
+                            </ul>
+                            <p className="mt-2"><strong>Для MOEX</strong> — Тинькофф / БКС:</p>
+                            <ul className="list-disc ml-4 space-y-0.5">
+                                <li>Купить ROSN на 50,000₽</li>
+                                <li>Продать (шорт) TATN на 50,000₽</li>
+                                <li>SL 8% на каждую ногу</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="border-l-2 border-yellow-500 pl-4">
+                        <div className="text-sm font-bold text-yellow-400 mb-1">Шаг 3. Ждёшь (1-14 дней)</div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                            <p>Ничего не делаешь. Спред возвращается к среднему сам по себе. Не трогай позиции.</p>
+                            <p>Проверяешь раз в день — бот сам пришлёт алерт на выход.</p>
+                        </div>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="border-l-2 border-purple-500 pl-4">
+                        <div className="text-sm font-bold text-purple-400 mb-1">Шаг 4. Получаешь алерт на выход</div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                            <div className="bg-gray-900 rounded p-2 font-mono text-[10px]">
+                                <p className="text-yellow-400">📊 PAIRS EXIT: Close DOGE/ETC</p>
+                                <p className="text-gray-500">Z-score вернулся к 0. Закрывай обе позиции.</p>
+                            </div>
+                            <p className="mt-1">Закрываешь обе ноги. Фиксируешь профит +2-3%.</p>
+                        </div>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="border-l-2 border-red-500 pl-4">
+                        <div className="text-sm font-bold text-red-400 mb-1">Шаг 5. Если сработал SL</div>
+                        <div className="text-xs text-gray-400 space-y-1">
+                            <p>Если одна из ног пробила -8% — SL закрывает её автоматически на бирже.</p>
+                            <p>Вторую ногу закрываешь вручную сразу. Убыток: ~3-5% от позиции.</p>
+                            <p className="text-yellow-400">Это нормально — случается в 17-25% случаев. На дистанции стратегия прибыльная.</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Rules */}
+                <div className="mt-6 bg-gray-800/50 rounded-lg p-4">
+                    <div className="text-sm font-bold text-white mb-2">Правила (не нарушай):</div>
+                    <div className="text-xs text-gray-400 space-y-1">
+                        <p>1. Равные суммы на обе ноги (Long $50 = Short $50)</p>
+                        <p>2. Плечо не выше x3 (для крипты) / x2 (для акций)</p>
+                        <p>3. Не более 20% депозита на одну пару</p>
+                        <p>4. Если SL сработал — не переоткрывай ту же пару сразу. Жди новый сигнал.</p>
+                        <p>5. Таймаут 14 дней — если z-score не вернулся, закрывай по рынку.</p>
+                        <p>6. Не удаляй SL. Никогда. Это твоя страховка от поломки корреляции.</p>
+                    </div>
+                </div>
+            </div>
+
             {/* Disclaimer */}
             <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 text-center">
                 <p className="text-xs text-red-400/80">
