@@ -11,11 +11,11 @@ from core.config import get_settings
 
 # Top 5 pairs by backtest PNL (correlation > 0.80, winrate > 65%)
 PAIRS = [
-    {"a": "ripple", "b": "dogecoin", "sym_a": "XRP", "sym_b": "DOGE", "corr": 0.81},
-    {"a": "dogecoin", "b": "ethereum-classic", "sym_a": "DOGE", "sym_b": "ETC", "corr": 0.86},
-    {"a": "litecoin", "b": "ethereum-classic", "sym_a": "LTC", "sym_b": "ETC", "corr": 0.82},
-    {"a": "shiba-inu", "b": "polkadot", "sym_a": "SHIB", "sym_b": "DOT", "corr": 0.83},
-    {"a": "dogecoin", "b": "avalanche-2", "sym_a": "DOGE", "sym_b": "AVAX", "corr": 0.82},
+    {"a": "ripple", "b": "dogecoin", "sym_a": "XRP", "sym_b": "DOGE", "corr": 0.81, "mexc_a": "XRP_USDT", "mexc_b": "DOGE_USDT"},
+    {"a": "dogecoin", "b": "ethereum-classic", "sym_a": "DOGE", "sym_b": "ETC", "corr": 0.86, "mexc_a": "DOGE_USDT", "mexc_b": "ETC_USDT"},
+    {"a": "litecoin", "b": "ethereum-classic", "sym_a": "LTC", "sym_b": "ETC", "corr": 0.82, "mexc_a": "LTC_USDT", "mexc_b": "ETC_USDT"},
+    {"a": "shiba-inu", "b": "polkadot", "sym_a": "SHIB", "sym_b": "DOT", "corr": 0.83, "mexc_a": "SHIB_USDT", "mexc_b": "DOT_USDT"},
+    {"a": "dogecoin", "b": "avalanche-2", "sym_a": "DOGE", "sym_b": "AVAX", "corr": 0.82, "mexc_a": "DOGE_USDT", "mexc_b": "AVAX_USDT"},
 ]
 
 # Strategy parameters (from backtest: z=1.0, window=20, timeout=14)
@@ -40,6 +40,22 @@ async def fetch_prices(coin_id: str, days: int = 25) -> list[float]:
             return []
         data = resp.json()
         return [p[1] for p in data.get("prices", [])]
+
+
+async def fetch_funding_rate(symbol: str) -> float | None:
+    """Fetch current funding rate from MEXC Futures (public, no auth)."""
+    url = f"https://contract.mexc.com/api/v1/contract/funding_rate/{symbol}"
+    
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success") and data.get("data"):
+                    return float(data["data"].get("fundingRate", 0))
+        except Exception:
+            pass
+    return None
 
 
 def calculate_zscore(prices_a: list[float], prices_b: list[float]) -> float | None:
@@ -128,6 +144,22 @@ async def check_pairs():
                     sl_price_a = price_a * (1 + sl_pct / 100)  # short SL = price goes UP
                     sl_price_b = price_b * (1 - sl_pct / 100)  # long SL = price goes DOWN
                     
+                    # Fetch funding rates
+                    fr_a = await fetch_funding_rate(pair.get("mexc_a", ""))
+                    fr_b = await fetch_funding_rate(pair.get("mexc_b", ""))
+                    fr_text = ""
+                    if fr_a is not None or fr_b is not None:
+                        fr_a_pct = (fr_a or 0) * 100
+                        fr_b_pct = (fr_b or 0) * 100
+                        daily_cost = abs(fr_b_pct) * 3 + abs(fr_a_pct) * 3  # Long pays, Short receives (approx)
+                        fr_text = (
+                            f"\n💰 FUNDING RATES (за 8ч):\n"
+                            f"  {pair['sym_a']}: {fr_a_pct:+.4f}% (Short — получаешь)\n"
+                            f"  {pair['sym_b']}: {fr_b_pct:+.4f}% (Long — платишь)\n"
+                            f"  ~Стоимость/день: ~{daily_cost:.3f}%\n"
+                            f"  ~За 7 дней: ~{daily_cost * 7:.2f}%\n"
+                        )
+                    
                     _active_positions[pair_key] = {
                         "direction": "short_a_long_b",
                         "entry_date": datetime.now(timezone.utc).isoformat(),
@@ -143,7 +175,8 @@ async def check_pairs():
                         f"Z-score: {zscore:.2f} (threshold: {ZSCORE_ENTRY})\n\n"
                         f"ACTION:\n"
                         f"  🔴 SHORT {pair['sym_a']}: entry ${price_a:.6g} | SL ${sl_price_a:.6g} (+{sl_pct}%)\n"
-                        f"  🟢 LONG {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (-{sl_pct}%)\n\n"
+                        f"  🟢 LONG {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (-{sl_pct}%)\n"
+                        f"{fr_text}\n"
                         f"TP: z-score returns to 0 (бот пришлёт алерт)\n"
                         f"SL: {sl_pct}% на каждую ногу (ставь на MEXC)\n"
                         f"Timeout: 14 days max\n"
@@ -155,6 +188,22 @@ async def check_pairs():
                     # B outperformed A -> Long A, Short B
                     sl_price_a = price_a * (1 - sl_pct / 100)  # long SL = price goes DOWN
                     sl_price_b = price_b * (1 + sl_pct / 100)  # short SL = price goes UP
+                    
+                    # Fetch funding rates
+                    fr_a = await fetch_funding_rate(pair.get("mexc_a", ""))
+                    fr_b = await fetch_funding_rate(pair.get("mexc_b", ""))
+                    fr_text = ""
+                    if fr_a is not None or fr_b is not None:
+                        fr_a_pct = (fr_a or 0) * 100
+                        fr_b_pct = (fr_b or 0) * 100
+                        daily_cost = abs(fr_a_pct) * 3 + abs(fr_b_pct) * 3
+                        fr_text = (
+                            f"\n💰 FUNDING RATES (за 8ч):\n"
+                            f"  {pair['sym_a']}: {fr_a_pct:+.4f}% (Long — платишь)\n"
+                            f"  {pair['sym_b']}: {fr_b_pct:+.4f}% (Short — получаешь)\n"
+                            f"  ~Стоимость/день: ~{daily_cost:.3f}%\n"
+                            f"  ~За 7 дней: ~{daily_cost * 7:.2f}%\n"
+                        )
                     
                     _active_positions[pair_key] = {
                         "direction": "long_a_short_b",
@@ -172,7 +221,8 @@ async def check_pairs():
                         f"Z-score: {zscore:.2f} (threshold: -{ZSCORE_ENTRY})\n\n"
                         f"ACTION:\n"
                         f"  🟢 LONG {pair['sym_a']}: entry ${price_a:.6g} | SL ${sl_price_a:.6g} (-{sl_pct}%)\n"
-                        f"  🔴 SHORT {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (+{sl_pct}%)\n\n"
+                        f"  🔴 SHORT {pair['sym_b']}: entry ${price_b:.6g} | SL ${sl_price_b:.6g} (+{sl_pct}%)\n"
+                        f"{fr_text}\n"
                         f"TP: z-score returns to 0 (бот пришлёт алерт)\n"
                         f"SL: {sl_pct}% на каждую ногу (ставь на MEXC)\n"
                         f"Timeout: 14 days max\n"
